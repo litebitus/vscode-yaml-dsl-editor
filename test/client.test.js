@@ -138,6 +138,41 @@ test('fold paths round-trip and reject a path that is not a fold', () => {
   assert.equal(parsed.env, 'one');
 });
 
+test('a search that fails does not block activation', async () => {
+  const vscode = fakeVscode({
+    readFile: async () => Buffer.from('dsls: [\n'),
+  });
+  vscode.RelativePattern = class { constructor() {} };
+  vscode.workspace.findFiles = async () => [];
+  const client = fakeClient();
+  await activateWith(vscode, { subscriptions: [] }, () => client);
+  vscode.workspace.fs.readFile = async () => Buffer.from('dsls:\n  - id: sample\n    match: ["**/mock.yml"]\n');
+  vscode.workspace.findFiles = async () => { throw new Error('down'); };
+  await vscode.watcher.change();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/warm'), false);
+});
+
+test('activation asks the server to read matching files', async () => {
+  const vscode = fakeVscode({
+    readFile: async () => Buffer.from('dsls:\n  - id: sample\n    match: ["**/mock.yml", "**/mock.yml"]\n'),
+  });
+  vscode.RelativePattern = class {
+    constructor(folder, pattern) { this.folder = folder; this.pattern = pattern; }
+  };
+  const seen = [];
+  vscode.workspace.findFiles = async (include) => {
+    seen.push(include.pattern);
+    return [{ fsPath: '/repo/mock.yml' }, { fsPath: '/repo/mock.yml' }, {}, null];
+  };
+  const client = fakeClient();
+  await activateWith(vscode, { subscriptions: [] }, () => client);
+  await new Promise((resolve) => setImmediate(resolve));
+  const warm = client.sent.find((item) => item.method === 'yaml-dsl/warm');
+  assert.deepEqual(warm.params.paths, ['/repo/mock.yml']);
+  assert.deepEqual(seen, ['**/mock.yml', '**/mock.yml']);
+});
+
 test('activation associates matching files and reveals the fold', async () => {
   const doc = { uri: { scheme: 'file', fsPath: '/repo/mock/mock.yml' }, languageId: 'yaml' };
   const outside = { uri: { scheme: 'file', fsPath: '/other/mock.yml' }, languageId: 'yaml-dsl' };

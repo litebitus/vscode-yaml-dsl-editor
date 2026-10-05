@@ -53,7 +53,7 @@ test('document events publish diagnostics and custom requests answer', async () 
   const connection = fakeConnection();
   const documents = fakeDocuments();
   const files = { '/repo/schema.json': '{"description":"root","properties":{"name":{"description":"the name"}}}' };
-  bind(connection, documents, {
+  const workspace = bind(connection, documents, {
     readFile: async (filePath) => files[filePath] ?? null,
     fetchText: async () => null,
   });
@@ -64,8 +64,9 @@ test('document events publish diagnostics and custom requests answer', async () 
     }],
   });
   const text = '# yaml-language-server: $schema=../schema.json\nname: plain\n';
-  await documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
-  await documents.handlers.change({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
+  documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
+  documents.handlers.change({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
+  await workspace.whenIdle();
   const hover = await connection.handlers.hover({ textDocument: { uri: 'file:///repo/app/mock.yml' }, position: { line: 1, character: 0 } });
   assert.equal(hover.contents.value, 'the name');
   const missing = await connection.handlers.definition({ textDocument: { uri: 'file:///repo/app/mock.yml' }, position: { line: 1, character: 0 } });
@@ -75,7 +76,8 @@ test('document events publish diagnostics and custom requests answer', async () 
     dir: '/repo',
   });
   const note = 'locals:\n  db: mock-value\nuse: local.db\n';
-  await documents.handlers.open({ document: { uri: 'file:///repo/note.yml', getText: () => note } });
+  documents.handlers.open({ document: { uri: 'file:///repo/note.yml', getText: () => note } });
+  await workspace.whenIdle();
   const hit = await connection.handlers.definition({ textDocument: { uri: 'file:///repo/note.yml' }, position: { line: 2, character: 5 } });
   assert.equal(hit.targetUri, 'file:///repo/note.yml');
   const whole = rangeOf(note, 'local.db');
@@ -89,6 +91,8 @@ test('document events publish diagnostics and custom requests answer', async () 
   assert.equal(await connection.handlers['yaml-dsl/fold']({ stackId: '/repo/app/mock.yml', env: 'one' }), '');
   const folds = await connection.handlers['yaml-dsl/foldsFor']({ path: '/repo/app/mock.yml' });
   assert.equal(folds.stackId, null);
+  connection.handlers['yaml-dsl/warm']({ paths: ['/repo/note.yml'] });
+  await workspace.whenIdle();
   documents.handlers.close({ document: { uri: 'file:///repo/app/mock.yml' } });
   assert.deepEqual(connection.diagnostics.at(-1).diagnostics, []);
   await documents.handlers.open({ document: { uri: 'yaml-dsl-fold:%2Frepo%2Fapp%2Fmock.yml/one', getText: () => 'name: plain\n' } });

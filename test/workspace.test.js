@@ -176,8 +176,9 @@ dsls:
   await ws.setConfigs([{ text: relative, dir: '/repo/disk' }]);
   await ws.sync('file:///repo/disk/mock.yml', '/repo/disk/mock.yml', open);
   files['/repo/disk/schema.json'] = JSON.stringify({ properties: { name: { description: 'the name' } } });
-  await ws.sync('file:///repo/disk/mock.yml', '/repo/disk/mock.yml', open);
-  const field = ws.hover('file:///repo/disk/mock.yml', at(open, 'name'));
+  const edited = '# yaml-language-server: $schema=schema.json\nname: edited\n';
+  await ws.sync('file:///repo/disk/mock.yml', '/repo/disk/mock.yml', edited);
+  const field = ws.hover('file:///repo/disk/mock.yml', at(edited, 'name'));
   assert.equal(field.contents.value, 'the name');
   const boom = workspace({}, async () => schema, async () => { throw new Error('boom'); });
   await boom.setConfigs([{ text: config, dir: '/repo' }]);
@@ -279,4 +280,49 @@ dsls:
   await ws.sync('file://' + bare, bare, bareText);
   assert.ok(ws.diagnostics('file://' + bare).some((item) => item.message === 'schema is unavailable'));
   assert.equal(ws.hover('file://' + bare, at(bareText, 'name')), null);
+});
+
+test('a line edit re-parses that file and leaves the rest of the stack', async () => {
+  const common = '/repo/mock.yml';
+  const overlay = '/repo/one/mock.yml';
+  const schema = '/repo/schema.json';
+  const files = {
+    [schema]: JSON.stringify({ properties: { name: { description: 'the name' } } }),
+    [common]: 'locals:\n  db: common\n',
+    [overlay]: 'locals:\n  db: overlay\n',
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{
+    text: `
+dsls:
+  - id: sample
+    match: ["**/mock.yml"]
+    schema: schema.json
+    layers:
+      environments: [one]
+    symbols:
+      - kind: local
+        at: "$.locals.*"
+`,
+    dir: '/repo',
+  }]);
+  await ws.warm([overlay, common, '/other/mock.yml']);
+  assert.ok(ws.reads.includes(common));
+  assert.ok(ws.reads.includes(overlay));
+  assert.ok(ws.reads.includes(schema));
+  const marked = ws.reads.length;
+  await ws.warm([common]);
+  const edited = 'locals:\n  kept: overlay\n';
+  await ws.sync('file://' + overlay, overlay, edited);
+  assert.equal(ws.reads.length, marked);
+  const entry = ws.cache.get(common);
+  assert.equal(entry.data.files.get(overlay).text, edited);
+  assert.equal(entry.data.files.get(common).text, files[common]);
+  assert.ok(entry.data.symbols.some((symbol) => symbol.file === overlay && symbol.name === 'kept'));
+  assert.ok(entry.data.symbols.some((symbol) => symbol.file === common && symbol.name === 'db'));
+  await ws.sync('file://' + overlay, overlay, '# yaml-language-server: $schema=schema.json\n' + edited);
+  assert.ok(ws.reads.length > marked);
+  const raced = ws.sync('file://' + overlay, overlay, 'locals:\n  later: 1\n');
+  ws.close('file://' + overlay);
+  await raced;
 });
