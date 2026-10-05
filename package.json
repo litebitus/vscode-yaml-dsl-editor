@@ -1,0 +1,41 @@
+{
+  "name": "yaml-dsl-editor",
+  "displayName": "YAML DSL Editor",
+  "description": "The editor that makes a YAML DSL authorable.",
+  "version": "0.0.1",
+  "publisher": "lite2073",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "workspaceContains:yaml-dsl.yml",
+    "onLanguage:yaml",
+    "onLanguage:yaml-dsl"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "yaml-dsl",
+        "aliases": [
+          "YAML DSL"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "make test"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "yaml": "^2.8.0"
+  }
+}
