@@ -16,9 +16,13 @@
   "categories": [
     "Programming Languages"
   ],
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#f4efe6",
+    "theme": "light"
+  },
   "activationEvents": [
     "workspaceContains:yaml-dsl.yml",
-    "onLanguage:yaml",
     "onLanguage:yaml-dsl"
   ],
   "main": "./extension.js",
@@ -29,7 +33,18 @@
         "aliases": [
           "YAML DSL"
         ],
+        "icon": {
+          "light": "./fileicon.svg",
+          "dark": "./fileicon.svg"
+        },
         "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "yaml-dsl",
+        "scopeName": "source.yaml.dsl",
+        "path": "./syntaxes/yaml-dsl.tmLanguage.json"
       }
     ]
   },

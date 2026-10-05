@@ -1,6 +1,6 @@
 const vscode = require('vscode');
 const { LanguageClient, TransportKind } = require('vscode-languageclient/node');
-const { activateWith } = require('./lib/client');
+const { activateWith, editorMiddleware } = require('./lib/client');
 
 function startClient(context) {
   const serverModule = context.asAbsolutePath('server.js');
@@ -11,7 +11,10 @@ function startClient(context) {
       run: { module: serverModule, transport: TransportKind.ipc },
       debug: { module: serverModule, transport: TransportKind.ipc },
     },
-    { documentSelector: [{ language: 'yaml-dsl' }] },
+    {
+      documentSelector: [{ language: 'yaml-dsl' }],
+      middleware: editorMiddleware(vscode),
+    },
   );
   client.start();
   return client;

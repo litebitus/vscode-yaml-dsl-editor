@@ -46,6 +46,7 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 - [Layers](#layers)
 - [Schema](#schema)
 - [Ownership](#ownership)
+- [Colors](#colors)
 - [Publish](#publish)
 - [Development](#development)
   - [Tests](#tests)
@@ -79,13 +80,13 @@ When no schema resolves, the file gets one diagnostic and field hovers stay empt
 
 ## Navigation
 
-Go to definition on a ref opens the declaration it names. Go to definition on a local opens that declaration. When nothing in scope matches, the cursor does not move.
+A ref or a local that stays in this file is blue. One that points at another file is peach. Both are underlined. Go to definition on a ref opens the declaration it names. Go to definition on a local opens that declaration. Resting on one that lives in another file shows that declaration in the hover after the pointer has rested for a second. Command-click opens the declaration. Moving the pointer away before the delay cancels the hover. The built-in peek is not used. When nothing in scope matches, the cursor does not move.
 
-In the resource DSL a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. The resource's identity is the last token of its key, with `-` written as `_`. A `${...}` placeholder is compared as written. The editor does not substitute it.
+In the resource DSL a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. The resource's identity is the last token of its key, with `-` written as `_`. A `${...}` placeholder is compared as written. A name that is the same spelling of a local's value, with `-` written as `_`, points at the resource whose key contains that local.
 
-A local is a key under `locals`. A reference is a whole scalar `local.<name>` or `${local.<name>}` inside a scalar.
+A local is a key under `locals`. A reference is a whole scalar `local.<name>`, or `${local.<name>}` inside a scalar or a key.
 
-Scope is the active stack: the common layer and every adjacent overlay. A ref in one file may name a declaration in another file of that stack. When the same symbol is in more than one file, the active file wins, then the common layer, then the other overlays in path order.
+Scope is the active stack: the common layer and every adjacent overlay. A ref in one file may name a declaration in another file of that stack. When the same symbol is in more than one file, the common layer wins, then the active file, then the other overlays in path order.
 
 ## Layers
 
@@ -99,7 +100,7 @@ mock-stack/two/sample.yml
 
 Activating any file in the stack puts the common layer and every adjacent overlay in scope. Switching files inside that stack uses the copy the server already holds.
 
-Each environment's folded document is a read-only buffer: the common layer merged under that overlay. Typing stays in the layer files. An environment with no file is an empty overlay on the common layer.
+Each environment's folded document is the common layer merged under that overlay. It is not opened on its own. Typing stays in the layer files. An environment with no file is an empty overlay on the common layer.
 
 The server loads a stack when a file in it becomes active. It does not load the rest at startup. The stack of the active editor is pinned, and so is any stack whose folded buffer is on screen. Capacity beyond the pins is 8 stacks. Loading one past that drops the least recently used unpinned stack and closes its folded buffers. The files on disk stay. A change to a resident stack updates it in place.
 
@@ -115,9 +116,13 @@ The extension ships no schema and no DSL definition.
 
 ## Ownership
 
-The extension contributes the language `yaml-dsl`. When `yaml-dsl.yml` loads, each DSL `match` pattern is associated with that language. A matching file opens as `yaml-dsl`. The language server's document selector is that language.
+The extension contributes the language `yaml-dsl`. It starts only when a workspace folder contains `yaml-dsl.yml`. A folder without that file is left alone, including in a window that also has a folder with the file.
 
-An extension that selects `yaml` does not own these files and does not activate on them. A file that matches no DSL pattern stays `yaml`. A file that matches two DSLs is reported and claimed by neither.
+A file under a folder that has the config, and that matches one DSL `match` pattern, opens as `yaml-dsl`. The language server's document selector is that language. A file that matches no DSL pattern stays `yaml`. A file that matches two DSLs is reported and claimed by neither.
+
+## Colors
+
+A matching file uses this extension's file icon. Colors follow the HCL editor: keys are identifiers, `ref` is a function, the names in a ref are types, strings are strings, `${` and `}` are interpolation marks, and the name inside them is an identifier. Numbers and `true` / `false` / `null` are constants.
 
 ## Publish
 

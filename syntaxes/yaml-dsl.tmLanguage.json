@@ -1,0 +1,113 @@
+{
+  "name": "YAML DSL",
+  "scopeName": "source.yaml.dsl",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#quotedPair" },
+    { "include": "#pair" },
+    { "include": "#ref" },
+    { "include": "#local" },
+    { "include": "#double" },
+    { "include": "#single" },
+    { "include": "#interpolation" },
+    { "include": "#brackets" },
+    { "include": "#constant" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.hcl",
+      "match": "(#).*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.comment.hcl" }
+      }
+    },
+    "quotedPair": {
+      "match": "(?m)^(\\s*)(\"(?:\\\\.|[^\"])*\"|'(?:[^'])*')\\s*(:)",
+      "captures": {
+        "2": { "name": "string.quoted.double.hcl" },
+        "3": { "name": "keyword.operator.assignment.hcl" }
+      }
+    },
+    "pair": {
+      "match": "(?m)^(\\s*)([^\\s:#\"'][^:#]*?)\\s*(:)",
+      "captures": {
+        "2": { "name": "variable.other.readwrite.hcl" },
+        "3": { "name": "keyword.operator.assignment.hcl" }
+      }
+    },
+    "double": {
+      "name": "string.quoted.double.hcl",
+      "begin": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.hcl" } },
+      "end": "\"",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.hcl" } },
+      "patterns": [
+        { "include": "#interpolation" },
+        { "include": "#escape" }
+      ]
+    },
+    "single": {
+      "name": "string.quoted.single.hcl",
+      "begin": "'",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.hcl" } },
+      "end": "'",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.hcl" } },
+      "patterns": [
+        { "match": "''", "name": "constant.character.escape.hcl" }
+      ]
+    },
+    "escape": {
+      "name": "constant.character.escape.hcl",
+      "match": "\\\\."
+    },
+    "interpolation": {
+      "name": "meta.interpolation.hcl",
+      "begin": "(\\$\\{)",
+      "beginCaptures": { "1": { "name": "keyword.other.interpolation.begin.hcl" } },
+      "end": "(\\})",
+      "endCaptures": { "1": { "name": "keyword.other.interpolation.end.hcl" } },
+      "patterns": [
+        { "match": "[A-Za-z0-9_.-]+", "name": "variable.other.readwrite.hcl" }
+      ]
+    },
+    "ref": {
+      "begin": "\\b(ref)\\b",
+      "beginCaptures": { "1": { "name": "support.function.builtin.hcl" } },
+      "end": "(?=\\s|#|$)",
+      "patterns": [
+        { "include": "#interpolation" },
+        { "match": "\\.", "name": "keyword.operator.accessor.hcl" },
+        { "match": "[A-Za-z_][A-Za-z0-9_-]*", "name": "entity.name.type.hcl" }
+      ]
+    },
+    "local": {
+      "begin": "\\b(local)(\\.)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.hcl" },
+        "2": { "name": "keyword.operator.accessor.hcl" }
+      },
+      "end": "(?![A-Za-z0-9_])",
+      "patterns": [
+        { "match": "[A-Za-z0-9_]+", "name": "variable.other.readwrite.hcl" }
+      ]
+    },
+    "brackets": {
+      "patterns": [
+        { "match": "\\[", "name": "punctuation.section.brackets.begin.hcl" },
+        { "match": "\\]", "name": "punctuation.section.brackets.end.hcl" }
+      ]
+    },
+    "constant": {
+      "patterns": [
+        {
+          "name": "constant.language.hcl",
+          "match": "(?<=:\\s*)(?:true|false|null|~)(?=\\s*(?:#|$))"
+        },
+        {
+          "name": "constant.numeric.integer.hcl",
+          "match": "(?<=:\\s*)[-+]?\\d+(?=\\s*(?:#|$))"
+        }
+      ]
+    }
+  }
+}

@@ -77,5 +77,11 @@ test('whole scalars and matches inside a scalar are references', () => {
   assert.equal(ref.range.start.line, 0);
   const within = analyzed.references.find((item) => item.groups.name === 'db' && item.range.start.line === 1);
   assert.ok(within);
+  const keyed = doc('${local.db}: 1\n', [], [
+    { pattern: '\\$\\{local\\.(?<name>[a-z0-9_]+)\\}', where: 'within', target: { kind: 'local', name: 'name' } },
+  ]);
+  const keyRef = keyed.references.find((item) => item.groups.name === 'db');
+  assert.equal(keyRef.range.start.character, 2);
+  assert.equal(keyRef.range.end.character, 10);
   assert.ok(analyzed.references.some((item) => item.groups.name === 'missing' || item.target.name === 'missing'));
 });

@@ -32,7 +32,7 @@ test('hover and definition outside a reference or a field are empty', () => {
   assert.equal(described.contents.value, 'the name');
 });
 
-test('an active file wins, then the common layer, then the earliest other file', () => {
+test('the common layer wins, then the active file, then the earliest other file', () => {
   const doc = analyzeDocument('source: ref mocktype.primary\n', '/repo/two/mock.yml', {
     symbols: [],
     references: [{
@@ -54,13 +54,21 @@ test('an active file wins, then the common layer, then the earliest other file',
   assert.equal(definitionAt(doc, { line: 0, character: 8 }, { symbols, common: '/repo/mock.yml' }).path, '/repo/mock.yml');
   symbols.unshift({ kind: 'resource', name: 'primary', qualifiers: { type: 'mocktype' }, file: '/repo/two/mock.yml', keyRange: range, valueText: 'here' });
   const active = definitionAt(doc, { line: 0, character: 8 }, { symbols, common: '/repo/mock.yml' });
-  assert.equal(active.path, '/repo/two/mock.yml');
+  assert.equal(active.path, '/repo/mock.yml');
   const links = linksFor(doc, { symbols, common: '/repo/mock.yml' });
   assert.equal(links.length, 1);
-  assert.equal(links[0].path, '/repo/two/mock.yml');
-  assert.match(linkTarget(links[0].path, links[0].targetRange), /^file:\/\/\/repo\/two\/mock\.yml#1,/);
+  assert.equal(links[0].path, '/repo/mock.yml');
+  assert.match(linkTarget(links[0].path, links[0].targetRange), /^file:\/\/\/repo\/mock\.yml#1,/);
   const hover = hoverAt(doc, { line: 0, character: 8 }, { symbols, common: '/repo/mock.yml' }, null);
-  assert.match(hover.contents.value, /mocktype\.primary — \/repo\/two\/mock\.yml/);
+  assert.match(hover.contents.value, /mocktype\.primary — \/repo\/mock\.yml/);
+  const shown = hoverAt(doc, { line: 0, character: 8 }, {
+    symbols,
+    common: '/repo/mock.yml',
+    files: new Map([['/repo/mock.yml', { text: '  primary:\n\n    label: 1\nnext:\n' }]]),
+  }, null);
+  assert.match(shown.contents.value, /primary:/);
+  assert.match(shown.contents.value, /label: 1/);
+  assert.doesNotMatch(shown.contents.value, /next:/);
   const missing = analyzeDocument('source: ref mocktype.missing\n', '/repo/two/mock.yml', {
     symbols: [],
     references: doc.references.length ? [{
@@ -105,6 +113,27 @@ test('an active file wins, then the common layer, then the earliest other file',
     common: '/repo/a.yml',
   })[0];
   assert.deepEqual(insideLink.range, rangeOf(inside, 'local.db'));
+});
+
+test('a ref named by a local value opens the common resource', () => {
+  const doc = analyzeDocument('item: ref mocktype.kds_bullet\n', '/repo/one/mock.yml', {
+    symbols: [],
+    references: [{
+      pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)',
+      where: 'whole',
+      target: { kind: 'resource', type: 'type', name: 'name' },
+    }],
+  });
+  const range = { start: { line: 2, character: 2 }, end: { line: 2, character: 8 } };
+  const symbols = [
+    { kind: 'local', name: 'bullet', qualifiers: {}, file: '/repo/one/mock.yml', keyRange: range, valueText: 'kds-bullet' },
+    { kind: 'local', name: 'bullet', qualifiers: {}, file: '/repo/mock.yml', keyRange: range, valueText: 'other-bullet' },
+    { kind: 'resource', name: '${local.bullet}', qualifiers: { type: 'mocktype' }, file: '/repo/one/mock.yml', keyRange: range, valueText: '' },
+    { kind: 'resource', name: '${local.bullet}', qualifiers: { type: 'mocktype' }, file: '/repo/mock.yml', keyRange: range, valueText: '' },
+  ];
+  const hit = definitionAt(doc, { line: 0, character: 12 }, { symbols, common: '/repo/mock.yml' });
+  assert.equal(hit.path, '/repo/mock.yml');
+  assert.equal(hit.range.start.line, 2);
 });
 
 test('a local hover shows the authored value', () => {

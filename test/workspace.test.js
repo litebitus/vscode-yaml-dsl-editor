@@ -94,7 +94,8 @@ test('hover, definition, and folds use the whole stack', async () => {
 
   const oneUri = 'file://' + one;
   const sourceHover = ws.hover(oneUri, at(files[one], 'ref mocktype.primary'));
-  assert.match(sourceHover.contents.value, /mocktype\.primary — .*mock\.yml$/);
+  assert.match(sourceHover.contents.value, /mocktype\.primary — .*mock\.yml/);
+  assert.match(sourceHover.contents.value, /primary:/);
   const sourceDef = ws.definition(oneUri, at(files[one], 'ref mocktype.primary'));
   assert.equal(sourceDef.path, common);
 
@@ -106,7 +107,8 @@ test('hover, definition, and folds use the whole stack', async () => {
   assert.equal(field.contents.value, '[optional] Mock label.');
 
   const within = ws.hover(oneUri, at(files[one], 'local.db'));
-  assert.equal(within.contents.value, 'mock-value');
+  assert.match(within.contents.value, /^mock-value/);
+  assert.match(within.contents.value, /db:/);
 
   assert.deepEqual(ws.foldsFor(one), { stackId: common, environments: ['one'] });
   assert.deepEqual(ws.foldsFor(common).environments, ['one', 'two', 'three', 'four']);
