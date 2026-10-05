@@ -36,9 +36,16 @@ test('pinned and on-screen stacks stay, and a repeat hold updates in place', () 
 
 test('identical schema bytes share one copy and eviction does not drop it', () => {
   const cache = createCache();
-  const first = cache.noteSchema('{"a":1}', { a: 1 });
-  const second = cache.noteSchema('{"a":1}', { a: 1 });
-  const third = cache.noteSchema('{"a":2}', { a: 2 });
+  const parsed = [];
+  const parse = (text) => {
+    parsed.push(text);
+    return JSON.parse(text);
+  };
+  const first = cache.noteSchema('{"a":1}', parse);
+  const second = cache.noteSchema('{"a":1}', parse);
+  const third = cache.noteSchema('{"a":2}', parse);
+  assert.deepEqual(parsed, ['{"a":1}', '{"a":2}']);
+  assert.equal(cache.noteSchema('[', () => null), null);
   assert.equal(first, second);
   assert.notEqual(first, third);
   assert.equal(cache.schemaCount(), 2);

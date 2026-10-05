@@ -326,3 +326,83 @@ dsls:
   ws.close('file://' + overlay);
   await raced;
 });
+
+test('a schema written after the file opened replaces the missing one, and a new version replaces it again', async () => {
+  const layered = `
+dsls:
+  - id: resources
+    match: ["**/mock.yml"]
+    schema:
+      - .schema/mock.schema.json
+      - one/.schema/mock.schema.json
+    layers:
+      environments: [one, two]
+`;
+  const commonPath = '/repo/mock-app/mock.yml';
+  const onePath = '/repo/mock-app/one/mock.yml';
+  const schemaPath = '/repo/mock-app/one/.schema/mock.schema.json';
+  const files = {
+    [commonPath]: 'name: plain\n',
+    [onePath]: '# yaml-language-server: $schema=.schema/mock.schema.json\nname: plain\n',
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: layered, dir: '/repo' }]);
+  await ws.sync(`file://${onePath}`, onePath, files[onePath]);
+  await ws.sync(`file://${commonPath}`, commonPath, files[commonPath]);
+  const unavailable = (filePath) => ws.diagnostics(`file://${filePath}`).some((item) => item.message === SCHEMA_UNAVAILABLE);
+  assert.equal(unavailable(onePath), true);
+  assert.equal(unavailable(commonPath), true);
+
+  assert.deepEqual(ws.schemaWatchTargets().map((target) => [target.base, target.pattern]).sort(), [
+    ['/repo/mock-app', '.schema'],
+    ['/repo/mock-app', '.schema/mock.schema.json'],
+    ['/repo/mock-app', 'one'],
+    ['/repo/mock-app', 'one/.schema'],
+    ['/repo/mock-app', 'one/.schema/mock.schema.json'],
+    ['/repo/mock-app/one', '.schema'],
+    ['/repo/mock-app/one', '.schema/mock.schema.json'],
+    ['/repo/mock-app/one', 'one'],
+    ['/repo/mock-app/one', 'one/.schema'],
+    ['/repo/mock-app/one', 'one/.schema/mock.schema.json'],
+  ]);
+
+  await ws.schemasChanged(['/repo/elsewhere/mock.schema.json']);
+  assert.equal(unavailable(onePath), true);
+
+  files[schemaPath] = JSON.stringify({ properties: { name: { description: 'version one' } } });
+  await ws.schemasChanged([schemaPath]);
+  assert.equal(unavailable(onePath), false);
+  assert.equal(unavailable(commonPath), false);
+  assert.equal(ws.hover(`file://${onePath}`, at(files[onePath], 'name')).contents.value, 'version one');
+  assert.equal(ws.cache.schemaCount(), 1);
+
+  const reads = ws.reads.length;
+  await ws.schemasChanged([schemaPath]);
+  assert.ok(ws.reads.length > reads);
+  assert.equal(ws.cache.schemaCount(), 1);
+
+  files[schemaPath] = JSON.stringify({ properties: { name: { description: 'version two' } } });
+  await ws.schemasChanged([schemaPath]);
+  assert.equal(ws.hover(`file://${onePath}`, at(files[onePath], 'name')).contents.value, 'version two');
+  assert.equal(ws.hover(`file://${commonPath}`, at(files[commonPath], 'name')).contents.value, 'version two');
+  assert.equal(ws.cache.schemaCount(), 2);
+
+  delete files[schemaPath];
+  await ws.schemasChanged(['/repo/mock-app/one/.schema']);
+  assert.equal(unavailable(onePath), true);
+});
+
+test('a schema path with glob characters is watched literally from a folder that exists', async () => {
+  const files = { '/repo/[mock]/mock.yml': '# yaml-language-server: $schema=../{schema}*.json\nname: plain\n' };
+  const ws = workspace(files, async () => null);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync('file:///repo/[mock]/mock.yml', '/repo/[mock]/mock.yml', files['/repo/[mock]/mock.yml']);
+  assert.deepEqual(ws.schemaWatchTargets(), [{ base: '/repo', pattern: '[{]schema[}][*].json' }]);
+  const nested = '# yaml-language-server: $schema=.terraform/[x]/s.json\nname: plain\n';
+  await ws.sync('file:///repo/[mock]/mock.yml', '/repo/[mock]/mock.yml', nested);
+  assert.deepEqual(ws.schemaWatchTargets(), [
+    { base: '/repo/[mock]', pattern: '.terraform' },
+    { base: '/repo/[mock]', pattern: '.terraform/[[]x[]]' },
+    { base: '/repo/[mock]', pattern: '.terraform/[[]x[]]/s.json' },
+  ]);
+});

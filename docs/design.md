@@ -22,6 +22,8 @@ The cache is bounded, and the unit is the stack. The stack of the active editor 
 
 A stack's schema is the `schema.json` of the grammar version that stack initialized. The same grammar version is the same schema, so every stack on that version shares one parsed copy. A different grammar version is a different schema, even when the difference is small, and hover for a stack uses the schema of its own version. The server keeps every distinct schema for the life of the workspace. Evicting a stack drops its layers and folded documents, not the schema.
 
+A schema on disk changes when its stack is initialized again. The server watches every path a resident file's schema search reads, and any change at one of them reloads that file's schema. Bytes identical to a schema the server holds are that schema and are not parsed again.
+
 The server does not run the engine. The continuous compile is the editor's analysis. Plan and admission stay with the engine.
 
 The extension process is the client. The analysis is a plain module with no editor API in it, so it is tested on its own with `node --test`. Editor features stay in the language server from the start.

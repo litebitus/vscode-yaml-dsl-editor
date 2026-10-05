@@ -4,7 +4,7 @@ const { bind } = require('../lib/bind');
 
 function fakeConnection() {
   const handlers = {};
-  return {
+  const connection = {
     handlers,
     diagnostics: [],
     notifications: [],
@@ -14,9 +14,19 @@ function fakeConnection() {
     onDocumentLinks(fn) { handlers.links = fn; },
     onNotification(method, fn) { handlers[method] = fn; },
     onRequest(method, fn) { handlers[method] = fn; },
+    onDidChangeWatchedFiles(fn) { handlers.watchedFiles = fn; },
+    registrations: [],
+    client: {
+      register(type, options) {
+        const registration = { method: type.method, options, disposed: false };
+        connection.registrations.push(registration);
+        return Promise.resolve({ dispose() { registration.disposed = true; } });
+      },
+    },
     sendDiagnostics(params) { this.diagnostics.push(params); },
     sendNotification(method, params) { this.notifications.push({ method, params }); },
   };
+  return connection;
 }
 
 function rangeOf(text, needle) {
@@ -96,4 +106,66 @@ test('document events publish diagnostics and custom requests answer', async () 
   documents.handlers.close({ document: { uri: 'file:///repo/app/mock.yml' } });
   assert.deepEqual(connection.diagnostics.at(-1).diagnostics, []);
   await documents.handlers.open({ document: { uri: 'yaml-dsl-fold:%2Frepo%2Fapp%2Fmock.yml/one', getText: () => 'name: plain\n' } });
+});
+
+test('the server watches each schema path it reads and reloads a schema that changes', async () => {
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const files = {};
+  const workspace = bind(connection, documents, {
+    readFile: async (filePath) => files[filePath] ?? null,
+    fetchText: async () => null,
+  });
+  connection.handlers.initialize({
+    capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true } } },
+  });
+  await connection.handlers['yaml-dsl/config']({
+    entries: [{ text: 'dsls:\n  - id: resources\n    match: ["**/mock.yml"]\n', dir: '/repo' }],
+  });
+  const text = '# yaml-language-server: $schema=.schema/mock.schema.json\nname: plain\n';
+  documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
+  await workspace.whenIdle();
+  const unavailable = () => connection.diagnostics
+    .filter((item) => item.uri === 'file:///repo/app/mock.yml')
+    .at(-1).diagnostics.some((item) => item.message === 'schema is unavailable');
+  assert.equal(unavailable(), true);
+  assert.equal(connection.registrations.length, 1);
+  assert.equal(connection.registrations[0].method, 'workspace/didChangeWatchedFiles');
+  assert.deepEqual(connection.registrations[0].options.watchers, [
+    { globPattern: { baseUri: 'file:///repo/app', pattern: '.schema' } },
+    { globPattern: { baseUri: 'file:///repo/app', pattern: '.schema/mock.schema.json' } },
+  ]);
+
+  files['/repo/app/.schema/mock.schema.json'] = '{"properties":{"name":{"description":"the name"}}}';
+  connection.handlers.watchedFiles({ changes: [{ uri: 'file:///repo/app/.schema/mock.schema.json', type: 1 }] });
+  await workspace.whenIdle();
+  assert.equal(unavailable(), false);
+  connection.handlers['yaml-dsl/visibleFolds']({ stackIds: [] });
+  connection.handlers.watchedFiles({});
+  await workspace.whenIdle();
+  assert.equal(connection.registrations.length, 1);
+
+  const moved = '# yaml-language-server: $schema=../schema.json\nname: plain\n';
+  documents.handlers.change({ document: { uri: 'file:///repo/app/mock.yml', getText: () => moved } });
+  await workspace.whenIdle();
+  assert.equal(connection.registrations.length, 2);
+  assert.deepEqual(connection.registrations[1].options.watchers, [
+    { globPattern: { baseUri: 'file:///repo', pattern: 'schema.json' } },
+  ]);
+  await new Promise((resolve) => { setImmediate(resolve); });
+  assert.equal(connection.registrations[0].disposed, true);
+  assert.equal(connection.registrations[1].disposed, false);
+});
+
+test('a client without relative-pattern watching gets no registration', async () => {
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
+  connection.handlers.initialize({ capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true } } } });
+  await connection.handlers['yaml-dsl/config']({
+    entries: [{ text: 'dsls:\n  - id: resources\n    match: ["**/mock.yml"]\n', dir: '/repo' }],
+  });
+  documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => 'name: plain\n' } });
+  await workspace.whenIdle();
+  assert.equal(connection.registrations.length, 0);
 });
