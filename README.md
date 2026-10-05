@@ -82,7 +82,7 @@ When no schema resolves, the file gets one diagnostic and field hovers stay empt
 
 A ref or a local that stays in this file is blue. One that points at another file is peach. Both are underlined. Resting on either shows that declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing in scope matches, the cursor does not move.
 
-In the resource DSL a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. The resource's identity is the last token of its key, with `-` written as `_`. A `${...}` placeholder is compared as written. A name that is the same spelling of a local's value, with `-` written as `_`, points at the resource whose key contains that local.
+In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. The resource's identity is the last token of its key, with `-` written as `_`. A `${...}` placeholder is compared as written. A name that is the same spelling of a local's value, with `-` written as `_`, points at the resource whose key contains that local.
 
 A local is a key under `locals`. A reference is a whole scalar `local.<name>`, or `${local.<name>}` inside a scalar or a key.
 
