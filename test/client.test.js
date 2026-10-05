@@ -43,7 +43,7 @@ function fakeVscode(options = {}) {
       workspaceFolders: options.folders === undefined ? [{ uri: { fsPath: '/repo' } }] : options.folders,
       textDocuments: options.documents || [],
       fs: {
-        readFile: options.readFile || (async () => Buffer.from('dsls:\n  - id: resources\n    match: ["**/resources.yml"]\n')),
+        readFile: options.readFile || (async () => Buffer.from('dsls:\n  - id: resources\n    match: ["**/mock.yml"]\n')),
       },
       getConfiguration() {
         return {
@@ -105,39 +105,41 @@ function fakeClient(behavior = {}) {
 
 test('fold paths round-trip and reject a path that is not a fold', () => {
   assert.equal(parseFoldPath(null), null);
-  assert.equal(parseFoldPath('resources.yml'), null);
+  assert.equal(parseFoldPath('mock.yml'), null);
   assert.equal(parseFoldPath('/only'), null);
-  const uri = foldUri({ Uri: { from: (parts) => parts } }, '/repo/resources.yml', 'dev');
+  const uri = foldUri({ Uri: { from: (parts) => parts } }, '/repo/mock.yml', 'one');
   const parsed = parseFoldPath(uri.path);
-  assert.equal(parsed.stackId, '/repo/resources.yml');
-  assert.equal(parsed.env, 'dev');
+  assert.equal(parsed.stackId, '/repo/mock.yml');
+  assert.equal(parsed.env, 'one');
 });
 
 test('activation associates matching files and reveals the fold', async () => {
-  const doc = { uri: { scheme: 'file', fsPath: '/repo/rds/resources.yml' }, languageId: 'yaml' };
+  const doc = { uri: { scheme: 'file', fsPath: '/repo/mock/mock.yml' }, languageId: 'yaml' };
+  const plain = { uri: { scheme: 'file', fsPath: '/repo/notes.txt' }, languageId: 'yaml' };
   const other = { uri: { scheme: 'untitled' }, languageId: 'yaml' };
   const owned = { uri: { scheme: 'file', fsPath: '/repo/other.yml' }, languageId: 'yaml-dsl' };
-  const editor = { document: { uri: { scheme: 'file', fsPath: '/repo/rds/resources.yml', toString() { return 'file:///repo/rds/resources.yml'; } }, languageId: 'yaml-dsl' } };
-  const foldEditor = { document: { uri: { scheme: 'yaml-dsl-fold', path: `/${encodeURIComponent('/repo/rds/resources.yml')}/dev` } } };
+  const editor = { document: { uri: { scheme: 'file', fsPath: '/repo/mock/mock.yml', toString() { return 'file:///repo/mock/mock.yml'; } }, languageId: 'yaml-dsl' } };
+  const foldEditor = { document: { uri: { scheme: 'yaml-dsl-fold', path: `/${encodeURIComponent('/repo/mock/mock.yml')}/one` } } };
   const vscode = fakeVscode({
-    documents: [doc, other, owned],
+    documents: [doc, plain, other, owned],
     editor,
     visible: [foldEditor, { document: null }, { document: { uri: { scheme: 'file', path: '/repo/a.yml' } } }],
-    associations: { '**/resources.yml': 'yaml-dsl' },
+    associations: { '**/mock.yml': 'yaml-dsl' },
     showTextDocument: async () => { throw new Error('no editor'); },
   });
-  const client = fakeClient({ foldsFor: { stackId: '/repo/rds/resources.yml', environments: ['dev'] }, throwRequest: false });
+  const client = fakeClient({ foldsFor: { stackId: '/repo/mock/mock.yml', environments: ['one'] }, throwRequest: false });
   const context = { subscriptions: [] };
   let started = null;
   const handle = await activateWith(vscode, context, (ctx) => { started = ctx; return client; });
   assert.equal(started, context);
   assert.equal(doc.languageId, 'yaml-dsl');
+  assert.equal(plain.languageId, 'yaml');
   assert.equal(vscode.updated, undefined);
   assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/config'), true);
-  assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/active' && item.params.path === '/repo/rds/resources.yml'), true);
-  assert.deepEqual(client.sent.find((item) => item.method === 'yaml-dsl/visibleFolds').params.stackIds, ['/repo/rds/resources.yml']);
+  assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/active' && item.params.path === '/repo/mock/mock.yml'), true);
+  assert.deepEqual(client.sent.find((item) => item.method === 'yaml-dsl/visibleFolds').params.stackIds, ['/repo/mock/mock.yml']);
   assert.equal(await vscode.provider.value.provideTextDocumentContent({ path: '/nope' }), '');
-  assert.equal(await vscode.provider.value.provideTextDocumentContent({ path: `/${encodeURIComponent('/repo/rds/resources.yml')}/dev` }), 'folded');
+  assert.equal(await vscode.provider.value.provideTextDocumentContent({ path: `/${encodeURIComponent('/repo/mock/mock.yml')}/one` }), 'folded');
 
   vscode.window.activeTextEditor = { document: { uri: { scheme: 'file', fsPath: '/x' }, languageId: 'markdown' } };
   await vscode.listeners.active[0]();
@@ -171,7 +173,7 @@ test('evicted folds close and a workspace without config still starts', async ()
   const tabGroups = {
     all: [{
       tabs: [
-        { input: { uri: { scheme: 'yaml-dsl-fold', path: `/${encodeURIComponent('/repo/resources.yml')}/dev` } } },
+        { input: { uri: { scheme: 'yaml-dsl-fold', path: `/${encodeURIComponent('/repo/mock.yml')}/one` } } },
         { input: { uri: { scheme: 'file', path: '/repo/a.yml' } } },
         { input: null },
         { input: { uri: { scheme: 'yaml-dsl-fold', path: '/only' } } },
@@ -188,15 +190,15 @@ test('evicted folds close and a workspace without config still starts', async ()
   });
   const client = fakeClient();
   await activateWith(vscode, { subscriptions: [] }, () => client);
-  await client.notes['yaml-dsl/evicted']({ stackIds: ['/repo/resources.yml'] });
+  await client.notes['yaml-dsl/evicted']({ stackIds: ['/repo/mock.yml'] });
   assert.equal(closed.length, 1);
   await client.notes['yaml-dsl/evicted']({ stackIds: ['/other'] });
   assert.equal(closed.length, 1);
-  await closeEvicted({ window: {} }, ['/repo/resources.yml']);
+  await closeEvicted({ window: {} }, ['/repo/mock.yml']);
   const changed = fakeVscode({
-    documents: [{ uri: { scheme: 'file', fsPath: '/repo/resources.yml' }, languageId: 'yaml' }],
+    documents: [{ uri: { scheme: 'file', fsPath: '/repo/mock.yml' }, languageId: 'yaml' }],
     associations: {},
   });
   await activateWith(changed, { subscriptions: [] }, () => fakeClient());
-  assert.equal(changed.updated['**/resources.yml'], 'yaml-dsl');
+  assert.equal(changed.updated['**/mock.yml'], 'yaml-dsl');
 });

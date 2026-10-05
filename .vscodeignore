@@ -1,0 +1,9 @@
+.gitignore
+Makefile
+test/
+node_modules/
+.vscode-test/
+package-lock.json
+*.vsix
+**/.DS_Store
+docs/

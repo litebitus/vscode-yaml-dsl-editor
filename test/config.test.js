@@ -5,10 +5,10 @@ const { parseConfig, claimFile } = require('../lib/config');
 const configText = `
 dsls:
   - id: resources
-    match: ["**/resources.yml", 1]
+    match: ["**/mock.yml", 1]
     schema: https://example.test/schema.json
     layers:
-      environments: [dev, 2]
+      environments: [one, 2]
     symbols:
       - kind: local
         at: "$.locals.*"
@@ -44,8 +44,8 @@ test('a config keeps the rules the editor can apply', () => {
   assert.equal(parsed.ok, true);
   assert.equal(parsed.dsls.length, 2);
   const resources = parsed.dsls[0];
-  assert.deepEqual(resources.match, ['**/resources.yml']);
-  assert.deepEqual(resources.layers.environments, ['dev']);
+  assert.deepEqual(resources.match, ['**/mock.yml']);
+  assert.deepEqual(resources.layers.environments, ['one']);
   assert.equal(resources.symbols.length, 2);
   assert.equal(resources.symbols[1].name.token, 'last');
   assert.equal(resources.symbols[1].name.spelling, 'snake');
@@ -70,16 +70,16 @@ test('a config that is not a mapping is rejected', () => {
 
 test('a file is claimed by one DSL, neither, or reported when two match', () => {
   const { dsls } = parseConfig(configText);
-  assert.equal(claimFile('/repo/rds/resources.yml', dsls).status, 'one');
+  assert.equal(claimFile('/repo/mock/mock.yml', dsls).status, 'one');
   assert.equal(claimFile('/repo/readme.md', dsls).status, 'none');
   const both = parseConfig(`
 dsls:
   - id: a
     match: ["**/*.yml"]
   - id: b
-    match: ["**/resources.yml"]
+    match: ["**/mock.yml"]
 `);
-  const claim = claimFile('/repo/resources.yml', both.dsls);
+  const claim = claimFile('/repo/mock.yml', both.dsls);
   assert.equal(claim.status, 'many');
   assert.deepEqual(claim.ids, ['a', 'b']);
 });

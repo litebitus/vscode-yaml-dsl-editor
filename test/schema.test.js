@@ -5,7 +5,7 @@ const { readModeline, parseSchema, fieldDescription } = require('../lib/schema')
 const schema = {
   description: 'root',
   properties: {
-    redshift: { $ref: '#/definitions/redshift_map', description: '[optional] Redshift clusters.' },
+    mocktype: { $ref: '#/definitions/mocktype_map', description: '[optional] Mock things.' },
     tags: { additionalProperties: { description: 'tag value' } },
     open: { additionalProperties: true },
     bad: { patternProperties: { '(': { description: 'nope' } }, additionalProperties: false },
@@ -15,11 +15,11 @@ const schema = {
   },
   definitions: {
     string_or_ref: { description: 'a literal string, a ref, or a bare local' },
-    redshift_map: { patternProperties: { '^(?!defaults$).+$': { $ref: '#/definitions/redshift' } } },
-    redshift: { allOf: [{ $ref: '#/definitions/redshift_body' }] },
-    redshift_body: {
+    mocktype_map: { patternProperties: { '^(?!defaults$).+$': { $ref: '#/definitions/mocktype' } } },
+    mocktype: { allOf: [{ $ref: '#/definitions/mocktype_body' }] },
+    mocktype_body: {
       properties: {
-        database_name: { $ref: '#/definitions/string_or_ref', description: '[optional] Database name.' },
+        label: { $ref: '#/definitions/string_or_ref', description: '[optional] Mock label.' },
       },
     },
     loop: { $ref: '#/definitions/loop' },
@@ -27,9 +27,9 @@ const schema = {
 };
 
 test('hover keeps the description beside $ref', () => {
-  assert.equal(fieldDescription(schema, ['redshift', 'primary', 'database_name']), '[optional] Database name.');
-  assert.equal(fieldDescription(schema, ['redshift']), '[optional] Redshift clusters.');
-  assert.equal(fieldDescription(schema, ['redshift', 'primary']), null);
+  assert.equal(fieldDescription(schema, ['mocktype', 'primary', 'label']), '[optional] Mock label.');
+  assert.equal(fieldDescription(schema, ['mocktype']), '[optional] Mock things.');
+  assert.equal(fieldDescription(schema, ['mocktype', 'primary']), null);
   assert.equal(fieldDescription(schema, []), 'root');
   assert.equal(fieldDescription(schema, ['tags', 'Name']), 'tag value');
   assert.equal(fieldDescription(schema, ['extra', 'x']), 'first');
@@ -52,7 +52,7 @@ test('a missing or unusable schema node has no description', () => {
 });
 
 test('a modeline is the schema path and only an object schema parses', () => {
-  assert.equal(readModeline('# yaml-language-server: $schema=.terraform/modules/resources_yaml/resources.schema.json\n'), '.terraform/modules/resources_yaml/resources.schema.json');
+  assert.equal(readModeline('# yaml-language-server: $schema=.schema/sample.schema.json\n'), '.schema/sample.schema.json');
   assert.equal(readModeline('name: a\n'), null);
   assert.deepEqual(parseSchema('{"a":1}'), { a: 1 });
   assert.equal(parseSchema('['), null);

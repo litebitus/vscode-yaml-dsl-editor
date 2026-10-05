@@ -15,11 +15,11 @@ function rule(extra) {
 }
 
 function doc(text, symbols, references = []) {
-  return analyzeDocument(text, '/repo/resources.yml', { symbols, references });
+  return analyzeDocument(text, '/repo/mock.yml', { symbols, references });
 }
 
 test('resource identity is the last token with dashes written as underscores', () => {
-  const text = 'redshift:\n  primary: {}\n  defaults: {}\n  "name dev-redshift-cluster-v2": {}\nlocals:\n  db: warehouse\nschema_version: 3\n';
+  const text = 'mocktype:\n  primary: {}\n  defaults: {}\n  "name mock-thing-v2": {}\nlocals:\n  db: mock-value\nschema_version: 3\n';
   const analyzed = doc(text, [
     rule({
       at: '$.*.*',
@@ -31,12 +31,12 @@ test('resource identity is the last token with dashes written as underscores', (
     rule({ kind: 'local', at: '$.locals.*', name: { token: null, spelling: null }, qualify: {} }),
   ]);
   const names = analyzed.symbols.map((symbol) => `${symbol.kind}:${symbol.qualifiers.type || ''}:${symbol.name}`);
-  assert.ok(names.includes('resource:redshift:primary'));
-  assert.ok(names.includes('resource:redshift:dev_redshift_cluster_v2'));
+  assert.ok(names.includes('resource:mocktype:primary'));
+  assert.ok(names.includes('resource:mocktype:mock_thing_v2'));
   assert.ok(names.includes('local::db'));
   assert.equal(names.some((name) => name.includes('defaults')), false);
   assert.equal(names.some((name) => name.includes('schema_version')), false);
-  assert.equal(analyzed.symbols.find((symbol) => symbol.name === 'db').valueText, 'warehouse');
+  assert.equal(analyzed.symbols.find((symbol) => symbol.name === 'db').valueText, 'mock-value');
 });
 
 test('path steps that do not match a node produce no symbol', () => {
@@ -63,7 +63,7 @@ test('path steps that do not match a node produce no symbol', () => {
 });
 
 test('whole scalars and matches inside a scalar are references', () => {
-  const text = 'source: ref redshift.primary.database_name\nnote: "use ${local.db} now"\nplain: local.db\nnum: 1\nlater: xname\nescaped: "a\\n"\n';
+  const text = 'source: ref mocktype.primary.label\nnote: "use ${local.db} now"\nplain: local.db\nnum: 1\nlater: xname\nescaped: "a\\n"\n';
   const analyzed = doc(text, [], [
     { pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)', where: 'whole', target: { kind: 'resource', type: 'type', name: 'name' } },
     { pattern: '^local\\.(?<name>[a-z0-9_]+)$', where: 'whole', target: { kind: 'local', name: 'name' } },
@@ -72,7 +72,7 @@ test('whole scalars and matches inside a scalar are references', () => {
     { pattern: '\\n', where: 'within', target: { kind: 'local', name: 'missing' } },
   ]);
   assert.equal(analyzed.references.length >= 3, true);
-  const ref = analyzed.references.find((item) => item.groups.type === 'redshift');
+  const ref = analyzed.references.find((item) => item.groups.type === 'mocktype');
   assert.equal(ref.groups.name, 'primary');
   assert.equal(ref.range.start.line, 0);
   const within = analyzed.references.find((item) => item.groups.name === 'db' && item.range.start.line === 1);

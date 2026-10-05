@@ -1,18 +1,18 @@
 # YAML DSL editor
 
-Authoring `resources.yml` is hard without this extension, and that is why it exists. A stack is a common layer and an overlay per environment. The file on screen is one of those, not the environment's full config. A field's documentation sits beside a `$ref` the usual YAML tooling never reads. A `ref` and a `local` are strings, so nothing jumps to the declaration. A per-type `defaults` block is a third fold on top of the common layer. The extension is the editor that makes that document authorable.
+Authoring `sample.yml` is hard without this extension, and that is why it exists. A stack is a common layer and an overlay per environment. The file on screen is one of those, not the environment's full config. A field's documentation sits beside a `$ref` the usual YAML tooling never reads. A `ref` and a `local` are strings, so nothing jumps to the declaration. A per-type `defaults` block is a third fold on top of the common layer. The extension is the editor that makes that document authorable.
 
 The extension is generic. It supports the pipeline DSL, the test DSL, and the resource DSL, and any further DSL written the same way. A DSL is a block in the workspace config, `yaml-dsl.yml`. Nothing about a particular DSL is compiled into the extension. The block says which files belong, the syntax of a ref and of a local, when the DSL has layers which directories are environments, and a fallback schema for a document that does not name one. A ref and a local are generic: the editor navigates them and hovers them the same way in every DSL. Each DSL's block supplies the syntax that declares them, and those syntaxes differ.
 
 Of the three, the pipeline DSL is the simplest, the test DSL is in the middle, and the resource DSL is the complex one. Its field types are shared definitions, because a value may be a scalar, a `ref`, or a bare `local`. A simpler DSL uses the same engine through its own config block.
 
-The resource DSL is the first target. It is the primary way Terraform stacks are authored, and it is the DSL to get right before the others. The first config block, and the first files the editor is proven against, are `resources.yml`. Pipeline and test config come after that works.
+The resource DSL is the first target. It is the primary way Terraform stacks are authored, and it is the DSL to get right before the others. The first config block, and the first files the editor is proven against, are `sample.yml`. Pipeline and test config come after that works.
 
 Features are fine-tuned iteratively. The first slice is what any editor for a programming language provides: hover documentation, and navigation of refs and locals. Diffing environments, suggestions, and extraction into the common layer come after that slice and are tuned the same way.
 
 ## Language server
 
-The editor is a language server. It has to be. Activating any `resources.yml` puts the whole stack in scope: the common layer and every adjacent overlay. The server holds that context. Switching from one file in the stack to another uses it. Rebuilding the stack on each switch would be slow.
+The editor is a language server. It has to be. Activating any `sample.yml` puts the whole stack in scope: the common layer and every adjacent overlay. The server holds that context. Switching from one file in the stack to another uses it. Rebuilding the stack on each switch would be slow.
 
 The server keeps the stack current as the files change, including the folded document of each environment. Those folded documents are buffers in the editor view, so the author sees an environment's full config instead of assembling it from the files. Hover and navigation run against the stack in scope, not against the active file alone.
 
@@ -32,14 +32,14 @@ Line coverage and branch coverage of the extension's own code are each at least 
 
 ## Common layer and overlays
 
-The core of the resource DSL is how a stack is composed. One `resources.yml` is the common layer. Each environment is an overlay: a `resources.yml` in a directory named `dev`, `staging`, `uat`, or `production` beside that file. The engine deep-merges the common layer under the overlay, and the folded document is what a plan sees. The same shape without an instance directory (`security-group-rule/resources.yml` beside `security-group-rule/dev/`) is the same composition.
+The core of the resource DSL is how a stack is composed. One `sample.yml` is the common layer. Each environment is an overlay: a `sample.yml` in a directory named `one` or `two` beside that file. The engine deep-merges the common layer under the overlay, and the folded document is what a plan sees. The same shape without an instance directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
 
 ```
-rds/datahub/resources.yml
-rds/datahub/dev/resources.yml
-rds/datahub/staging/resources.yml
-rds/datahub/uat/resources.yml
-rds/datahub/production/resources.yml
+mock-stack/sample.yml
+mock-stack/one/sample.yml
+mock-stack/two/sample.yml
+mock-stack/three/sample.yml
+mock-stack/four/sample.yml
 ```
 
 An author editing one of those files sees only that file. The language server buffers the stack in the editor view: each environment's folded document, common layer merged with that overlay. Shared config lives in the common layer, including a local that a resource references. A per-type `defaults` block is a third place the engine folds in, so the author has to piece the overlay, the common layer, and `defaults` together to see one environment. `defaults` is redundant with the common layer and is being phased out. The `layers` block in the resource DSL's config is this composition.
@@ -56,7 +56,7 @@ Go to definition on a ref opens the declaration it names. The editor has one nav
 
 In the resource DSL that syntax is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. Navigation opens the resource `<name>` under `<type>`.
 
-The resource's identity is the last token of its key, with `-` written as `_`. A key `name dev-redshift-cluster-v2` is the ref name `dev_redshift_cluster_v2`. A logical key `primary` is the ref name `primary`. A `${...}` placeholder is compared as written. The editor does not substitute it. When nothing in scope matches, go to definition does not move.
+The resource's identity is the last token of its key, with `-` written as `_`. A key `name mock-thing-v2` is the ref name `mock_thing_v2`. A logical key `primary` is the ref name `primary`. A `${...}` placeholder is compared as written. The editor does not substitute it. When nothing in scope matches, go to definition does not move.
 
 Scope for a ref is the active stack: the common layer and every adjacent overlay. A ref in one file may name a resource declared in another file of that stack.
 
@@ -87,7 +87,7 @@ This extension reads the schema document as authored. Hover walks the YAML path 
 
 Hover on a ref shows the target's type, identity, and file. Hover on a local shows the value as authored.
 
-The schema for a file is the one the file names. A `# yaml-language-server: $schema=` modeline is honored. Its path is relative to that file and points at the schema shipped inside the Terraform module version the stack has initialized. An environment file names `.terraform/modules/resources_yaml/resources.schema.json`. A common layer names that file through the environment directory that initialized the stack, such as `dev/.terraform/modules/resources_yaml/resources.schema.json`. That is the grammar the stack is actually on.
+The schema for a file is the one the file names. A `# yaml-language-server: $schema=` modeline is honored. Its path is relative to that file and points at the schema shipped inside the Terraform module version the stack has initialized. An environment file names `.schema/sample.schema.json`. A common layer names that file through the environment directory that initialized the stack, such as `one/.schema/sample.schema.json`. That is the grammar the stack is actually on.
 
 The config may set `schema` to a search path. It is the fallback, used when the file has no modeline or the path it names is not on disk. Each entry is relative to the file, the same way a modeline path is, and the first one on disk is the schema. A URL in the path is fetched. The search does not override a modeline that resolves. The extension embeds no schema. When neither source resolves, the file gets one diagnostic and field hovers stay empty.
 
@@ -95,7 +95,7 @@ DSL-level behavior is configured in `yaml-dsl.yml`: which files, the syntax of a
 
 The schema is how the editor understands a field and the shape of an object: which keys exist, what value shape a key takes, and the field's own description, including the text beside a `$ref`. It is read as published. If that is not enough to understand a field or a shape, the schema gains an extension point and the module publishes it with the grammar. The extension does not grow a special case for that object. No such point is added before a field or a shape actually requires one.
 
-The schema is not the component's rules. Those live in the component's `variables.tf` and run at plan, after the fold. A representative one is a group of fields required only when `pattern` is a certain value. `s3_bucket` keeps that as two tables: `pattern_fields` is the fields a pattern allows, and `pattern_required_fields` is the group it requires. `private_airflow_source` requires `kms_key_arn`, `name_prefix`, and `noncurrent_version_expiration_days`. `legacy_public_website` requires `name`, `versioning`, and `website_index_document`. The published schema has no such table. A `required` array on the resource would also be wrong while `defaults` still folds onto every resource of the type: the field may be filled from the resource, from `defaults` in the same file, or from `defaults` in the common layer, and the editor is looking at one file. `defaults` is being phased out in favor of a local, which a resource references explicitly, so that implicit fill goes away with it. The common layer merged under the overlay remains. The same gap covers the other component checks, such as a field legal only for one lookup type, or two fields of which exactly one may be set. An extension point is not a transcription of these checks.
+The schema is not the component's rules. Those live in the component's `variables.tf` and run at plan, after the fold. A representative one is a group of fields required only when `pattern` is a certain value. A component keeps that as two tables: one lists the fields a pattern allows, and one lists the group it requires. `mock_pattern` requires `mock_a`, `mock_b`, and `mock_c`. `mock_other` requires `mock_d`, `mock_e`, and `mock_f`. The published schema has no such table. A `required` array on the resource would also be wrong while `defaults` still folds onto every resource of the type: the field may be filled from the resource, from `defaults` in the same file, or from `defaults` in the common layer, and the editor is looking at one file. `defaults` is being phased out in favor of a local, which a resource references explicitly, so that implicit fill goes away with it. The common layer merged under the overlay remains. The same gap covers the other component checks, such as a field legal only for one lookup type, or two fields of which exactly one may be set. An extension point is not a transcription of these checks.
 
 ## Diffing across environments
 
@@ -124,12 +124,12 @@ One `yaml-dsl.yml` at the root of a workspace folder.
 ```yaml
 dsls:
   - id: resources
-    match: ["**/resources.yml"]
+    match: ["**/sample.yml"]
     schema:
-      - .terraform/modules/resources_yaml/resources.schema.json
-      - dev/.terraform/modules/resources_yaml/resources.schema.json
+      - .schema/sample.schema.json
+      - one/.schema/sample.schema.json
     layers:
-      environments: [dev, staging, uat, production]
+      environments: [one, two]
     symbols:
       - kind: local
         at: "$.locals.*"
