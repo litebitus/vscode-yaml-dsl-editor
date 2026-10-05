@@ -5,6 +5,10 @@
   "version": "0.0.1",
   "publisher": "lite2073",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litebitus/vscode-yaml-dsl-editor.git"
+  },
   "engines": {
     "vscode": "^1.85.0",
     "node": ">=22"
