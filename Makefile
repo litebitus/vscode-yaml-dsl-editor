@@ -13,7 +13,7 @@ VERSION = $(shell node -p "require('./package.json').version")
 PUBLISHER = $(shell node -p "require('./package.json').publisher")
 EXT_ID = $(PUBLISHER).$(shell node -p "require('./package.json').name")
 
-.PHONY: test package install-cursor publish preflight bump push publish-ovsx publish-vsce uninstall
+.PHONY: test test-all package install-cursor publish preflight bump push publish-ovsx publish-vsce uninstall
 
 test:
 	node --test --experimental-test-coverage \
@@ -25,7 +25,12 @@ test:
 		--test-coverage-exclude='node_modules/**' \
 		test/*.test.js
 
-package: test
+# unit tests plus integration tests: downloads a real VS Code on first run
+# (cached in .vscode-test/), launches it with the extension, runs test/integration/
+test-all: test
+	npx vscode-test
+
+package: test-all
 	vsce package -o $(VSIX)
 
 # Installs the .vsix that `package` already wrote into Cursor.

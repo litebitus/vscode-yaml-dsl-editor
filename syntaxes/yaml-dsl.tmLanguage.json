@@ -22,14 +22,14 @@
       }
     },
     "quotedPair": {
-      "match": "(?m)^(\\s*)(\"(?:\\\\.|[^\"])*\"|'(?:[^'])*')\\s*(:)",
+      "match": "^(\\s*)(\"(?:\\\\.|[^\"\\n])*\"|'(?:[^'\\n])*')\\s*(:)",
       "captures": {
         "2": { "name": "string.quoted.double.hcl" },
         "3": { "name": "keyword.operator.assignment.hcl" }
       }
     },
     "pair": {
-      "match": "(?m)^(\\s*)([^\\s:#\"'][^:#]*?)\\s*(:)",
+      "match": "^(\\s*)([^\\s:#\"'][^:#\\n]*?)\\s*(:)",
       "captures": {
         "2": { "name": "variable.other.readwrite.hcl" },
         "3": { "name": "keyword.operator.assignment.hcl" }
@@ -73,7 +73,7 @@
     "ref": {
       "begin": "\\b(ref)\\b",
       "beginCaptures": { "1": { "name": "support.function.builtin.hcl" } },
-      "end": "(?=\\s|#|$)",
+      "end": "(?=\\s*#|$)",
       "patterns": [
         { "include": "#interpolation" },
         { "match": "\\.", "name": "keyword.operator.accessor.hcl" },
@@ -101,11 +101,11 @@
       "patterns": [
         {
           "name": "constant.language.hcl",
-          "match": "(?<=:\\s*)(?:true|false|null|~)(?=\\s*(?:#|$))"
+          "match": "(?<=:)\\s*(?:true|false|null|~)(?=\\s*(?:#|$))"
         },
         {
           "name": "constant.numeric.integer.hcl",
-          "match": "(?<=:\\s*)[-+]?\\d+(?=\\s*(?:#|$))"
+          "match": "(?<=:)\\s*[-+]?\\d+(?=\\s*(?:#|$))"
         }
       ]
     }

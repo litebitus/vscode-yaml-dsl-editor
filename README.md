@@ -80,7 +80,7 @@ When no schema resolves, the file gets one diagnostic and field hovers stay empt
 
 ## Navigation
 
-A ref or a local that stays in this file is blue. One that points at another file is peach. Both are underlined. Go to definition on a ref opens the declaration it names. Go to definition on a local opens that declaration. Resting on one that lives in another file shows that declaration in the hover after the pointer has rested for a second. Command-click opens the declaration. Moving the pointer away before the delay cancels the hover. The built-in peek is not used. When nothing in scope matches, the cursor does not move.
+A ref or a local that stays in this file is blue. One that points at another file is peach. Both are underlined. Resting on either shows that declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing in scope matches, the cursor does not move.
 
 In the resource DSL a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. The resource's identity is the last token of its key, with `-` written as `_`. A `${...}` placeholder is compared as written. A name that is the same spelling of a local's value, with `-` written as `_`, points at the resource whose key contains that local.
 
@@ -178,4 +178,4 @@ F5 (Extension Development Host). There is no compile step. The extension is plai
 
 ### Tests
 
-`make test` runs the suite and fails if line coverage or branch coverage of the extension's own code is under 90%. Test files are not part of the measured set. The suite covers language ownership, field hover, ref and local navigation, the stack, the folded buffer, and the schema search path. `make package` runs that gate before it builds the `.vsix`.
+`make test` runs the unit suite and fails if line coverage or branch coverage of the extension's own code is under 90%. Test files are not part of the measured set. `make test-all` runs that suite, then downloads each exact version in `vscodeTestVersions` in `package.json` and runs `test/integration` in it. It does not use an editor installed on the machine. `make package` runs `test-all` before it builds the `.vsix`.

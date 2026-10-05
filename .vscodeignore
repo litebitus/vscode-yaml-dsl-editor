@@ -2,6 +2,7 @@
 Makefile
 test/
 .vscode-test/
+.vscode-test.mjs
 package-lock.json
 *.vsix
 **/.DS_Store

@@ -1,0 +1,4 @@
+mocktype:
+  replica:
+    source: ref mocktype.primary
+    label: local.db

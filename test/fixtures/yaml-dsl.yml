@@ -1,0 +1,22 @@
+dsls:
+  - id: sample
+    match: ["**/mock.yml"]
+    layers:
+      environments: [one]
+    symbols:
+      - kind: local
+        at: "$.locals.*"
+        name: { from: key }
+      - kind: resource
+        at: "$.*.*"
+        skip: [locals]
+        exclude: [defaults]
+        name: { from: key, token: last, spelling: snake }
+        qualify: { type: parent }
+    references:
+      - pattern: "^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)"
+        where: whole
+        target: { kind: resource, type: type, name: name }
+      - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
+        where: whole
+        target: { kind: local, name: name }

@@ -1,0 +1,5 @@
+locals:
+  db: mock-value
+mocktype:
+  primary:
+    label: local.db

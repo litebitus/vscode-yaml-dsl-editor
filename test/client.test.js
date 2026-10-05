@@ -323,6 +323,12 @@ test('a cross-file target peeks that section and leaves this file', async () => 
     (await mid.provideHover({ uri: here }, { line: 0, character: 0 }, null, async () => ({ contents: 'plain' }))).contents,
     'plain',
   );
+  const section = await mid.provideHover({ uri: here }, { line: 0, character: 0 }, null, async () => ({
+    contents: { value: '**mock.yml:3**\n\n```yaml-dsl\n  data_at_rest_key:\n```' },
+  }));
+  assert.match(section.contents.value, /```yaml-dsl/);
+  assert.match(section.contents.value, /data_at_rest_key/);
+  assert.equal(peeked.some((item) => item[0] === 'editor.action.peekLocations'), false);
 
   peeked.length = 0;
   const moved = {

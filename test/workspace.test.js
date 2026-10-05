@@ -94,20 +94,21 @@ test('hover, definition, and folds use the whole stack', async () => {
 
   const oneUri = 'file://' + one;
   const sourceHover = ws.hover(oneUri, at(files[one], 'ref mocktype.primary'));
-  assert.match(sourceHover.contents.value, /mocktype\.primary — .*mock\.yml/);
-  assert.match(sourceHover.contents.value, /primary:/);
+  assert.match(sourceHover.contents.value, /mock-stack\/mock\.yml:\d+/);
+  assert.doesNotMatch(sourceHover.contents.value, /mocktype\.primary —/);
   const sourceDef = ws.definition(oneUri, at(files[one], 'ref mocktype.primary'));
   assert.equal(sourceDef.path, common);
 
   await ws.sync('file://' + common, common, files[common]);
   const localHover = ws.hover('file://' + common, at(files[common], 'local.db'));
-  assert.equal(localHover.contents.value, 'mock-value');
+  assert.match(localHover.contents.value, /```yaml-dsl/);
+  assert.match(localHover.contents.value, /db:/);
   assert.equal(ws.definition('file://' + common, at(files[common], 'local.db')).path, common);
   const field = ws.hover('file://' + common, at(files[common], 'label'));
   assert.equal(field.contents.value, '[optional] Mock label.');
 
   const within = ws.hover(oneUri, at(files[one], 'local.db'));
-  assert.match(within.contents.value, /^mock-value/);
+  assert.match(within.contents.value, /mock-stack\/mock\.yml:\d+/);
   assert.match(within.contents.value, /db:/);
 
   assert.deepEqual(ws.foldsFor(one), { stackId: common, environments: ['one'] });
@@ -131,10 +132,11 @@ test('hover, definition, and folds use the whole stack', async () => {
   const shared = ws.definition('file://' + two, at(files[two], 'ref mocktype.shared'));
   assert.equal(shared.path, four);
   const unresolved = ws.hover('file://' + two, at(files[two], 'ref mocktype.primary'));
-  assert.match(unresolved.contents.value, /mocktype\.primary — /);
+  assert.match(unresolved.contents.value, /mock-stack\/mock\.yml:\d+/);
+  assert.doesNotMatch(unresolved.contents.value, /mocktype\.primary —/);
   assert.equal(ws.definition('file://' + two, at(files[two], 'ref mocktype.nope')), null);
   await ws.sync(foldUri, foldUri, 'name: overwritten\n');
-  assert.equal(ws.hover('file://' + common, at(files[common], 'local.db')).contents.value, 'mock-value');
+  assert.match(ws.hover('file://' + common, at(files[common], 'local.db')).contents.value, /```yaml-dsl/);
 
   assert.equal(ws.hover('file://missing', { line: 0, character: 0 }), null);
   assert.equal(ws.definition('yaml-dsl-fold:nope', { line: 0, character: 0 }), null);
@@ -206,7 +208,8 @@ dsls:
   assert.match(ws.diagnostics('file:///repo/mock.yml')[0].message, /claimed by a and b/);
   await ws.sync('file:///repo/note.yml', '/repo/note.yml', 'locals:\n  db: mock-value\nuse: local.db\n');
   const hover = ws.hover('file:///repo/note.yml', at('locals:\n  db: mock-value\nuse: local.db\n', 'local.db'));
-  assert.equal(hover.contents.value, 'mock-value');
+  assert.match(hover.contents.value, /```yaml-dsl/);
+  assert.match(hover.contents.value, /mock-value/);
   assert.deepEqual(ws.foldsFor('/repo/note.yml'), { stackId: null, environments: [] });
   assert.equal(ws.foldText('/repo/note.yml', 'one'), '');
   await ws.sync('file:///repo/note.yml', '/repo/note.yml', 'locals: [\n');
