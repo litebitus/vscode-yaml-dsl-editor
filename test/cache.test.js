@@ -54,3 +54,16 @@ test('identical schema bytes share one copy and eviction does not drop it', () =
   for (let i = 0; i < 9; i += 1) cache.hold(`s${i}`, {});
   assert.equal(cache.schemaCount(), 2);
 });
+
+test('a held or replaced stack is reported reanalyzed once, and an evicted one is not', () => {
+  const cache = createCache();
+  cache.hold('a', { n: 1 });
+  cache.hold('b', { n: 1 });
+  assert.deepEqual(cache.takeReanalyzed(), ['a', 'b']);
+  assert.deepEqual(cache.takeReanalyzed(), []);
+  cache.replaceData('a', { n: 2 });
+  assert.equal(cache.replaceData('missing', {}), null);
+  assert.deepEqual(cache.takeReanalyzed(), ['a']);
+  for (const id of ['c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k']) cache.hold(id, {});
+  assert.equal(cache.takeReanalyzed().includes('a'), false);
+});

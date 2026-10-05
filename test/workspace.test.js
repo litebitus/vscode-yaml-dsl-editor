@@ -163,14 +163,15 @@ dsls:
 `;
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   await ws.sync('file:///repo/only/mock.yml', '/repo/only/mock.yml', files['/repo/only/mock.yml']);
-  const diags = ws.diagnostics('file:///repo/only/mock.yml');
+  const diags = ws.problems('file:///repo/only/mock.yml');
   assert.equal(diags.some((item) => item.message === 'schema is unavailable'), false);
   await ws.sync('file:///repo/good/mock.yml', '/repo/good/mock.yml', files['/repo/good/mock.yml']);
-  assert.equal(ws.diagnostics('file:///repo/good/mock.yml').some((item) => item.message === 'schema is unavailable'), false);
+  assert.equal(ws.problems('file:///repo/good/mock.yml').some((item) => item.message === 'schema is unavailable'), false);
 
   await ws.setConfigs([{ text: 'dsls: [', dir: '/repo' }]);
   await ws.sync('file:///repo/yaml-dsl.yml', '/repo/yaml-dsl.yml', 'dsls: [');
-  assert.ok(ws.diagnostics('file:///repo/yaml-dsl.yml')[0].message.length > 0);
+  assert.ok(ws.problems('file:///repo/yaml-dsl.yml')[0].message.length > 0);
+  assert.deepEqual(ws.problems('file:///elsewhere/yaml-dsl.yml'), []);
 
   const open = 'name: from-editor\n';
   await ws.setConfigs([{ text: relative, dir: '/repo/disk' }]);
@@ -183,7 +184,7 @@ dsls:
   const boom = workspace({}, async () => schema, async () => { throw new Error('boom'); });
   await boom.setConfigs([{ text: config, dir: '/repo' }]);
   await boom.sync('file:///repo/boom/mock.yml', '/repo/boom/mock.yml', '# yaml-language-server: $schema=missing.json\nname: plain\n');
-  assert.equal(boom.diagnostics('file:///repo/boom/mock.yml').some((item) => item.message === 'schema is unavailable'), false);
+  assert.equal(boom.problems('file:///repo/boom/mock.yml').some((item) => item.message === 'schema is unavailable'), false);
 });
 
 test('two DSLs, a parse error, and a DSL without layers', async () => {
@@ -206,7 +207,7 @@ dsls:
   const ws = workspace({}, async () => null);
   await ws.setConfigs([{ text: both, dir: '/repo' }]);
   await ws.sync('file:///repo/mock.yml', '/repo/mock.yml', 'name: a\n');
-  assert.match(ws.diagnostics('file:///repo/mock.yml')[0].message, /claimed by a and b/);
+  assert.match(ws.problems('file:///repo/mock.yml')[0].message, /claimed by a and b/);
   await ws.sync('file:///repo/note.yml', '/repo/note.yml', 'locals:\n  db: mock-value\nuse: local.db\n');
   const hover = ws.hover('file:///repo/note.yml', at('locals:\n  db: mock-value\nuse: local.db\n', 'local.db'));
   assert.match(hover.contents.value, /```yaml-dsl/);
@@ -214,13 +215,13 @@ dsls:
   assert.deepEqual(ws.foldsFor('/repo/note.yml'), { stackId: null, environments: [] });
   assert.equal(ws.foldText('/repo/note.yml', 'one'), '');
   await ws.sync('file:///repo/note.yml', '/repo/note.yml', 'locals: [\n');
-  assert.ok(ws.diagnostics('file:///repo/note.yml').length > 0);
+  assert.ok(ws.problems('file:///repo/note.yml').length > 0);
   await ws.setActive(null);
   await ws.setActive('/repo/missing.yml');
   ws.setVisibleFolds(['/repo/note.yml']);
   assert.equal(ws.hover('yaml-dsl-fold:%2Frepo%2Fmissing/one', { line: 0, character: 0 }), null);
   ws.close('file:///repo/note.yml');
-  assert.deepEqual(ws.diagnostics('file:///repo/note.yml'), []);
+  assert.deepEqual(ws.problems('file:///repo/note.yml'), []);
 });
 
 test('loading past the pin capacity evicts the oldest unpinned stack', async () => {
@@ -278,7 +279,7 @@ dsls:
   const bareText = 'name: plain\n';
   await ws.setConfigs([{ text: 'dsls:\n  - id: sample\n    match: ["**/mock.yml"]\n', dir: '/repo' }]);
   await ws.sync('file://' + bare, bare, bareText);
-  assert.ok(ws.diagnostics('file://' + bare).some((item) => item.message === 'schema is unavailable'));
+  assert.ok(ws.problems('file://' + bare).some((item) => item.message === 'schema is unavailable'));
   assert.equal(ws.hover('file://' + bare, at(bareText, 'name')), null);
 });
 
@@ -349,9 +350,14 @@ dsls:
   await ws.setConfigs([{ text: layered, dir: '/repo' }]);
   await ws.sync(`file://${onePath}`, onePath, files[onePath]);
   await ws.sync(`file://${commonPath}`, commonPath, files[commonPath]);
-  const unavailable = (filePath) => ws.diagnostics(`file://${filePath}`).some((item) => item.message === SCHEMA_UNAVAILABLE);
+  const unavailable = (filePath) => ws.problems(`file://${filePath}`).some((item) => item.message === SCHEMA_UNAVAILABLE);
   assert.equal(unavailable(onePath), true);
   assert.equal(unavailable(commonPath), true);
+  assert.equal(ws.problems(`file://${onePath}`)[0].range.start.line, 0);
+  const named = `name: plain\n# yaml-language-server: $schema=.schema/mock.schema.json\n`;
+  await ws.sync(`file://${onePath}`, onePath, named);
+  assert.equal(ws.problems(`file://${onePath}`).find((item) => item.message === SCHEMA_UNAVAILABLE).range.start.line, 1);
+  await ws.sync(`file://${onePath}`, onePath, files[onePath]);
 
   assert.deepEqual(ws.schemaWatchTargets().map((target) => [target.base, target.pattern]).sort(), [
     ['/repo/mock-app', '.schema'],
@@ -405,4 +411,52 @@ test('a schema path with glob characters is watched literally from a folder that
     { base: '/repo/[mock]', pattern: '.terraform/[[]x[]]' },
     { base: '/repo/[mock]', pattern: '.terraform/[[]x[]]/s.json' },
   ]);
+});
+
+test('a reanalyzed stack names every open document in it, fold buffers included', async () => {
+  const files = { [common]: 'name: plain\n', [one]: 'name: plain\n' };
+  const ws = workspace(files, async () => schema);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${one}`, one, files[one]);
+  const stackId = ws.foldsFor(one).stackId;
+  const foldBuffer = `yaml-dsl-fold:${encodeURIComponent(stackId)}/one`;
+  await ws.sync(foldBuffer, foldBuffer, 'name: plain\n');
+  await ws.sync('yaml-dsl-fold:%2Frepo%2Fother/one', 'yaml-dsl-fold:%2Frepo%2Fother/one', 'name: plain\n');
+  await ws.sync('file:///repo/unclaimed.txt', '/repo/unclaimed.txt', 'plain\n');
+  await ws.sync(`file://${common}`, common, 'name: edited\n');
+  assert.deepEqual(ws.takeReanalyzedUris().sort(), [`file://${common}`, `file://${one}`, foldBuffer].sort());
+  assert.deepEqual(ws.takeReanalyzedUris(), []);
+  await ws.sync(`file://${common}`, common, 'name: edited\n');
+  assert.deepEqual(ws.takeReanalyzedUris(), []);
+});
+
+test('each reference is classified local, external, or error', async () => {
+  const files = {
+    [common]: 'locals:\n  db: mock-value\nmocktype:\n  primary:\n    label: local.db\n',
+    [two]: 'mocktype:\n  replica:\n    source: ref mocktype.primary\n    gone: ref mocktype.nope\n    self: ref mocktype.replica\n',
+  };
+  const ws = workspace(files, async () => schema);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${two}`, two, files[two]);
+  await ws.sync(`file://${common}`, common, files[common]);
+  const classesOf = (uri, text) => ws.references(uri).map((reference) => [
+    text.split('\n')[reference.range.start.line].slice(reference.range.start.character, reference.range.end.character),
+    reference.kind,
+  ]);
+  assert.deepEqual(classesOf(`file://${two}`, files[two]), [
+    ['ref mocktype.primary', 'external'],
+    ['ref mocktype.nope', 'error'],
+    ['ref mocktype.replica', 'local'],
+  ]);
+  assert.deepEqual(classesOf(`file://${common}`, files[common]), [['local.db', 'local']]);
+  const stackId = ws.foldsFor(two).stackId;
+  const folded = ws.references(`yaml-dsl-fold:${encodeURIComponent(stackId)}/two`);
+  assert.deepEqual(folded.map((reference) => reference.kind).sort(), ['error', 'external', 'external', 'local']);
+  const commonOnly = ws.references(`yaml-dsl-fold:${encodeURIComponent(stackId)}/one`);
+  assert.deepEqual(commonOnly.map((reference) => reference.kind), ['local']);
+  assert.equal(ws.references('yaml-dsl-fold:%2Frepo%2Fmissing/one'), null);
+  assert.equal(ws.references('file:///repo/not-open.yml'), null);
+  await ws.sync('file:///repo/unclaimed.txt', '/repo/unclaimed.txt', 'plain\n');
+  assert.equal(ws.references('file:///repo/unclaimed.txt'), null);
+  assert.equal(ws.references(`yaml-dsl-fold:${encodeURIComponent(stackId)}/one`).length, 1);
 });

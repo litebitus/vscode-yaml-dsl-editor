@@ -123,6 +123,7 @@ function fakeClient(behavior = {}) {
       if (behavior.throwRequest) throw new Error('down');
       if (method === 'yaml-dsl/foldsFor') return behavior.foldsFor || { stackId: null, environments: [] };
       if (method === 'yaml-dsl/fold') return 'folded';
+      if (method === 'yaml-dsl/decorations') return behavior.decorations === undefined ? null : behavior.decorations;
       return null;
     },
   };
@@ -401,148 +402,6 @@ test('a cross-file target peeks that section and leaves this file', async () => 
   assert.equal(peeked.some((item) => item[0] === 'editor.action.peekLocations'), false);
 });
 
-test('refs and locals stay underlined', async () => {
-  const hereRange = { start: { line: 1, character: 2 }, end: { line: 1, character: 10 } };
-  const awayRange = { start: { line: 4, character: 2 }, end: { line: 4, character: 12 } };
-  const painted = [];
-  const docUri = { scheme: 'file', toString() { return 'file:///repo/mock.yml'; } };
-  const yamlEditor = {
-    document: { languageId: 'yaml-dsl', uri: docUri },
-    setDecorations(decoration, ranges) { painted.push({ decoration, ranges }); },
-  };
-  const plainEditor = {
-    document: { languageId: 'yaml', uri: { scheme: 'file' } },
-    setDecorations(decoration, ranges) { painted.push({ decoration, ranges }); },
-  };
-  const vscode = {
-    window: { visibleTextEditors: [yamlEditor, plainEditor, { document: null }] },
-    commands: {
-      executeCommand: async (cmd) => (cmd === 'vscode.executeLinkProvider' ? [
-        { range: hereRange, target: { scheme: 'file', toString() { return 'file:///repo/mock.yml'; } } },
-        { range: awayRange, target: { scheme: 'command', toString() { return 'command:yaml-dsl.peek'; } } },
-        { range: hereRange, target: { scheme: 'http', toString() { return 'http://example.test'; } } },
-        {
-          range: awayRange,
-          target: {
-            scheme: 'file',
-            fragment: '1,1',
-            toString() { return 'file:///repo/other.yml#1,1'; },
-            with() { return { toString() { return 'file:///repo/other.yml'; } }; },
-          },
-        },
-        {},
-      ] : []),
-    },
-  };
-  const inFile = { kind: 'in' };
-  const outFile = { kind: 'out' };
-  await paintUnderlines(vscode, inFile, outFile);
-  assert.equal(painted[0].decoration, inFile);
-  assert.equal(painted[0].ranges.length, 2);
-  assert.equal(painted[1].decoration, outFile);
-  assert.equal(painted[1].ranges.length, 2);
-  assert.deepEqual(painted[2].ranges, []);
-  assert.deepEqual(painted[3].ranges, []);
-});
-
-test('a placeholder inside a ref keeps its own color', async () => {
-  const text = 'ref redshift.\n${env}_cluster';
-  const at = text.indexOf('${env}');
-  const range = { start: { line: 0, character: 0 }, end: { line: 1, character: 12 } };
-  const empty = { start: { line: 2, character: 0 }, end: { line: 2, character: 0 }, empty: true };
-  const painted = [];
-  const doc = {
-    languageId: 'yaml-dsl',
-    uri: { scheme: 'file', toString() { return 'file:///repo/mock.yml'; } },
-    getText(asked) { return asked && asked.empty ? '' : text; },
-  };
-  const editor = {
-    document: doc,
-    setDecorations(decoration, ranges) { painted.push({ decoration, ranges }); },
-  };
-  const vscode = {
-    window: { visibleTextEditors: [editor] },
-    commands: {
-      executeCommand: async () => [
-        { range, target: { scheme: 'file', toString() { return 'file:///repo/mock.yml'; } } },
-        { range: empty, target: { scheme: 'file', toString() { return 'file:///repo/mock.yml'; } } },
-      ],
-    },
-  };
-  const inFile = { kind: 'in' };
-  const outFile = { kind: 'out' };
-  const mark = { kind: 'mark' };
-  await paintUnderlines(vscode, inFile, outFile, mark);
-  assert.deepEqual(painted[0].ranges[0], {
-    start: { line: 0, character: 0 },
-    end: placeAt(text, at),
-  });
-  assert.deepEqual(painted[0].ranges[1], {
-    start: placeAt(text, at + '${env}'.length),
-    end: placeAt(text, text.length),
-  });
-  assert.deepEqual(painted[0].ranges[2], empty);
-  assert.deepEqual(painted[2].ranges[0], {
-    start: placeAt(text, at),
-    end: placeAt(text, at + '${env}'.length),
-  });
-  assert.equal(painted[2].decoration, mark);
-});
-
-test('underlines are painted before the language server answers', async () => {
-  let release;
-  const gate = new Promise((resolve) => { release = resolve; });
-  const text = 'integration_name ${local.ai_result_integration}:\n  ref redshift.${env}_cluster.endpoint\nsee local.db ${}\n';
-  const painted = [];
-  const doc = {
-    languageId: 'yaml-dsl',
-    uri: { scheme: 'file', toString() { return 'file:///repo/mock.yml'; } },
-    getText(range) {
-      if (!range) return text;
-      const line = text.split('\n')[range.start.line] || '';
-      return line.slice(range.start.character, range.end.character);
-    },
-  };
-  const editor = {
-    document: doc,
-    setDecorations(decoration, ranges) { painted.push({ decoration, ranges }); },
-  };
-  const vscode = {
-    window: { visibleTextEditors: [editor] },
-    commands: { executeCommand: async () => { await gate; return []; } },
-  };
-  const config = [
-    'dsls:',
-    '  - id: sample',
-    '    match: ["**/mock.yml"]',
-    '    references:',
-    "      - pattern: '^ref [a-z0-9_.]+'",
-    '        where: whole',
-    '        target: { kind: resource, type: type, name: name }',
-    '      - pattern: "\\\\$\\\\{local\\\\.(?<name>[a-z0-9_]+)\\\\}"',
-    '        where: within',
-    '        target: { kind: local, name: name }',
-    "      - pattern: 'local\\.[a-z]+'",
-    '        where: within',
-    '        target: { kind: local, name: name }',
-  ].join('\n');
-  const inFile = { kind: 'in' };
-  const outFile = { kind: 'out' };
-  const mark = { kind: 'mark' };
-  const pending = paintUnderlines(vscode, inFile, outFile, mark, [{ text: config }]);
-  try {
-    const linked = painted.find((item) => item.decoration === outFile);
-    const covered = linked.ranges.map((range) => doc.getText(range));
-    assert.ok(covered.includes('local.ai_result_integration'));
-    assert.ok(covered.includes('local.db'));
-    assert.equal(covered.includes('${local.ai_result_integration}'), false);
-    assert.equal(covered.some((piece) => piece.includes('integration_name')), false);
-  } finally {
-    release();
-  }
-  await pending;
-});
-
 function placeAt(text, offset) {
   let line = 0;
   let character = 0;
@@ -556,3 +415,262 @@ function placeAt(text, offset) {
   }
   return { line, character };
 }
+
+function referenceMarks() {
+  return {
+    local: { kind: 'local' },
+    external: { kind: 'external' },
+    error: { kind: 'error' },
+    placeholder: { kind: 'placeholder' },
+    unclassified: { kind: 'unclassified' },
+  };
+}
+
+function rangeOf(line, from, to) {
+  return { start: { line, character: from }, end: { line, character: to } };
+}
+
+function documentOf(text, name = 'mock.yml') {
+  return {
+    languageId: 'yaml-dsl',
+    uri: { scheme: 'file', fsPath: `/repo/${name}`, toString() { return `file:///repo/${name}`; } },
+    getText(range) {
+      if (!range) return text;
+      const lines = text.split('\n');
+      if (range.start.line === range.end.line) {
+        return (lines[range.start.line] || '').slice(range.start.character, range.end.character);
+      }
+      const first = lines[range.start.line].slice(range.start.character);
+      const middle = lines.slice(range.start.line + 1, range.end.line);
+      const last = lines[range.end.line].slice(0, range.end.character);
+      return [first, ...middle, last].join('\n');
+    },
+  };
+}
+
+function recordingEditor(doc, painted) {
+  return { document: doc, setDecorations(mark, ranges) { painted.push({ kind: mark.kind, ranges }); } };
+}
+
+function lastPaint(painted, kind) {
+  return painted.filter((item) => item.kind === kind).at(-1);
+}
+
+const referenceConfig = [
+  'dsls:',
+  '  - id: sample',
+  '    match: ["**/*.yml"]',
+  '    references:',
+  "      - pattern: '^ref [a-z0-9_.${}]+'",
+  '        where: whole',
+  '        target: { kind: resource }',
+  "      - pattern: '^local\\.[a-z_]+$'",
+  '        where: whole',
+  '        target: { kind: local }',
+  "      - pattern: '\\$\\{local\\.(?<name>[a-z0-9_]+)\\}'",
+  '        where: within',
+  '        target: { kind: local, name: name }',
+].join('\n');
+
+test('references are painted by the class the server gives them', async () => {
+  const painted = [];
+  const doc = documentOf('a: ref one.two\nb: ref three.four\nc: ref five.six\nd: x\n');
+  const plainPainted = [];
+  const plainEditor = recordingEditor({ languageId: 'yaml', uri: { scheme: 'file' } }, plainPainted);
+  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted), plainEditor, { document: null }] } };
+  const client = fakeClient({
+    decorations: {
+      references: [
+        { range: rangeOf(0, 3, 14), kind: 'local' },
+        { range: rangeOf(1, 3, 17), kind: 'external' },
+        { range: rangeOf(2, 3, 15), kind: 'error' },
+        { range: rangeOf(3, 3, 4), kind: 'unknown' },
+      ],
+      problems: [],
+    },
+  });
+  await paintUnderlines(vscode, client, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
+  const covered = (kind) => lastPaint(painted, kind).ranges.map((mark) => doc.getText(mark.range || mark));
+  assert.deepEqual(covered('local'), ['ref one.two']);
+  assert.deepEqual(covered('external'), ['ref three.four']);
+  assert.deepEqual(covered('error'), ['ref five.six']);
+  assert.deepEqual(covered('unclassified'), []);
+  assert.deepEqual(client.sent.at(-1), { method: 'yaml-dsl/decorations', params: { uri: 'file:///repo/mock.yml' } });
+  assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0, 0]);
+});
+
+test('a placeholder inside a classified ref keeps the plain underline', async () => {
+  const text = 'ref redshift.\n${env}_cluster';
+  const at = text.indexOf('${env}');
+  const painted = [];
+  const doc = documentOf(text);
+  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  const client = fakeClient({
+    decorations: {
+      references: [
+        { range: { start: { line: 0, character: 0 }, end: { line: 1, character: 14 } }, kind: 'external' },
+        { range: rangeOf(2, 0, 0), kind: 'local' },
+      ],
+      problems: [],
+    },
+  });
+  await paintUnderlines(vscode, client, referenceMarks(), []);
+  assert.deepEqual(lastPaint(painted, 'external').ranges, [
+    { start: { line: 0, character: 0 }, end: placeAt(text, at) },
+    { start: placeAt(text, at + '${env}'.length), end: placeAt(text, text.length) },
+  ]);
+  assert.deepEqual(lastPaint(painted, 'placeholder').ranges, [
+    { start: placeAt(text, at), end: placeAt(text, at + '${env}'.length) },
+  ]);
+  assert.deepEqual(lastPaint(painted, 'local').ranges, [rangeOf(2, 0, 0)]);
+});
+
+test('every ref is underlined from the text before the server classifies it, once per editor', async () => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const text = [
+    'integration_name ${local.ai_result}:',
+    '  vpc_id: ref data_source.vpc.id',
+    '  - ref iam_role.redshift.arn',
+    '  label: local.db',
+    '  note: not a ref',
+    '  Resource: ["%s/*", [ref data_source.bucket.arn], ref data_source.key.arn]',
+  ].join('\n');
+  const painted = [];
+  const doc = documentOf(text);
+  const editor = recordingEditor(doc, painted);
+  const vscode = { window: { visibleTextEditors: [editor] } };
+  const client = fakeClient();
+  client.sendRequest = async () => {
+    await gate;
+    return { references: [{ range: rangeOf(1, 10, 33), kind: 'external' }], problems: [] };
+  };
+  const entries = [
+    { text: referenceConfig, dir: '/elsewhere' },
+    { text: referenceConfig, dir: '/repo' },
+  ];
+  const pending = paintUnderlines(vscode, client, referenceMarks(), entries);
+  const early = lastPaint(painted, 'unclassified').ranges.map((range) => doc.getText(range));
+  assert.deepEqual(early.sort(), [
+    'local.ai_result',
+    'local.db',
+    'ref data_source.bucket.arn',
+    'ref data_source.key.arn',
+    'ref data_source.vpc.id',
+    'ref iam_role.redshift.arn',
+  ]);
+  release();
+  await pending;
+  assert.deepEqual(lastPaint(painted, 'unclassified').ranges, []);
+  painted.length = 0;
+  await paintUnderlines(vscode, client, referenceMarks(), entries);
+  assert.equal(painted.some((item) => item.kind === 'unclassified' && item.ranges.length > 0), false);
+});
+
+test('a document the server has not analyzed keeps its text-pass underlines', async () => {
+  const painted = [];
+  const doc = documentOf('a: ref one.two\n', 'unanalyzed.yml');
+  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  await paintUnderlines(vscode, fakeClient(), referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
+  const failing = fakeClient({ throwRequest: true });
+  await paintUnderlines(vscode, failing, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
+  assert.equal(lastPaint(painted, 'unclassified').ranges.length, 1);
+  assert.equal(painted.some((item) => item.kind === 'external'), true);
+  assert.equal(lastPaint(painted, 'external').ranges.length, 0);
+});
+
+test('a reanalyzed notification repaints only the documents it names, and an edit paints nothing', async () => {
+  const painted = [];
+  const first = { ...recordingEditor(documentOf('name: plain\n', 'one.yml'), painted), name: 'one.yml' };
+  const second = { ...recordingEditor(documentOf('name: plain\n', 'two.yml'), painted), name: 'two.yml' };
+  first.setDecorations = () => { painted.push('one.yml'); };
+  second.setDecorations = () => { painted.push('two.yml'); };
+  const vscode = fakeVscode({ visible: [first, second] });
+  const client = fakeClient({ decorations: { references: [{ range: rangeOf(0, 0, 4), kind: 'local' }], problems: [] } });
+  await activateWith(vscode, { subscriptions: [] }, () => client);
+  await new Promise((resolve) => setImmediate(resolve));
+  painted.length = 0;
+  vscode.listeners.change[0]({ document: first.document });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(painted, []);
+  await client.notes['yaml-dsl/reanalyzed']({ uris: ['file:///repo/two.yml'] });
+  assert.ok(painted.length > 0);
+  assert.ok(painted.every((name) => name === 'two.yml'));
+  painted.length = 0;
+  await client.notes['yaml-dsl/reanalyzed']({});
+  assert.deepEqual(painted, []);
+});
+
+test('classes that arrive after a newer paint are dropped', async () => {
+  const painted = [];
+  let releaseOlder;
+  const olderGate = new Promise((resolve) => { releaseOlder = resolve; });
+  let requestCount = 0;
+  const doc = documentOf('abc', 'stale.yml');
+  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  const client = fakeClient();
+  client.sendRequest = async () => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      await olderGate;
+      return { references: [{ range: rangeOf(0, 0, 1), kind: 'local' }], problems: [] };
+    }
+    return { references: [{ range: rangeOf(0, 0, 2), kind: 'local' }], problems: [] };
+  };
+  const older = paintUnderlines(vscode, client, referenceMarks(), []);
+  await paintUnderlines(vscode, client, referenceMarks(), []);
+  releaseOlder();
+  await older;
+  const localPaints = painted.filter((item) => item.kind === 'local' && item.ranges.length > 0);
+  assert.equal(localPaints.length, 1);
+  assert.equal(localPaints[0].ranges[0].end.character, 2);
+});
+
+test('problems are error squiggles with their message on hover, a whole line when the range is empty', async () => {
+  const painted = [];
+  const doc = documentOf('# yaml-language-server: $schema=missing.json\nname: [\nsource: ref one.two\n');
+  doc.lineCount = 4;
+  doc.lineAt = (line) => ({ range: rangeOf(line, 0, doc.getText().split('\n')[line].length) });
+  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  const client = fakeClient({
+    decorations: {
+      references: null,
+      problems: [
+        { range: rangeOf(0, 0, 0), message: 'schema is unavailable' },
+        { range: rangeOf(1, 6, 7), message: 'flow sequence is not closed' },
+        { range: rangeOf(9, 0, 0), message: 'past the end' },
+      ],
+    },
+  });
+  await paintUnderlines(vscode, client, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
+  assert.deepEqual(lastPaint(painted, 'error').ranges, [
+    { range: rangeOf(0, 0, 44), hoverMessage: 'schema is unavailable' },
+    { range: rangeOf(1, 6, 7), hoverMessage: 'flow sequence is not closed' },
+    { range: rangeOf(9, 0, 0), hoverMessage: 'past the end' },
+  ]);
+  assert.equal(lastPaint(painted, 'unclassified').ranges.length, 1);
+  assert.equal(painted.some((item) => item.kind === 'external' && item.ranges.length > 0), false);
+});
+
+test('a workspace config file shows its own problems and nothing else', async () => {
+  const painted = [];
+  const config = {
+    languageId: 'yaml',
+    uri: { scheme: 'file', fsPath: '/repo/yaml-dsl.yml', toString() { return 'file:///repo/yaml-dsl.yml'; } },
+    getText: () => 'dsls: [\n',
+  };
+  const elsewhere = {
+    languageId: 'yaml',
+    uri: { scheme: 'file', fsPath: '/other/yaml-dsl.yml', toString() { return 'file:///other/yaml-dsl.yml'; } },
+  };
+  const otherPainted = [];
+  const vscode = {
+    window: { visibleTextEditors: [recordingEditor(config, painted), recordingEditor(elsewhere, otherPainted)] },
+  };
+  const client = fakeClient({ decorations: { references: null, problems: [{ range: rangeOf(0, 3, 4), message: 'bad config' }] } });
+  await paintUnderlines(vscode, client, referenceMarks(), [{ text: 'dsls: [\n', dir: '/repo' }]);
+  assert.deepEqual(lastPaint(painted, 'error').ranges, [{ range: rangeOf(0, 3, 4), hoverMessage: 'bad config' }]);
+  assert.equal(painted.some((item) => item.kind === 'unclassified'), false);
+  assert.deepEqual(client.sent.map((item) => item.params.uri), ['file:///repo/yaml-dsl.yml']);
+  assert.ok(otherPainted.every((item) => item.ranges.length === 0));
+});

@@ -6,7 +6,6 @@ function fakeConnection() {
   const handlers = {};
   const connection = {
     handlers,
-    diagnostics: [],
     notifications: [],
     onInitialize(fn) { handlers.initialize = fn; },
     onHover(fn) { handlers.hover = fn; },
@@ -23,7 +22,6 @@ function fakeConnection() {
         return Promise.resolve({ dispose() { registration.disposed = true; } });
       },
     },
-    sendDiagnostics(params) { this.diagnostics.push(params); },
     sendNotification(method, params) { this.notifications.push({ method, params }); },
   };
   return connection;
@@ -59,7 +57,7 @@ test('the default workspace still answers initialize', () => {
   assert.equal(result.capabilities.documentLinkProvider.resolveProvider, false);
 });
 
-test('document events publish diagnostics and custom requests answer', async () => {
+test('document events analyze and custom requests answer', async () => {
   const connection = fakeConnection();
   const documents = fakeDocuments();
   const files = { '/repo/schema.json': '{"description":"root","properties":{"name":{"description":"the name"}}}' };
@@ -99,12 +97,18 @@ test('document events publish diagnostics and custom requests answer', async () 
   await connection.handlers['yaml-dsl/active']({ path: '/repo/app/mock.yml' });
   connection.handlers['yaml-dsl/visibleFolds']({ stackIds: ['/repo/app/mock.yml'] });
   assert.equal(await connection.handlers['yaml-dsl/fold']({ stackId: '/repo/app/mock.yml', env: 'one' }), '');
+  const noteDecorations = connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/note.yml' });
+  assert.deepEqual(noteDecorations.references.map((item) => item.kind), ['local']);
+  assert.deepEqual(noteDecorations.problems, [{
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    message: 'schema is unavailable',
+  }]);
   const folds = await connection.handlers['yaml-dsl/foldsFor']({ path: '/repo/app/mock.yml' });
   assert.equal(folds.stackId, null);
   connection.handlers['yaml-dsl/warm']({ paths: ['/repo/note.yml'] });
   await workspace.whenIdle();
   documents.handlers.close({ document: { uri: 'file:///repo/app/mock.yml' } });
-  assert.deepEqual(connection.diagnostics.at(-1).diagnostics, []);
+  assert.deepEqual(connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/app/mock.yml' }).problems, []);
   await documents.handlers.open({ document: { uri: 'yaml-dsl-fold:%2Frepo%2Fapp%2Fmock.yml/one', getText: () => 'name: plain\n' } });
 });
 
@@ -125,9 +129,8 @@ test('the server watches each schema path it reads and reloads a schema that cha
   const text = '# yaml-language-server: $schema=.schema/mock.schema.json\nname: plain\n';
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
   await workspace.whenIdle();
-  const unavailable = () => connection.diagnostics
-    .filter((item) => item.uri === 'file:///repo/app/mock.yml')
-    .at(-1).diagnostics.some((item) => item.message === 'schema is unavailable');
+  const unavailable = () => connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/app/mock.yml' })
+    .problems.some((item) => item.message === 'schema is unavailable');
   assert.equal(unavailable(), true);
   assert.equal(connection.registrations.length, 1);
   assert.equal(connection.registrations[0].method, 'workspace/didChangeWatchedFiles');
@@ -168,4 +171,22 @@ test('a client without relative-pattern watching gets no registration', async ()
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => 'name: plain\n' } });
   await workspace.whenIdle();
   assert.equal(connection.registrations.length, 0);
+});
+
+test('an analysis that changes a stack tells the client which documents to repaint', async () => {
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
+  await connection.handlers['yaml-dsl/config']({
+    entries: [{ text: 'dsls:\n  - id: resources\n    match: ["**/mock.yml"]\n', dir: '/repo' }],
+  });
+  const text = 'name: plain\n';
+  documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
+  await workspace.whenIdle();
+  const repaints = () => connection.notifications.filter((item) => item.method === 'yaml-dsl/reanalyzed');
+  assert.deepEqual(repaints().at(-1).params.uris, ['file:///repo/app/mock.yml']);
+  const repaintCount = repaints().length;
+  documents.handlers.change({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
+  await workspace.whenIdle();
+  assert.equal(repaints().length, repaintCount);
 });

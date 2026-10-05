@@ -14,7 +14,7 @@ The editor is a language server. It has to be. Activating any `sample.yml` puts 
 
 The server keeps the stack current as the files change, including the folded document of each environment. Those folded documents are buffers in the editor view, so the author sees an environment's full config instead of assembling it from the files. Hover and navigation run against the stack in scope, not against the active file alone.
 
-On each change the server parses the changed YAML, reads that file's schema, and resolves refs and locals across the stack. Hover and navigation are requests against that analysis. Later diagnostics and suggestions are further results of the same pass.
+On each change the server parses the changed YAML, reads that file's schema, and resolves refs and locals across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem is a red squiggle at its range, with its message on hover, and an empty range covers its whole line.
 
 The workspace holds many stacks. The server loads one when a file in it becomes active, and does not load the rest at startup. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each environment. Switching files inside a resident stack is a hit.
 
@@ -60,6 +60,8 @@ The resource's identity is the last token of its key, with `-` written as `_`. A
 
 Scope for a ref is the active stack: the common layer and every adjacent overlay. A ref in one file may name a resource declared in another file of that stack.
 
+The analysis classifies every ref and local reference: local when it resolves in the same file, external when it resolves in another file of the stack, error when nothing in scope matches. The editor underlines each reference from the text as soon as the file opens, using the config's reference rules, and colors the underline by its class once the analysis answers. An error is a red squiggle. A `${...}` placeholder inside a reference keeps a plain underline.
+
 ## Locals
 
 A local is a named value declared in the document. Go to definition opens that declaration. Hover shows the value as authored. Scope is the active stack, the same as a ref.
@@ -87,13 +89,13 @@ Hover on a ref shows the target's type, identity, and file. Hover on a local sho
 
 The schema for a file is the one the file names. A `# yaml-language-server: $schema=` modeline is honored. Its path is relative to that file and points at the schema shipped with the grammar version the stack has initialized. An environment file names `.schema/sample.schema.json`. A common layer names that file through the environment directory that initialized the stack, such as `one/.schema/sample.schema.json`. That is the grammar the stack is actually on.
 
-The config may set `schema` to a search path. It is the fallback, used when the file has no modeline or the path it names is not on disk. Each entry is relative to the file, the same way a modeline path is, and the first one on disk is the schema. A URL in the path is fetched. The search does not override a modeline that resolves. The extension embeds no schema. When neither source resolves, the file gets one diagnostic and field hovers stay empty.
+The config may set `schema` to a search path. It is the fallback, used when the file has no modeline or the path it names is not on disk. Each entry is relative to the file, the same way a modeline path is, and the first one on disk is the schema. A URL in the path is fetched. The search does not override a modeline that resolves. The extension embeds no schema. When neither source resolves, the file's modeline line gets a problem, or its first line when it has no modeline, and field hovers stay empty.
 
 DSL-level behavior is configured in `yaml-dsl.yml`: which files, the syntax of a ref, the syntax of a local, how layers are grouped. The concepts are the editor's. The syntax is the DSL's, and each DSL may spell it differently. That syntax does not move into the schema.
 
 The schema is how the editor understands a field and the shape of an object: which keys exist, what value shape a key takes, and the field's own description, including the text beside a `$ref`. It is read as published. If that is not enough to understand a field or a shape, the schema gains an extension point and the grammar publishes it. The extension does not grow a special case for that object. No such point is added before a field or a shape actually requires one.
 
-The schema is not the engine's checks. Those run at plan, after the fold. A check can require a group of fields only when another field has a certain value, allow a field for only one mode, or allow exactly one of two fields. The published schema has no such table. A field may be filled from the common layer, and the editor is looking at one file, so a `required` array on the resource alone does not say whether the folded document is complete. The common layer merged under the overlay remains. An extension point is not a transcription of these checks.
+The schema is not the engine's checks. The editor handles everything about authoring the DSL files, and those checks are a separate pass. A check can require a group of fields only when another field has a certain value, allow a field for only one mode, or allow exactly one of two fields. The published schema has no such table. A field may be filled from the common layer, and the editor is looking at one file, so a `required` array on the resource alone does not say whether the folded document is complete. The common layer merged under the overlay remains. An extension point is not a transcription of these checks.
 
 ## Diffing across environments
 
@@ -167,6 +169,5 @@ An extension that selects `yaml` does not own these files and does not activate 
 ## Out of scope
 
 - Running the engine that accepts the file.
-- Diagnosing engine checks. Requiredness after the fold, fields that depend on another field, mutual exclusion, and checks on a derived value run in the engine at plan.
 - Substituting `${...}`.
 - Schemas or DSL definitions shipped inside the extension.

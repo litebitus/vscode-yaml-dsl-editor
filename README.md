@@ -76,11 +76,11 @@ Hover reads the schema as authored. A field whose value `$ref`s a shared composi
 
 Hover on a ref shows the target's type, identity, and file. Hover on a local shows the value as authored.
 
-When no schema resolves, the file gets one diagnostic and field hovers stay empty. Ref and local navigation still run.
+When no schema resolves, the modeline line gets a red squiggle, or the first line when there is no modeline, and field hovers stay empty. Ref and local navigation still run.
 
 ## Navigation
 
-A ref or a local that stays in this file is blue. One that points at another file is peach. Both are underlined. Resting on either shows that declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing in scope matches, the cursor does not move.
+A ref or a local is underlined as soon as the file opens. Once the analysis answers, one that stays in this file turns blue, one that points at another file turns peach, and one that matches nothing in scope becomes a red squiggle. Resting on either shows that declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing in scope matches, the cursor does not move.
 
 In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. The resource's identity is the last token of its key, with `-` written as `_`. A `${...}` placeholder is compared as written. A name that is the same spelling of a local's value, with `-` written as `_`, points at the resource whose key contains that local.
 
