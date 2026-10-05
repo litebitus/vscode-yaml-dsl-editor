@@ -105,7 +105,7 @@ test('hover, definition, and folds use the whole stack', async () => {
   const field = ws.hover('file://' + common, at(files[common], 'label'));
   assert.equal(field.contents.value, '[optional] Mock label.');
 
-  const within = ws.hover(oneUri, at(files[one], '${local.db}'));
+  const within = ws.hover(oneUri, at(files[one], 'local.db'));
   assert.equal(within.contents.value, 'mock-value');
 
   assert.deepEqual(ws.foldsFor(one), { stackId: common, environments: ['one'] });
@@ -118,6 +118,8 @@ test('hover, definition, and folds use the whole stack', async () => {
   assert.match(twoFold, /the two overlay/);
 
   const foldUri = `yaml-dsl-fold:${encodeURIComponent(common)}/one`;
+  assert.ok(ws.links(foldUri).some((link) => link.path === common));
+  assert.deepEqual(ws.links('file://missing'), []);
   const foldHover = ws.hover(foldUri, at(folded, 'label'));
   assert.equal(foldHover.contents.value, '[optional] Mock label.');
   const foldDef = ws.definition(foldUri, at(folded, 'ref mocktype.primary'));

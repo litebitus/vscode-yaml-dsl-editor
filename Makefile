@@ -13,7 +13,7 @@ VERSION = $(shell node -p "require('./package.json').version")
 PUBLISHER = $(shell node -p "require('./package.json').publisher")
 EXT_ID = $(PUBLISHER).$(shell node -p "require('./package.json').name")
 
-.PHONY: test package publish preflight bump push publish-ovsx publish-vsce uninstall
+.PHONY: test package install-cursor publish preflight bump push publish-ovsx publish-vsce uninstall
 
 test:
 	node --test --experimental-test-coverage \
@@ -27,6 +27,11 @@ test:
 
 package: test
 	vsce package -o $(VSIX)
+
+# Installs the .vsix that `package` already wrote into Cursor.
+# Cursor keeps running the previous copy until the window is reloaded.
+install-cursor:
+	cursor --install-extension $(VSIX)
 
 # Bump first (commit + tag, requires clean tree), then publish one identical
 # .vsix to both stores. Open VSX goes first because it returns quickly; the

@@ -1,6 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { analyzeDocument, hoverAt, definitionAt, pathToUri, uriToPath } = require('../lib/analyze');
+const { analyzeDocument, hoverAt, definitionAt, linksFor, linkTarget, pathToUri, uriToPath } = require('../lib/analyze');
+
+function rangeOf(text, needle) {
+  const index = text.indexOf(needle);
+  const at = (offset) => ({
+    line: text.slice(0, offset).split('\n').length - 1,
+    character: offset - text.lastIndexOf('\n', offset - 1) - 1,
+  });
+  return { start: at(index), end: at(index + needle.length) };
+}
 
 test('paths convert to file uris and back', () => {
   assert.equal(pathToUri('/repo/a.yml'), 'file:///repo/a.yml');
@@ -46,6 +55,10 @@ test('an active file wins, then the common layer, then the earliest other file',
   symbols.unshift({ kind: 'resource', name: 'primary', qualifiers: { type: 'mocktype' }, file: '/repo/two/mock.yml', keyRange: range, valueText: 'here' });
   const active = definitionAt(doc, { line: 0, character: 8 }, { symbols, common: '/repo/mock.yml' });
   assert.equal(active.path, '/repo/two/mock.yml');
+  const links = linksFor(doc, { symbols, common: '/repo/mock.yml' });
+  assert.equal(links.length, 1);
+  assert.equal(links[0].path, '/repo/two/mock.yml');
+  assert.match(linkTarget(links[0].path, links[0].targetRange), /^file:\/\/\/repo\/two\/mock\.yml#1,/);
   const hover = hoverAt(doc, { line: 0, character: 8 }, { symbols, common: '/repo/mock.yml' }, null);
   assert.match(hover.contents.value, /mocktype\.primary — \/repo\/two\/mock\.yml/);
   const missing = analyzeDocument('source: ref mocktype.missing\n', '/repo/two/mock.yml', {
@@ -59,6 +72,39 @@ test('an active file wins, then the common layer, then the earliest other file',
   const unresolved = hoverAt(missing, { line: 0, character: 8 }, { symbols: [], common: '/repo/mock.yml' }, null);
   assert.equal(unresolved.contents.value, 'mocktype.missing');
   assert.equal(definitionAt(missing, { line: 0, character: 8 }, { symbols: [], common: '/repo/mock.yml' }), null);
+  assert.deepEqual(linksFor(missing, { symbols: [], common: '/repo/mock.yml' }), []);
+  const fieldPath = 'item: ref mocktype.primary.tail\n';
+  const fieldDoc = analyzeDocument(fieldPath, '/repo/two/mock.yml', {
+    symbols: [],
+    references: [{
+      pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)',
+      where: 'whole',
+      target: { kind: 'resource', type: 'type', name: 'name' },
+    }],
+  });
+  const fieldLink = linksFor(fieldDoc, {
+    symbols,
+    common: '/repo/mock.yml',
+  })[0];
+  assert.equal(fieldPath.slice(
+    fieldPath.indexOf('ref mocktype.primary.tail'),
+    fieldPath.indexOf('ref mocktype.primary.tail') + 'ref mocktype.primary.tail'.length,
+  ), 'ref mocktype.primary.tail');
+  assert.deepEqual(fieldLink.range, rangeOf(fieldPath, 'ref mocktype.primary.tail'));
+  const inside = 'item: "pre ${local.db} tail"\n';
+  const insideDoc = analyzeDocument(inside, '/repo/a.yml', {
+    symbols: [],
+    references: [{
+      pattern: '\\$\\{local\\.(?<name>[a-z0-9_]+)\\}',
+      where: 'within',
+      target: { kind: 'local', name: 'name' },
+    }],
+  });
+  const insideLink = linksFor(insideDoc, {
+    symbols: [{ kind: 'local', name: 'db', qualifiers: {}, file: '/repo/a.yml', keyRange: range, valueText: 'x' }],
+    common: '/repo/a.yml',
+  })[0];
+  assert.deepEqual(insideLink.range, rangeOf(inside, 'local.db'));
 });
 
 test('a local hover shows the authored value', () => {

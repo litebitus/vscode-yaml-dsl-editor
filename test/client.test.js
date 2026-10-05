@@ -4,6 +4,7 @@ const {
   activateWith,
   parseFoldPath,
   foldUri,
+  associationPatterns,
   closeEvicted,
 } = require('../lib/client');
 
@@ -127,14 +128,15 @@ test('activation associates matching files and reveals the fold', async () => {
     associations: { '**/mock.yml': 'yaml-dsl' },
     showTextDocument: async () => { throw new Error('no editor'); },
   });
-  const client = fakeClient({ foldsFor: { stackId: '/repo/mock/mock.yml', environments: ['one'] }, throwRequest: false });
+  const client = fakeClient({ foldsFor: { stackId: '/repo/mock/mock.yml', environments: ['one', 'two'] }, throwRequest: false });
   const context = { subscriptions: [] };
   let started = null;
   const handle = await activateWith(vscode, context, (ctx) => { started = ctx; return client; });
   assert.equal(started, context);
   assert.equal(doc.languageId, 'yaml-dsl');
   assert.equal(plain.languageId, 'yaml');
-  assert.equal(vscode.updated, undefined);
+  assert.equal(vscode.updated['**/mock.yml'], 'yaml-dsl');
+  assert.equal(vscode.updated['mock.yml'], 'yaml-dsl');
   assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/config'), true);
   assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/active' && item.params.path === '/repo/mock/mock.yml'), true);
   assert.deepEqual(client.sent.find((item) => item.method === 'yaml-dsl/visibleFolds').params.stackIds, ['/repo/mock/mock.yml']);
@@ -201,4 +203,6 @@ test('evicted folds close and a workspace without config still starts', async ()
   });
   await activateWith(changed, { subscriptions: [] }, () => fakeClient());
   assert.equal(changed.updated['**/mock.yml'], 'yaml-dsl');
+  assert.equal(changed.updated['mock.yml'], 'yaml-dsl');
+  assert.deepEqual(associationPatterns(['**/mock.yml', '*.yml']), ['**/mock.yml', 'mock.yml', '*.yml']);
 });

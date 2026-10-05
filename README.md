@@ -158,7 +158,7 @@ copy the editor loads:
 Then, for every code change, run the full three-step cycle:
 
 1. `make package` — runs the tests, then builds a fresh `yaml-dsl-editor.vsix`
-2. Extensions view → `⋯` menu → **Install from VSIX…** → pick `yaml-dsl-editor.vsix`
+2. `make install-cursor` — installs that `.vsix` into Cursor
    (no uninstall needed — installing replaces the existing copy, even at the
    same version)
 3. **Developer: Reload Window**
