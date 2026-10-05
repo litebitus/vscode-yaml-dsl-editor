@@ -46,9 +46,15 @@ suite('references peek regression', () => {
       place(doc.getText(), 'ref mocktype.primary'),
     );
     assert.equal(referencesPeekCount(), before);
+    assert.ok(hovers && hovers.length > 0);
     const text = hoverText(hovers);
-    assert.match(text, /```yaml-dsl/);
-    assert.match(text, /primary:/);
+    assert.match(text, /primary/);
+    assert.match(text, /label/);
+    assert.match(text, /<br>/);
+    assert.equal(text.includes('```'), false);
+    assert.equal(text.includes('\n'), false);
+    assert.match(text, /command:yaml-dsl\.peek\?/);
+    assert.match(decodeURIComponent(text), /"startLine":/);
   });
 
   test('an in-file local shows the section and does not open the references peek', async () => {
@@ -60,8 +66,10 @@ suite('references peek regression', () => {
       place(doc.getText(), 'local.db'),
     );
     assert.equal(referencesPeekCount(), before);
+    assert.ok(hovers && hovers.length > 0);
     const text = hoverText(hovers);
-    assert.match(text, /```yaml-dsl/);
-    assert.match(text, /db:/);
+    assert.match(text, /db/);
+    assert.match(text, /mock-value/);
+    assert.equal(text.includes('```'), false);
   });
 });

@@ -22,14 +22,14 @@
       }
     },
     "quotedPair": {
-      "match": "^(\\s*)(\"(?:\\\\.|[^\"\\n])*\"|'(?:[^'\\n])*')\\s*(:)",
+      "match": "^(\\s*)(\"(?:\\\\.|[^\"\\n])*\"|'(?:[^'\\n])*')\\s*(:)(?=\\s|$)",
       "captures": {
         "2": { "name": "string.quoted.double.hcl" },
         "3": { "name": "keyword.operator.assignment.hcl" }
       }
     },
     "pair": {
-      "match": "^(\\s*)([^\\s:#\"'][^:#\\n]*?)\\s*(:)",
+      "match": "^(\\s*)([^\\s:#\"'][^:#\\n]*?)\\s*(:)(?=\\s|$)",
       "captures": {
         "2": { "name": "variable.other.readwrite.hcl" },
         "3": { "name": "keyword.operator.assignment.hcl" }

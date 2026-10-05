@@ -26,8 +26,9 @@
     "theme": "light"
   },
   "activationEvents": [
-    "workspaceContains:yaml-dsl.yml",
-    "onLanguage:yaml-dsl"
+    "onLanguage:yaml",
+    "onLanguage:yaml-dsl",
+    "workspaceContains:yaml-dsl.yml"
   ],
   "main": "./extension.js",
   "contributes": {

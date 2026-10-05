@@ -300,8 +300,7 @@ test('a cross-file target peeks that section and leaves this file', async () => 
     { target: 'file:///repo/one/mock.yml#1,1,1,2' },
     {},
   ]);
-  assert.equal(links[0].target.scheme, 'command');
-  assert.match(decodeURIComponent(links[0].target.toString()), /"startLine":2/);
+  assert.equal(links[0].target, 'file:///repo/mock.yml#3,2,3,9');
   assert.equal(links[1].target, 'file:///repo/one/mock.yml#1,1,1,2');
   assert.equal(await mid.provideDocumentLinks({ uri: here }, null, async () => null), null);
   assert.equal(peeked.length, 0);
@@ -323,12 +322,32 @@ test('a cross-file target peeks that section and leaves this file', async () => 
     (await mid.provideHover({ uri: here }, { line: 0, character: 0 }, null, async () => ({ contents: 'plain' }))).contents,
     'plain',
   );
+  vscode.MarkdownString = class {
+    constructor() { this.value = ''; }
+    appendMarkdown(text) { this.value += text; }
+  };
+  vscode.Hover = class {
+    constructor(contents, range) { this.contents = contents; this.range = range; }
+  };
   const section = await mid.provideHover({ uri: here }, { line: 0, character: 0 }, null, async () => ({
-    contents: { value: '**mock.yml:3**\n\n```yaml-dsl\n  data_at_rest_key:\n```' },
+    contents: { value: '[mock.yml:3](file:///repo/mock.yml#L3)\n\n```yaml-dsl\n# note\nref x\n  data_at_rest_key: "a\\\\b" \'c\'\n\n  ref ${\n```' },
   }));
-  assert.match(section.contents.value, /```yaml-dsl/);
+  assert.match(section.contents.value, /<div><a href="[^"]+"><code><u>mock\.yml:3<\/u><\/code><\/a><div>/);
   assert.match(section.contents.value, /data_at_rest_key/);
+  assert.match(section.contents.value, /<br>/);
+  assert.match(section.contents.value, /color:#87C3FF;/);
+  assert.equal(section.contents.value.includes('```'), false);
+  assert.equal(section.contents.value.includes('\n'), false);
+  assert.match(section.contents.value, /command:yaml-dsl\.peek\?/);
+  assert.match(decodeURIComponent(section.contents.value), /"startLine":2/);
+  assert.match(section.contents.value, /data_at_rest_key/);
+  assert.equal(section.contents.isTrusted.enabledCommands[0], 'yaml-dsl.peek');
   assert.equal(peeked.some((item) => item[0] === 'editor.action.peekLocations'), false);
+  const bare = await mid.provideHover({ uri: here }, { line: 0, character: 0 }, null, async () => ({
+    contents: { value: '[mock.yml:3](file:///repo/mock.yml#L3)' },
+  }));
+  assert.match(bare.contents.value, /<code><u>mock\.yml:3<\/u><\/code>/);
+  assert.equal(bare.contents.value.includes('```'), false);
 
   peeked.length = 0;
   const moved = {
@@ -390,3 +409,115 @@ test('refs and locals stay underlined', async () => {
   assert.deepEqual(painted[2].ranges, []);
   assert.deepEqual(painted[3].ranges, []);
 });
+
+test('a placeholder inside a ref keeps its own color', async () => {
+  const text = 'ref redshift.\n${env}_cluster';
+  const at = text.indexOf('${env}');
+  const range = { start: { line: 0, character: 0 }, end: { line: 1, character: 12 } };
+  const empty = { start: { line: 2, character: 0 }, end: { line: 2, character: 0 }, empty: true };
+  const painted = [];
+  const doc = {
+    languageId: 'yaml-dsl',
+    uri: { scheme: 'file', toString() { return 'file:///repo/mock.yml'; } },
+    getText(asked) { return asked && asked.empty ? '' : text; },
+  };
+  const editor = {
+    document: doc,
+    setDecorations(decoration, ranges) { painted.push({ decoration, ranges }); },
+  };
+  const vscode = {
+    window: { visibleTextEditors: [editor] },
+    commands: {
+      executeCommand: async () => [
+        { range, target: { scheme: 'file', toString() { return 'file:///repo/mock.yml'; } } },
+        { range: empty, target: { scheme: 'file', toString() { return 'file:///repo/mock.yml'; } } },
+      ],
+    },
+  };
+  const inFile = { kind: 'in' };
+  const outFile = { kind: 'out' };
+  const mark = { kind: 'mark' };
+  await paintUnderlines(vscode, inFile, outFile, mark);
+  assert.deepEqual(painted[0].ranges[0], {
+    start: { line: 0, character: 0 },
+    end: placeAt(text, at),
+  });
+  assert.deepEqual(painted[0].ranges[1], {
+    start: placeAt(text, at + '${env}'.length),
+    end: placeAt(text, text.length),
+  });
+  assert.deepEqual(painted[0].ranges[2], empty);
+  assert.deepEqual(painted[2].ranges[0], {
+    start: placeAt(text, at),
+    end: placeAt(text, at + '${env}'.length),
+  });
+  assert.equal(painted[2].decoration, mark);
+});
+
+test('underlines are painted before the language server answers', async () => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const text = 'integration_name ${local.ai_result_integration}:\n  ref redshift.${env}_cluster.endpoint\nsee local.db ${}\n';
+  const painted = [];
+  const doc = {
+    languageId: 'yaml-dsl',
+    uri: { scheme: 'file', toString() { return 'file:///repo/mock.yml'; } },
+    getText(range) {
+      if (!range) return text;
+      const line = text.split('\n')[range.start.line] || '';
+      return line.slice(range.start.character, range.end.character);
+    },
+  };
+  const editor = {
+    document: doc,
+    setDecorations(decoration, ranges) { painted.push({ decoration, ranges }); },
+  };
+  const vscode = {
+    window: { visibleTextEditors: [editor] },
+    commands: { executeCommand: async () => { await gate; return []; } },
+  };
+  const config = [
+    'dsls:',
+    '  - id: sample',
+    '    match: ["**/mock.yml"]',
+    '    references:',
+    "      - pattern: '^ref [a-z0-9_.]+'",
+    '        where: whole',
+    '        target: { kind: resource, type: type, name: name }',
+    '      - pattern: "\\\\$\\\\{local\\\\.(?<name>[a-z0-9_]+)\\\\}"',
+    '        where: within',
+    '        target: { kind: local, name: name }',
+    "      - pattern: 'local\\.[a-z]+'",
+    '        where: within',
+    '        target: { kind: local, name: name }',
+  ].join('\n');
+  const inFile = { kind: 'in' };
+  const outFile = { kind: 'out' };
+  const mark = { kind: 'mark' };
+  const pending = paintUnderlines(vscode, inFile, outFile, mark, [{ text: config }]);
+  try {
+    const linked = painted.find((item) => item.decoration === outFile);
+    const covered = linked.ranges.map((range) => doc.getText(range));
+    assert.ok(covered.includes('local.ai_result_integration'));
+    assert.ok(covered.includes('local.db'));
+    assert.equal(covered.includes('${local.ai_result_integration}'), false);
+    assert.equal(covered.some((piece) => piece.includes('integration_name')), false);
+  } finally {
+    release();
+  }
+  await pending;
+});
+
+function placeAt(text, offset) {
+  let line = 0;
+  let character = 0;
+  for (let i = 0; i < offset; i += 1) {
+    if (text[i] === '\n') {
+      line += 1;
+      character = 0;
+    } else {
+      character += 1;
+    }
+  }
+  return { line, character };
+}

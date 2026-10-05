@@ -94,7 +94,7 @@ test('hover, definition, and folds use the whole stack', async () => {
 
   const oneUri = 'file://' + one;
   const sourceHover = ws.hover(oneUri, at(files[one], 'ref mocktype.primary'));
-  assert.match(sourceHover.contents.value, /mock-stack\/mock\.yml:\d+/);
+  assert.match(sourceHover.contents.value, /\[mock-stack\/mock\.yml:\d+\]\(file:\/\/.*#L\d+\)/);
   assert.doesNotMatch(sourceHover.contents.value, /mocktype\.primary —/);
   const sourceDef = ws.definition(oneUri, at(files[one], 'ref mocktype.primary'));
   assert.equal(sourceDef.path, common);

@@ -69,6 +69,14 @@ test('the common layer wins, then the active file, then the earliest other file'
   assert.match(shown.contents.value, /primary:/);
   assert.match(shown.contents.value, /label: 1/);
   assert.doesNotMatch(shown.contents.value, /next:/);
+  const longBody = ['primary:', ...Array.from({ length: 30 }, (_, i) => `  line${i}`), 'sibling:'].join('\n');
+  const full = hoverAt(doc, { line: 0, character: 8 }, {
+    symbols,
+    common: '/repo/mock.yml',
+    files: new Map([['/repo/mock.yml', { text: longBody }]]),
+  }, null);
+  assert.match(full.contents.value, /line29/);
+  assert.doesNotMatch(full.contents.value, /sibling:/);
   const missing = analyzeDocument('source: ref mocktype.missing\n', '/repo/two/mock.yml', {
     symbols: [],
     references: doc.references.length ? [{
