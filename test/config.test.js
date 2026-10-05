@@ -82,4 +82,16 @@ dsls:
   const claim = claimFile('/repo/mock.yml', both.dsls);
   assert.equal(claim.status, 'many');
   assert.deepEqual(claim.ids, ['a', 'b']);
+  const shared = parseConfig(`
+dsls:
+  - id: resources
+    match: ["**/resources.yml"]
+`).dsls[0];
+  const here = claimFile('/repo/a/resources.yml', [{ ...shared, dir: '/repo/a' }, { ...shared, dir: '/repo/b' }]);
+  assert.equal(here.status, 'one');
+  assert.equal(here.dsl.dir, '/repo/a');
+  assert.equal(claimFile('/repo/c/resources.yml', [{ ...shared, dir: '/repo/a' }]).status, 'none');
+  assert.equal(claimFile('/repo-a/resources.yml', [{ ...shared, dir: '/repo' }]).status, 'none');
+  assert.equal(claimFile('/repo/a', [{ ...shared, dir: '/repo/a', match: ['**/*'] }]).status, 'one');
+  assert.equal(claimFile('/repo/a/resources.yml', [{ ...shared, dir: '/' }]).status, 'none');
 });
