@@ -76,7 +76,7 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 | `schema` | Search path used when a file does not name a schema, or the path it names is not on disk. Each entry is relative to that file. The first one on disk wins. A URL is fetched. |
 | `layers` | `overlays`, the directory names of the overlays, and `common`, how the common layer is found (`parent` or `nearest_ancestor`); or `none` |
 | `scopes` | Each scope's `visible_from` (`stack`, `everywhere`, `following`, or a list of paths) and its builtin `names` |
-| `symbols` | Where a name is declared (`at`, `skip`, `exclude`), how it is read (`name.from` `key`, `value` or `meta_argument`), and its `scope` |
+| `symbols` | Where a name is declared (`at`, `skip`, `exclude`), how it is read (`name.from` `key`, `value` or `meta_argument`, or `any` for every name of the scope at that key), and its `scope` |
 | `references` | A `pattern` with named groups, the positions it may stand in (`where`), whether text may follow the name (`trailing_text`), and its `target` scope and name |
 | `placeholders` | The placeholder's `pattern` with a `body` group, or `none` |
 | `functions` | The call grammar (`marker`, `splat`, `unnamed_calls`, `call_results_where`, `refused_at`) and its `vocabulary` sources, or `none` |
