@@ -10,7 +10,7 @@ A layered DSL is the first one the editor is proven against. Others come after t
 # yaml-dsl.yml
 dsls:
   - id: sample
-    match: ["**/sample.yml"]
+    includes: ["**/sample.yml"]
     schema:
       - .schema/sample.schema.json
       - side/.schema/sample.schema.json
@@ -43,6 +43,7 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 - [The DSL](#the-dsl)
 - [Hover](#hover)
 - [Navigation](#navigation)
+- [Completion](#completion)
 - [Layers](#layers)
 - [Schema](#schema)
 - [Ownership](#ownership)
@@ -58,15 +59,19 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 | Field | What it sets |
 | --- | --- |
 | `id` | Name of the DSL |
-| `match` | Globs of files that belong to it |
+| `includes` | Globs of files that belong to it |
+| `excludes` | Globs of files that do not, even when `includes` matches them |
 | `schema` | Search path used when a file does not name a schema, or the path it names is not on disk. Each entry is relative to that file. The first one on disk wins. A URL is fetched. |
 | `layers.environments` | Directory names of the overlays, beside the common file |
 | `symbols` | Where a local or a resource is declared, and how its name is read |
 | `references` | Which scalars are refs or locals, and which symbol they point at |
+| `placeholders` | The placeholder's `pattern` with a `body` group, its `builtins`, and which of `local` and `ref` a body may be |
 
-`at` is `$`, `.key`, `.*`, and `[*]`. `skip` lists keys a `.*` step does not descend into. `exclude` lists keys that are not symbols. `token: last` takes the key's last whitespace-separated token. `spelling: snake` writes `-` as `_`. `qualify.type: parent` is the mapping key that contains the symbol, and the reference's `type` group must equal it.
+`at` is `$`, `.key`, `.*`, and `[*]`. `skip` lists keys a `.*` step does not descend into. `exclude` lists keys that are not symbols. `token: first` and `token: last` take the key's first and last whitespace-separated token. `spelling: snake` writes `-` as `_`. `qualify.type: parent` is the mapping key that contains the symbol, and the reference's `type` group must equal it.
 
 `where: whole` means the scalar is the reference. `where: within` means each match inside the scalar is a reference.
+
+Every placeholder is checked: its body is a builtin, or a local or ref in its whole form when `references` allows it. Any other placeholder is a red squiggle. Refs, locals and placeholders are colored from these rules.
 
 A DSL without `layers` still hovers and navigates. Its scope is the one file.
 
@@ -80,13 +85,17 @@ When no schema resolves, the modeline line gets a red squiggle, or the first lin
 
 ## Navigation
 
-A ref or a local is underlined as soon as the file opens. Once the analysis answers, one that stays in this file turns blue, one that points at another file turns peach, and one that matches nothing in scope becomes a red squiggle. Resting on either shows that declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing in scope matches, the cursor does not move.
+A ref or a local is underlined as soon as the file opens. Once the analysis answers, one that stays in this file keeps a straight underline, one that points at another file becomes a squiggle, and one that matches nothing in scope turns red with a red squiggle. Otherwise the text keeps its own colors. Resting on either shows that declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing in scope matches, the cursor does not move.
 
-In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. The resource's identity is the last token of its key, with `-` written as `_`. A `${...}` placeholder is compared as written. A name that is the same spelling of a local's value, with `-` written as `_`, points at the resource whose key contains that local.
+In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. The resource's identity is the last token of its key, with `-` written as `_`. A key holding a local placeholder is also named by the local's value, spelled the same way. A builtin placeholder is compared as written.
 
 A local is a key under `locals`. A reference is a whole scalar `local.<name>`, or `${local.<name>}` inside a scalar or a key.
 
 Scope is the active stack: the common layer and every adjacent overlay. A ref in one file may name a declaration in another file of that stack. When the same symbol is in more than one file, the common layer wins, then the active file, then the other overlays in path order.
+
+## Completion
+
+Typing `ref `, `local.` or `${` opens the list of what the reference or placeholder can name, and every character narrows it by fuzzy match: `ref mtprim` finds `ref mocktype.primary`. Each entry names the declaring file and shows the declaration. Enter inserts it. The list holds what the file's environment sees: an overlay offers the common layer and its own declarations, and the common layer offers its own and those declared in every overlay. The forms come from the config's reference rules and placeholders, and builtins are offered inside a placeholder.
 
 ## Layers
 
@@ -118,11 +127,11 @@ The extension ships no schema and no DSL definition.
 
 The extension contributes the language `yaml-dsl`. It starts only when a workspace folder contains `yaml-dsl.yml`. A folder without that file is left alone, including in a window that also has a folder with the file.
 
-A file under a folder that has the config, and that matches one DSL `match` pattern, opens as `yaml-dsl`. The language server's document selector is that language. A file that matches no DSL pattern stays `yaml`. A file that matches two DSLs is reported and claimed by neither.
+A file under a folder that has the config, and that one DSL's `includes` match and its `excludes` do not, opens as `yaml-dsl`. The language server's document selector is that language. A file that matches no DSL pattern stays `yaml`. A file that matches two DSLs is reported and claimed by neither.
 
 ## Colors
 
-A matching file uses this extension's file icon. Colors follow the HCL editor: keys are identifiers, `ref` is a function, the names in a ref are types, strings are strings, `${` and `}` are interpolation marks, and the name inside them is an identifier. Numbers and `true` / `false` / `null` are constants.
+A matching file uses this extension's file icon. Colors follow the HCL editor: keys are identifiers, strings are strings, and numbers and `true` / `false` / `null` are constants. References and placeholders are colored from the config: a reference rule's leading literal is a function, its target groups are types and names, and a placeholder's delimiters and builtin body have their own colors.
 
 ## Publish
 

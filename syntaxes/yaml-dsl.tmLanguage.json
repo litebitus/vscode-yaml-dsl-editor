@@ -5,11 +5,8 @@
     { "include": "#comment" },
     { "include": "#quotedPair" },
     { "include": "#pair" },
-    { "include": "#ref" },
-    { "include": "#local" },
     { "include": "#double" },
     { "include": "#single" },
-    { "include": "#interpolation" },
     { "include": "#brackets" },
     { "include": "#constant" }
   ],
@@ -42,7 +39,6 @@
       "end": "\"",
       "endCaptures": { "0": { "name": "punctuation.definition.string.end.hcl" } },
       "patterns": [
-        { "include": "#interpolation" },
         { "include": "#escape" }
       ]
     },
@@ -59,37 +55,6 @@
     "escape": {
       "name": "constant.character.escape.hcl",
       "match": "\\\\."
-    },
-    "interpolation": {
-      "name": "meta.interpolation.hcl",
-      "begin": "(\\$\\{)",
-      "beginCaptures": { "1": { "name": "keyword.other.interpolation.begin.hcl" } },
-      "end": "(\\})",
-      "endCaptures": { "1": { "name": "keyword.other.interpolation.end.hcl" } },
-      "patterns": [
-        { "match": "[A-Za-z0-9_.-]+", "name": "variable.other.readwrite.hcl" }
-      ]
-    },
-    "ref": {
-      "begin": "\\b(ref)\\b",
-      "beginCaptures": { "1": { "name": "support.function.builtin.hcl" } },
-      "end": "(?=\\s*#|$)",
-      "patterns": [
-        { "include": "#interpolation" },
-        { "match": "\\.", "name": "keyword.operator.accessor.hcl" },
-        { "match": "[A-Za-z_][A-Za-z0-9_-]*", "name": "entity.name.type.hcl" }
-      ]
-    },
-    "local": {
-      "begin": "\\b(local)(\\.)",
-      "beginCaptures": {
-        "1": { "name": "keyword.control.hcl" },
-        "2": { "name": "keyword.operator.accessor.hcl" }
-      },
-      "end": "(?![A-Za-z0-9_])",
-      "patterns": [
-        { "match": "[A-Za-z0-9_]+", "name": "variable.other.readwrite.hcl" }
-      ]
     },
     "brackets": {
       "patterns": [

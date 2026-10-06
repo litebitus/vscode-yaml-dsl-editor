@@ -14,7 +14,7 @@ The editor is a language server. It has to be. Activating any `sample.yml` puts 
 
 The server keeps the stack current as the files change, including the folded document of each environment. Those folded documents are buffers in the editor view, so the author sees an environment's full config instead of assembling it from the files. Hover and navigation run against the stack in scope, not against the active file alone.
 
-On each change the server parses the changed YAML, reads that file's schema, and resolves refs and locals across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem is a red squiggle at its range, with its message on hover, and an empty range covers its whole line.
+On each change the server parses the changed YAML, reads that file's schema, and resolves refs and locals across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem is red text with a red squiggle at its range, with its message on hover, and an empty range covers its whole line.
 
 The workspace holds many stacks. The server loads one when a file in it becomes active, and does not load the rest at startup. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each environment. Switching files inside a resident stack is a hit.
 
@@ -56,17 +56,27 @@ Go to definition on a ref opens the declaration it names. The editor has one nav
 
 In `sample.yml` that syntax is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. Navigation opens the resource `<name>` under `<type>`.
 
-The resource's identity is the last token of its key, with `-` written as `_`. A key `name mock-thing-v2` is the ref name `mock_thing_v2`. A logical key `primary` is the ref name `primary`. A `${...}` placeholder is compared as written. The editor does not substitute it. When nothing in scope matches, go to definition does not move.
+The resource's identity is the last token of its key, with `-` written as `_`. A key `name mock-thing-v2` is the ref name `mock_thing_v2`. A logical key `primary` is the ref name `primary`. A name that holds a local placeholder is also known by the local's value, spelled by the name rule: a key `name ${local.thing}` whose local is `mock-thing` is the ref name `mock_thing`. The value is the local the file's fold sees. A builtin placeholder is compared as written. When nothing in scope matches, go to definition does not move.
 
 Scope for a ref is the active stack: the common layer and every adjacent overlay. A ref in one file may name a resource declared in another file of that stack.
 
-The analysis classifies every ref and local reference: local when it resolves in the same file, external when it resolves in another file of the stack, error when nothing in scope matches. The editor underlines each reference from the text as soon as the file opens, using the config's reference rules, and colors the underline by its class once the analysis answers. An error is a red squiggle. A `${...}` placeholder inside a reference keeps a plain underline.
+The analysis classifies every ref and local reference: local when it resolves in the same file, external when it resolves in another file of the stack, error when nothing in scope matches. The editor underlines each reference from the text as soon as the file opens, using the config's reference rules, and redraws it by its class once the analysis answers: a local reference keeps a straight underline and an external one is a squiggle, both in the text's own colors. An error turns red, text and squiggle. The whole reference takes its class's underline, placeholders inside it included.
+
+The editor colors references and placeholders from the config: a reference rule's leading literal, its target groups and its other literal text, and a placeholder's delimiters and builtin body. The grammar colors plain YAML only.
 
 ## Locals
 
 A local is a named value declared in the document. Go to definition opens that declaration. Hover shows the value as authored. Scope is the active stack, the same as a ref.
 
 `sample.yml` declares locals as keys under `locals`, and references them as a whole scalar `local.<name>` or as `${local.<name>}` inside a scalar. Another DSL declares the same concept with its own syntax in its own config block. A value shared by resources is a local in the common layer, and each resource that uses it references the local.
+
+## Completion
+
+Typing the start of a reference opens the list of what it can name. Each config reference rule is a literal with named groups, and the editor turns it into a template: `^ref (?<type>…)\.(?<name>…)` writes `ref <type>.<name>`. A symbol fills the template, and the result is kept only when the rule's own pattern reads it back as that symbol. A rule whose pattern is not a literal with named groups offers nothing.
+
+The list holds what the file's fold sees. An overlay offers the common layer's symbols and its own. The common layer offers its own symbols and those declared in every overlay. A resource keyed by a local is offered under the local's value, the spelling a ref uses for it. A ref completes up to the resource name, and the field path after it is the author's.
+
+The list opens as the reference starts and narrows on every character, by the editor's fuzzy match against everything typed since the reference began. Each entry names the declaring file and shows the declaration as authored.
 
 ## Hover documentation
 
@@ -117,6 +127,14 @@ When every environment overlay sets a path to the same value, and moving that va
 
 Folded documents before and after the click are the same.
 
+## Placeholders
+
+A placeholder holds a builtin, a local, or a ref. The config's `placeholders` block spells the placeholder with a `pattern` whose `body` group is what it holds, lists the `builtins`, and names in `references` which of local and ref a body may be. A body that is a reference is written in the reference's whole form, so `${local.name}` holds `local.name`, read by the whole `local` rule.
+
+Every placeholder in a scalar or a key is validated. A body that is neither a builtin nor an allowed reference is a problem. A reference body is classified like any other reference. Completion offers the builtins and the allowed references, each in the placeholder's spelling.
+
+A DSL may have placeholders and no refs or locals.
+
 ## What the workspace defines
 
 One `yaml-dsl.yml` at the root of a workspace folder.
@@ -124,12 +142,17 @@ One `yaml-dsl.yml` at the root of a workspace folder.
 ```yaml
 dsls:
   - id: resources
-    match: ["**/sample.yml"]
+    includes: ["**/sample.yml"]
+    excludes: ["**/.github/**"]
     schema:
       - .schema/sample.schema.json
       - one/.schema/sample.schema.json
     layers:
       environments: [one, two]
+    placeholders:
+      pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
+      builtins: [env, region]
+      references: [local]
     symbols:
       - kind: local
         at: "$.locals.*"
@@ -147,9 +170,6 @@ dsls:
       - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
         where: whole
         target: { kind: local, name: name }
-      - pattern: "\\$\\{local\\.(?<name>[a-z0-9_]+)\\}"
-        where: within
-        target: { kind: local, name: name }
 ```
 
 `layers` is a DSL's composition of a common layer and per-environment overlays. A DSL without it still formats, navigates, and hovers.
@@ -158,16 +178,15 @@ A file matching two DSLs is reported and claimed by neither. Other YAML is untou
 
 ## Ownership
 
-The extension contributes the language `yaml-dsl`. When the workspace config loads, each DSL `match` pattern is associated with that language. A matching file opens as `yaml-dsl`, and the language server's document selector is that language.
+The extension contributes the language `yaml-dsl`. When the workspace config loads, each DSL's files are associated with that language: those its `includes` globs match and its `excludes` globs do not. Such a file opens as `yaml-dsl`, and the language server's document selector is that language.
 
 An extension that selects `yaml` does not own these files and does not activate on them. The Red Hat YAML extension is one of those. A file that matches no DSL pattern stays `yaml`.
 
-`at` is `$`, `.key`, `.*`, and `[*]`. `skip` lists keys a `.*` step does not descend into. `exclude` lists keys that are not symbols. `token: last` takes the key's last whitespace-separated token. `spelling: snake` writes `-` as `_`. `qualify.type: parent` is the mapping key that contains the symbol, and the reference's `type` group must equal it.
+`at` is `$`, `.key`, `.*`, and `[*]`. `skip` lists keys a `.*` step does not descend into. `exclude` lists keys that are not symbols. `token: first` and `token: last` take the key's first and last whitespace-separated token. `spelling: snake` writes `-` as `_`. `qualify.type: parent` is the mapping key that contains the symbol, and the reference's `type` group must equal it.
 
 `where: whole` means the scalar is the reference. `where: within` means each match inside the scalar is a reference.
 
 ## Out of scope
 
 - Running the engine that accepts the file.
-- Substituting `${...}`.
 - Schemas or DSL definitions shipped inside the extension.

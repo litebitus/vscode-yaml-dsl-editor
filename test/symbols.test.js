@@ -69,7 +69,7 @@ test('whole scalars and matches inside a scalar are references', () => {
     { pattern: '^local\\.(?<name>[a-z0-9_]+)$', where: 'whole', target: { kind: 'local', name: 'name' } },
     { pattern: '\\$\\{local\\.(?<name>[a-z0-9_]+)\\}', where: 'within', target: { kind: 'local', name: 'name' } },
     { pattern: 'name', where: 'whole', target: { kind: 'resource', name: 'name' } },
-    { pattern: '\\n', where: 'within', target: { kind: 'local', name: 'missing' } },
+    { pattern: 'xna', where: 'within', target: { kind: 'local', name: 'missing' } },
   ]);
   assert.equal(analyzed.references.length >= 3, true);
   const ref = analyzed.references.find((item) => item.groups.type === 'mocktype');
@@ -81,7 +81,13 @@ test('whole scalars and matches inside a scalar are references', () => {
     { pattern: '\\$\\{local\\.(?<name>[a-z0-9_]+)\\}', where: 'within', target: { kind: 'local', name: 'name' } },
   ]);
   const keyRef = keyed.references.find((item) => item.groups.name === 'db');
-  assert.equal(keyRef.range.start.character, 2);
-  assert.equal(keyRef.range.end.character, 10);
+  assert.equal(keyRef.range.start.character, 0);
+  assert.equal(keyRef.range.end.character, 11);
   assert.ok(analyzed.references.some((item) => item.groups.name === 'missing' || item.target.name === 'missing'));
+});
+
+test('a first-token name reads a function-bound key by its leading word', () => {
+  const text = 'locals:\n  operator_key fn.ssm: /mock/key\n  plain: mock-value\n';
+  const analyzed = doc(text, [rule({ kind: 'local', at: '$.locals.*', name: { token: 'first', spelling: null } })]);
+  assert.deepEqual(analyzed.symbols.map((symbol) => symbol.name), ['operator_key', 'plain']);
 });

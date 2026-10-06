@@ -32,6 +32,26 @@
   ],
   "main": "./extension.js",
   "contributes": {
+    "configurationDefaults": {
+      "[yaml-dsl]": {
+        "editor.quickSuggestions": {
+          "strings": "on"
+        },
+        "editor.semanticHighlighting.enabled": true
+      }
+    },
+    "semanticTokenScopes": [
+      {
+        "language": "yaml-dsl",
+        "scopes": {
+          "keyword": ["support.function.builtin.hcl"],
+          "operator": ["keyword.operator.accessor.hcl"],
+          "type": ["entity.name.type.hcl"],
+          "variable": ["variable.other.readwrite.hcl"],
+          "variable.defaultLibrary": ["variable.language.hcl"]
+        }
+      }
+    ],
     "languages": [
       {
         "id": "yaml-dsl",

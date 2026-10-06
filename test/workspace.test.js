@@ -17,10 +17,14 @@ const schema = JSON.stringify({
 const config = `
 dsls:
   - id: resources
-    match: ["**/mock.yml"]
+    includes: ["**/mock.yml"]
     schema: https://example.test/fallback.json
     layers:
       environments: [one, two, three, four]
+    placeholders:
+      pattern: '\\$\\{(?<body>[^}\\n]*)\\}'
+      builtins: [env]
+      references: [local]
     symbols:
       - kind: local
         at: "$.locals.*"
@@ -37,9 +41,6 @@ dsls:
         target: { kind: resource, type: type, name: name }
       - pattern: '^local\\.(?<name>[a-z0-9_]+)$'
         where: whole
-        target: { kind: local, name: name }
-      - pattern: '\\$\\{local\\.(?<name>[a-z0-9_]+)\\}'
-        where: within
         target: { kind: local, name: name }
 `;
 
@@ -156,7 +157,7 @@ test('a modeline that fails falls through to the published schema', async () => 
   const relative = `
 dsls:
   - id: resources
-    match: ["**/mock.yml"]
+    includes: ["**/mock.yml"]
     schema: schema.json
     symbols: []
     references: []
@@ -191,11 +192,11 @@ test('two DSLs, a parse error, and a DSL without layers', async () => {
   const both = `
 dsls:
   - id: a
-    match: ["**/mock.yml"]
+    includes: ["**/mock.yml"]
   - id: b
-    match: ["**/mock.yml"]
+    includes: ["**/mock.yml"]
   - id: note
-    match: ["**/note.yml"]
+    includes: ["**/note.yml"]
     symbols:
       - kind: local
         at: "$.locals.*"
@@ -228,7 +229,7 @@ test('loading past the pin capacity evicts the oldest unpinned stack', async () 
   const plain = `
 dsls:
   - id: resources
-    match: ["**/mock.yml"]
+    includes: ["**/mock.yml"]
     layers:
       environments: [one]
 `;
@@ -255,7 +256,7 @@ test('a missing modeline walks the schema search path from the file', async () =
     text: `
 dsls:
   - id: resources
-    match: ["**/mock.yml"]
+    includes: ["**/mock.yml"]
     schema:
       - .schema/sample.schema.json
       - one/.schema/sample.schema.json
@@ -277,7 +278,7 @@ dsls:
   assert.equal(ws.hover('file://' + common, at(named, 'name')).contents.value, 'from the side stack');
   const bare = '/repo/bare/mock.yml';
   const bareText = 'name: plain\n';
-  await ws.setConfigs([{ text: 'dsls:\n  - id: sample\n    match: ["**/mock.yml"]\n', dir: '/repo' }]);
+  await ws.setConfigs([{ text: 'dsls:\n  - id: sample\n    includes: ["**/mock.yml"]\n', dir: '/repo' }]);
   await ws.sync('file://' + bare, bare, bareText);
   assert.ok(ws.problems('file://' + bare).some((item) => item.message === 'schema is unavailable'));
   assert.equal(ws.hover('file://' + bare, at(bareText, 'name')), null);
@@ -297,7 +298,7 @@ test('a line edit re-parses that file and leaves the rest of the stack', async (
     text: `
 dsls:
   - id: sample
-    match: ["**/mock.yml"]
+    includes: ["**/mock.yml"]
     schema: schema.json
     layers:
       environments: [one]
@@ -332,7 +333,7 @@ test('a schema written after the file opened replaces the missing one, and a new
   const layered = `
 dsls:
   - id: resources
-    match: ["**/mock.yml"]
+    includes: ["**/mock.yml"]
     schema:
       - .schema/mock.schema.json
       - one/.schema/mock.schema.json
@@ -459,4 +460,153 @@ test('each reference is classified local, external, or error', async () => {
   await ws.sync('file:///repo/unclaimed.txt', '/repo/unclaimed.txt', 'plain\n');
   assert.equal(ws.references('file:///repo/unclaimed.txt'), null);
   assert.equal(ws.references(`yaml-dsl-fold:${encodeURIComponent(stackId)}/one`).length, 1);
+});
+
+test('completion offers what the file\'s fold sees, written as each reference rule reads it', async () => {
+  const files = {
+    [common]: 'locals:\n  db: mock-value\nmocktype:\n  primary:\n    label: local.db\n',
+    [one]: 'mocktype:\n  replica: {}\n  per_env: {}\n  only_one: {}\n',
+    [two]: 'mocktype:\n  replica: {}\n  per_env: {}\n',
+    [three]: 'mocktype:\n  per_env: {}\n',
+    [four]: 'mocktype:\n  per_env: {}\n',
+  };
+  const ws = workspace(files, async () => schema);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  const after = (text, needle) => {
+    const index = text.indexOf(needle) + needle.length;
+    const line = text.slice(0, index).split('\n').length - 1;
+    return { line, character: index - text.lastIndexOf('\n', index - 1) - 1 };
+  };
+  const labels = (filePath, text, needle) => ws
+    .completion(`file://${filePath}`, after(text, needle))
+    .map((item) => item.label);
+  const oneText = `${files[one]}  wired:\n    source: ref \n    label: local.\n    note: "a \${local.d"\n    key_being_typed\n`;
+  await ws.sync(`file://${one}`, one, oneText);
+  assert.deepEqual(labels(one, oneText, 'source: ref '), [
+    'ref mocktype.primary',
+    'ref mocktype.replica',
+    'ref mocktype.per_env',
+    'ref mocktype.only_one',
+    'ref mocktype.wired',
+  ]);
+  assert.deepEqual(labels(one, oneText, 'label: local.'), ['local.db']);
+  assert.deepEqual(labels(one, oneText, '${local.d'), ['${env}', '${local.db}']);
+  const builtin = ws.completion(`file://${one}`, after(oneText, '${local.d')).find((entry) => entry.label === '${env}');
+  assert.deepEqual([builtin.kind, builtin.detail, builtin.documentation], ['builtin', 'builtin placeholder', '']);
+  assert.deepEqual(labels(one, oneText, 'key_being_typed'), []);
+  const item = ws.completion(`file://${one}`, after(oneText, 'source: ref '))[0];
+  assert.deepEqual(item.range.start, after(oneText, 'source: '));
+  assert.deepEqual(item.range.end, after(oneText, 'source: ref '));
+  assert.equal(item.detail, 'mock-stack/mock.yml');
+  assert.match(item.documentation, /^```yaml-dsl\n {2}primary:/);
+
+  const commonText = `${files[common]}    source: re\n    closed: "\${local.db}"\n`;
+  await ws.sync(`file://${common}`, common, commonText);
+  assert.deepEqual(labels(common, commonText, 'source: re'), ['ref mocktype.primary', 'ref mocktype.per_env']);
+  assert.deepEqual(labels(common, commonText, '${local.db}'), []);
+
+  const sparse = workspace({ [common]: files[common], [one]: files[one] }, async () => schema);
+  await sparse.setConfigs([{ text: config, dir: '/repo' }]);
+  await sparse.sync(`file://${common}`, common, commonText);
+  const sparseLabels = sparse
+    .completion(`file://${common}`, after(commonText, 'source: re'))
+    .map((entry) => entry.label);
+  assert.deepEqual(sparseLabels, ['ref mocktype.primary']);
+  assert.deepEqual(ws.completion('file:///repo/not-open.yml', { line: 0, character: 0 }), []);
+  await ws.sync('file:///repo/unclaimed.txt', '/repo/unclaimed.txt', 'plain\n');
+  assert.deepEqual(ws.completion('file:///repo/unclaimed.txt', { line: 0, character: 0 }), []);
+  assert.deepEqual(ws.completion(`file://${one}`, { line: 99, character: 0 }), []);
+});
+
+test('completion in a DSL without layers offers the whole file', async () => {
+  const flat = 'dsls:\n  - id: flat\n    includes: ["**/flat.yml"]\n    symbols:\n      - kind: local\n        at: "$.locals.*"\n'
+    + '        name: { from: key }\n    references:\n      - pattern: "^local\\\\.(?<name>[a-z]+)$"\n        where: whole\n'
+    + '        target: { kind: local, name: name }\n';
+  const text = 'locals:\n  db: one\nuse: local.\n';
+  const ws = workspace({ '/repo/flat.yml': text }, async () => null);
+  await ws.setConfigs([{ text: flat, dir: '/repo' }]);
+  await ws.sync('file:///repo/flat.yml', '/repo/flat.yml', text);
+  assert.deepEqual(ws.completion('file:///repo/flat.yml', { line: 2, character: 11 }).map((item) => item.label), ['local.db']);
+});
+
+test('a resource keyed by a local is offered by the local\'s value, as a ref names it', async () => {
+  const files = {
+    [common]: 'locals:\n  alias: mock-thing\nmocktype:\n  name ${local.alias}: {}\n  name ${local.missing}: {}\n',
+  };
+  const ws = workspace(files, async () => schema);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  const text = `${files[common]}  user:\n    source: ref \n`;
+  await ws.sync(`file://${common}`, common, text);
+  const labels = ws.completion(`file://${common}`, { line: 6, character: 16 }).map((item) => item.label);
+  assert.deepEqual(labels, ['ref mocktype.mock_thing', 'ref mocktype.user']);
+});
+
+test('a local the overlay overrides names the resource the overlay\'s fold sees', async () => {
+  const files = {
+    [common]: 'locals:\n  alias: common-thing\nmocktype:\n  name ${local.alias}: {}\n',
+    [one]: 'locals:\n  alias: overlay-thing\nmocktype:\n  user:\n    source: ref \n',
+  };
+  const ws = workspace(files, async () => schema);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${one}`, one, files[one]);
+  const labels = ws.completion(`file://${one}`, { line: 4, character: 16 }).map((item) => item.label);
+  assert.deepEqual(labels, ['ref mocktype.overlay_thing', 'ref mocktype.user']);
+});
+
+test('every placeholder is a builtin or a reference the config allows, and the rest are problems', async () => {
+  const text = [
+    'mocktype:',
+    '  name ${env}_${local.db}:',
+    '    a: "${env} ${local.db} ${local.nope}"',
+    '    b: ${envv}',
+    '    c: ${ref mocktype.x}',
+    '',
+  ].join('\n');
+  const files = { [common]: `locals:\n  db: mock-value\n${text}` };
+  const ws = workspace(files, async () => schema);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, files[common]);
+  const problems = ws.problems(`file://${common}`).map((problem) => problem.message);
+  assert.deepEqual(problems.filter((message) => message.startsWith('unknown placeholder')), [
+    'unknown placeholder ${envv}',
+    'unknown placeholder ${ref mocktype.x}',
+  ]);
+  const classes = ws.references(`file://${common}`).map((reference) => reference.kind);
+  assert.deepEqual(classes.sort(), ['error', 'local', 'local']);
+  const tokens = ws.semanticTokens(`file://${common}`);
+  const line = (number) => tokens
+    .filter((token) => token.line === number)
+    .map((token) => [token.character, token.length, token.type, token.modifiers.join()]);
+  assert.deepEqual(line(3), [
+    [7, 2, 'operator', ''],
+    [9, 3, 'variable', 'defaultLibrary'],
+    [12, 1, 'operator', ''],
+    [14, 2, 'operator', ''],
+    [16, 6, 'keyword', ''],
+    [22, 2, 'variable', ''],
+    [24, 1, 'operator', ''],
+  ]);
+  assert.deepEqual(ws.semanticTokens('file:///repo/not-open.yml'), []);
+  const stackId = ws.foldsFor(common).stackId;
+  assert.ok(ws.semanticTokens(`yaml-dsl-fold:${encodeURIComponent(stackId)}/one`).length > 0);
+  assert.equal(ws.decorations('file:///repo/not-open.yml').references, null);
+});
+
+test('a ref with a builtin in its name keeps the builtin\'s own tokens', async () => {
+  const text = 'mocktype:\n  user:\n    source: ref mocktype.${env}_thing\n';
+  const ws = workspace({ [common]: text }, async () => schema);
+  const refTail = "'\n        where: whole\n        target: { kind: resource";
+  const placeholderNames = config.replace(`(?<name>[a-z0-9_]+)${refTail}`, `(?<name>[a-z0-9_\${}]+)${refTail}`);
+  await ws.setConfigs([{ text: placeholderNames, dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, text);
+  const tokens = ws.semanticTokens(`file://${common}`).map((token) => [token.character, token.length, token.type]);
+  assert.deepEqual(tokens, [
+    [12, 4, 'keyword'],
+    [16, 8, 'type'],
+    [24, 1, 'operator'],
+    [25, 2, 'operator'],
+    [27, 3, 'variable'],
+    [30, 1, 'operator'],
+    [31, 6, 'variable'],
+  ]);
 });

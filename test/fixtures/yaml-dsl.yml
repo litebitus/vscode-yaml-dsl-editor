@@ -1,6 +1,6 @@
 dsls:
   - id: sample
-    match: ["**/mock.yml"]
+    includes: ["**/mock.yml"]
     layers:
       environments: [one]
     symbols:

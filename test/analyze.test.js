@@ -120,7 +120,7 @@ test('the common layer wins, then the active file, then the earliest other file'
     symbols: [{ kind: 'local', name: 'db', qualifiers: {}, file: '/repo/a.yml', keyRange: range, valueText: 'x' }],
     common: '/repo/a.yml',
   })[0];
-  assert.deepEqual(insideLink.range, rangeOf(inside, 'local.db'));
+  assert.deepEqual(insideLink.range, rangeOf(inside, '${local.db}'));
 });
 
 test('a ref named by a local value opens the common resource', () => {
@@ -133,15 +133,30 @@ test('a ref named by a local value opens the common resource', () => {
     }],
   });
   const range = { start: { line: 2, character: 2 }, end: { line: 2, character: 8 } };
+  const resource = { kind: 'resource', name: '${local.bullet}', spelling: 'snake', qualifiers: { type: 'mocktype' } };
   const symbols = [
-    { kind: 'local', name: 'bullet', qualifiers: {}, file: '/repo/one/mock.yml', keyRange: range, valueText: 'kds-bullet' },
+    { kind: 'local', name: 'bullet', qualifiers: {}, file: '/repo/one/mock.yml', keyRange: range, valueText: '"kds-bullet"' },
     { kind: 'local', name: 'bullet', qualifiers: {}, file: '/repo/mock.yml', keyRange: range, valueText: 'other-bullet' },
-    { kind: 'resource', name: '${local.bullet}', qualifiers: { type: 'mocktype' }, file: '/repo/one/mock.yml', keyRange: range, valueText: '' },
-    { kind: 'resource', name: '${local.bullet}', qualifiers: { type: 'mocktype' }, file: '/repo/mock.yml', keyRange: range, valueText: '' },
+    { ...resource, file: '/repo/one/mock.yml', keyRange: range, valueText: '' },
+    { ...resource, file: '/repo/mock.yml', keyRange: range, valueText: '' },
   ];
-  const hit = definitionAt(doc, { line: 0, character: 12 }, { symbols, common: '/repo/mock.yml' });
+  const dsl = {
+    placeholders: { pattern: '\\$\\{(?<body>[^}]*)\\}', builtins: ['env'], references: ['local'] },
+    references: [{ pattern: '^local\\.(?<name>[a-z]+)$', where: 'whole', target: { kind: 'local', name: 'name' } }],
+  };
+  const hit = definitionAt(doc, { line: 0, character: 12 }, { symbols, common: '/repo/mock.yml', dsl });
   assert.equal(hit.path, '/repo/mock.yml');
   assert.equal(hit.range.start.line, 2);
+  assert.equal(definitionAt(doc, { line: 0, character: 12 }, { symbols, common: '/repo/mock.yml' }), null);
+  const unvalued = symbols.map((symbol) => (symbol.kind === 'local' ? { ...symbol, valueText: '' } : symbol));
+  assert.equal(definitionAt(doc, { line: 0, character: 12 }, { symbols: unvalued, common: '/repo/mock.yml', dsl }), null);
+  const refBodies = { ...dsl, placeholders: { ...dsl.placeholders, references: ['local', 'ref'] } };
+  const refKeyed = [{ ...resource, name: '${ref mocktype.other}', file: '/repo/mock.yml', keyRange: range, valueText: '' }];
+  refBodies.references = [
+    ...dsl.references,
+    { pattern: '^ref (?<type>[a-z]+)\\.(?<name>[a-z]+)', where: 'whole', target: { kind: 'resource', type: 'type', name: 'name' } },
+  ];
+  assert.equal(definitionAt(doc, { line: 0, character: 12 }, { symbols: refKeyed, common: '/repo/mock.yml', dsl: refBodies }), null);
 });
 
 test('a local hover shows the authored value', () => {

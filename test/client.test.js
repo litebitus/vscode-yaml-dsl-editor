@@ -52,7 +52,7 @@ function fakeVscode(options = {}) {
       workspaceFolders: options.folders === undefined ? [{ uri: { fsPath: '/repo' } }] : options.folders,
       textDocuments: options.documents || [],
       fs: {
-        readFile: options.readFile || (async () => Buffer.from('dsls:\n  - id: resources\n    match: ["**/mock.yml"]\n')),
+        readFile: options.readFile || (async () => Buffer.from('dsls:\n  - id: resources\n    includes: ["**/mock.yml"]\n')),
       },
       openTextDocument: options.openTextDocument,
       getConfiguration() {
@@ -147,7 +147,7 @@ test('a search that fails does not block activation', async () => {
   vscode.workspace.findFiles = async () => [];
   const client = fakeClient();
   await activateWith(vscode, { subscriptions: [] }, () => client);
-  vscode.workspace.fs.readFile = async () => Buffer.from('dsls:\n  - id: sample\n    match: ["**/mock.yml"]\n');
+  vscode.workspace.fs.readFile = async () => Buffer.from('dsls:\n  - id: sample\n    includes: ["**/mock.yml"]\n');
   vscode.workspace.findFiles = async () => { throw new Error('down'); };
   await vscode.watcher.change();
   await new Promise((resolve) => setImmediate(resolve));
@@ -156,7 +156,7 @@ test('a search that fails does not block activation', async () => {
 
 test('activation asks the server to read matching files', async () => {
   const vscode = fakeVscode({
-    readFile: async () => Buffer.from('dsls:\n  - id: sample\n    match: ["**/mock.yml", "**/mock.yml"]\n'),
+    readFile: async () => Buffer.from('dsls:\n  - id: sample\n    includes: ["**/mock.yml", "**/mock.yml"]\n'),
   });
   vscode.RelativePattern = class {
     constructor(folder, pattern) { this.folder = folder; this.pattern = pattern; }
@@ -293,8 +293,8 @@ test('evicted folds close and a workspace without config still starts', async ()
   await activateWith(changed, { subscriptions: [] }, () => fakeClient());
   assert.equal(sample.languageId, 'yaml-dsl');
   assert.equal(changed.updated, undefined);
-  assert.equal(ownedFile('/other/mock.yml', [{ dir: '/repo', text: 'dsls:\n  - id: sample\n    match: ["**/mock.yml"]\n' }]), false);
-  assert.equal(ownedFile('/repo/mock.yml', [{ dir: '/repo', text: 'dsls:\n  - id: sample\n    match: ["**/mock.yml"]\n' }]), true);
+  assert.equal(ownedFile('/other/mock.yml', [{ dir: '/repo', text: 'dsls:\n  - id: sample\n    includes: ["**/mock.yml"]\n' }]), false);
+  assert.equal(ownedFile('/repo/mock.yml', [{ dir: '/repo', text: 'dsls:\n  - id: sample\n    includes: ["**/mock.yml"]\n' }]), true);
   assert.deepEqual(associationPatterns(['**/mock.yml', '*.yml']), ['**/mock.yml', 'mock.yml', '*.yml']);
 });
 
@@ -421,7 +421,6 @@ function referenceMarks() {
     local: { kind: 'local' },
     external: { kind: 'external' },
     error: { kind: 'error' },
-    placeholder: { kind: 'placeholder' },
     unclassified: { kind: 'unclassified' },
   };
 }
@@ -459,7 +458,11 @@ function lastPaint(painted, kind) {
 const referenceConfig = [
   'dsls:',
   '  - id: sample',
-  '    match: ["**/*.yml"]',
+  '    includes: ["**/*.yml"]',
+  '    placeholders:',
+  "      pattern: '\\$\\{(?<body>[^}]*)\\}'",
+  '      builtins: [env]',
+  '      references: [local]',
   '    references:',
   "      - pattern: '^ref [a-z0-9_.${}]+'",
   '        where: whole',
@@ -467,9 +470,6 @@ const referenceConfig = [
   "      - pattern: '^local\\.[a-z_]+$'",
   '        where: whole',
   '        target: { kind: local }',
-  "      - pattern: '\\$\\{local\\.(?<name>[a-z0-9_]+)\\}'",
-  '        where: within',
-  '        target: { kind: local, name: name }',
 ].join('\n');
 
 test('references are painted by the class the server gives them', async () => {
@@ -496,33 +496,18 @@ test('references are painted by the class the server gives them', async () => {
   assert.deepEqual(covered('error'), ['ref five.six']);
   assert.deepEqual(covered('unclassified'), []);
   assert.deepEqual(client.sent.at(-1), { method: 'yaml-dsl/decorations', params: { uri: 'file:///repo/mock.yml' } });
-  assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0, 0]);
+  assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0]);
 });
 
-test('a placeholder inside a classified ref keeps the plain underline', async () => {
+test('a classified ref takes its class underline whole, placeholders inside it included', async () => {
   const text = 'ref redshift.\n${env}_cluster';
-  const at = text.indexOf('${env}');
   const painted = [];
   const doc = documentOf(text);
   const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
-  const client = fakeClient({
-    decorations: {
-      references: [
-        { range: { start: { line: 0, character: 0 }, end: { line: 1, character: 14 } }, kind: 'external' },
-        { range: rangeOf(2, 0, 0), kind: 'local' },
-      ],
-      problems: [],
-    },
-  });
+  const whole = { start: { line: 0, character: 0 }, end: { line: 1, character: 14 } };
+  const client = fakeClient({ decorations: { references: [{ range: whole, kind: 'external' }], problems: [] } });
   await paintUnderlines(vscode, client, referenceMarks(), []);
-  assert.deepEqual(lastPaint(painted, 'external').ranges, [
-    { start: { line: 0, character: 0 }, end: placeAt(text, at) },
-    { start: placeAt(text, at + '${env}'.length), end: placeAt(text, text.length) },
-  ]);
-  assert.deepEqual(lastPaint(painted, 'placeholder').ranges, [
-    { start: placeAt(text, at), end: placeAt(text, at + '${env}'.length) },
-  ]);
-  assert.deepEqual(lastPaint(painted, 'local').ranges, [rangeOf(2, 0, 0)]);
+  assert.deepEqual(lastPaint(painted, 'external').ranges, [whole]);
 });
 
 test('every ref is underlined from the text before the server classifies it, once per editor', async () => {
@@ -673,4 +658,100 @@ test('a workspace config file shows its own problems and nothing else', async ()
   assert.equal(painted.some((item) => item.kind === 'unclassified'), false);
   assert.deepEqual(client.sent.map((item) => item.params.uri), ['file:///repo/yaml-dsl.yml']);
   assert.ok(otherPainted.every((item) => item.ranges.length === 0));
+});
+
+test('a hover colors the declaration by the declaring file\'s DSL, with no DSL syntax of its own', async () => {
+  const vscode = {
+    MarkdownString: class {
+      constructor() { this.value = ''; }
+      appendMarkdown(text) { this.value += text; }
+    },
+    Hover: class {
+      constructor(contents, range) { this.contents = contents; this.range = range; }
+    },
+  };
+  const hover = (configText) => editorMiddleware(vscode, () => [{ text: configText, dir: '/repo' }])
+    .provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
+      contents: {
+        value: '[mock.yml:1](file:///repo/mock.yml#L1)\n\n```yaml-dsl\n'
+          + '  source: ref thing.one\n  name: "x" ${local.db} ${env} @{y}\n```',
+      },
+    }));
+  const configured = (await hover(referenceConfig)).contents.value;
+  assert.match(configured, /<span style="color:#efb080;">ref<\/span>/);
+  assert.match(configured, /<span style="color:#82D2CE;">\$\{local\.db\}<\/span>/);
+  assert.match(configured, /<span style="color:#82D2CE;">\$\{env\}<\/span>/);
+  assert.doesNotMatch(configured, /color:#82D2CE;">@\{y\}/);
+  const other = [
+    'dsls:',
+    '  - id: other',
+    '    includes: ["**/*.yml"]',
+    "    placeholders: { pattern: '@\\{(?<body>[^}]*)\\}', builtins: [y] }",
+    '    references:',
+    "      - { pattern: 'use [a-z]+', where: within, target: { kind: local } }",
+  ].join('\n');
+  const otherDsl = (await hover(other)).contents.value;
+  assert.doesNotMatch(otherDsl, /color:#efb080;">ref/);
+  assert.doesNotMatch(otherDsl, /color:#82D2CE;">\$\{env\}/);
+  assert.match(otherDsl, /<span style="color:#82D2CE;">@\{y\}<\/span>/);
+  const unowned = (await editorMiddleware(vscode).provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
+    contents: { value: '[mock.yml:1](file:///repo/mock.yml#L1)\n\n```yaml-dsl\n  source: ref thing.one\n```' },
+  }))).contents.value;
+  assert.doesNotMatch(unowned, /color:#efb080/);
+});
+
+test('the text pass underlines placeholder references and within matches from the config', async () => {
+  const painted = [];
+  const doc = documentOf('a: "${local.db} ${env} ${bad}"\nb: use thing\n');
+  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  const withinConfig = `${referenceConfig}\n      - pattern: 'use [a-z]+'\n        where: within\n        target: { kind: local }`;
+  await paintUnderlines(vscode, fakeClient(), referenceMarks(), [{ text: withinConfig, dir: '/repo' }]);
+  const covered = lastPaint(painted, 'unclassified').ranges.map((range) => doc.getText(range));
+  assert.deepEqual(covered.sort(), ['local.db', 'use thing']);
+  const unowned = [];
+  await paintUnderlines(
+    { window: { visibleTextEditors: [recordingEditor(documentOf('a: ref x.y\n', 'elsewhere.txt'), unowned)] } },
+    fakeClient(),
+    referenceMarks(),
+    [{ text: referenceConfig, dir: '/other' }],
+  );
+  assert.deepEqual(lastPaint(unowned, 'unclassified').ranges, []);
+});
+
+test('activation leaves excluded files out of the warm-up', async () => {
+  const vscode = fakeVscode({
+    readFile: async () => Buffer.from('dsls:\n  - id: suites\n    includes: ["**/*.yml"]\n    excludes: ["**/protocols/**"]\n'),
+  });
+  vscode.RelativePattern = class { constructor(folder, pattern) { this.pattern = pattern; } };
+  vscode.workspace.findFiles = async () => [{ fsPath: '/repo/games/slot.yml' }, { fsPath: '/repo/protocols/mock/protocol.yml' }];
+  const client = fakeClient();
+  await activateWith(vscode, { subscriptions: [] }, () => client);
+  await new Promise((resolve) => setImmediate(resolve));
+  const warm = client.sent.find((item) => item.method === 'yaml-dsl/warm');
+  assert.deepEqual(warm.params.paths, ['/repo/games/slot.yml']);
+});
+
+test('the repaint notice is handled from the moment the client starts, before activation finishes', async () => {
+  const painted = [];
+  const editor = {
+    document: { languageId: 'yaml-dsl', uri: { scheme: 'file', fsPath: '/repo/mock.yml', toString() { return 'file:///repo/mock.yml'; } }, getText: () => '' },
+    setDecorations(mark, ranges) { painted.push(ranges.length); },
+  };
+  const vscode = fakeVscode({ visible: [editor] });
+  let answer = null;
+  let release;
+  const client = fakeClient();
+  client.sendRequest = async (method) => {
+    if (method !== 'yaml-dsl/decorations') return null;
+    if (!release) await new Promise((resolve) => { release = resolve; });
+    return answer;
+  };
+  const activation = activateWith(vscode, { subscriptions: [] }, () => client);
+  while (!release) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(typeof client.notes['yaml-dsl/reanalyzed'], 'function');
+  answer = { references: [{ range: rangeOf(0, 0, 3), kind: 'external' }], problems: [] };
+  await client.notes['yaml-dsl/reanalyzed']({ uris: ['file:///repo/mock.yml'] });
+  release();
+  await activation;
+  assert.ok(painted.some((count) => count === 1));
 });

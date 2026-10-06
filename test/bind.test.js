@@ -11,6 +11,14 @@ function fakeConnection() {
     onHover(fn) { handlers.hover = fn; },
     onDefinition(fn) { handlers.definition = fn; },
     onDocumentLinks(fn) { handlers.links = fn; },
+    onCompletion(fn) { handlers.completion = fn; },
+    tokenRefreshes: 0,
+    languages: {
+      semanticTokens: {
+        on(fn) { handlers.semanticTokens = fn; },
+        refresh() { connection.tokenRefreshes += 1; },
+      },
+    },
     onNotification(method, fn) { handlers[method] = fn; },
     onRequest(method, fn) { handlers[method] = fn; },
     onDidChangeWatchedFiles(fn) { handlers.watchedFiles = fn; },
@@ -67,7 +75,7 @@ test('document events analyze and custom requests answer', async () => {
   });
   await connection.handlers['yaml-dsl/config']({
     entries: [{
-      text: 'dsls:\n  - id: resources\n    match: ["**/mock.yml"]\n    schema: schema.json\n',
+      text: 'dsls:\n  - id: resources\n    includes: ["**/mock.yml"]\n    schema: schema.json\n',
       dir: '/repo',
     }],
   });
@@ -80,7 +88,7 @@ test('document events analyze and custom requests answer', async () => {
   const missing = await connection.handlers.definition({ textDocument: { uri: 'file:///repo/app/mock.yml' }, position: { line: 1, character: 0 } });
   assert.equal(missing, null);
   await connection.handlers['yaml-dsl/config']({
-    text: 'dsls:\n  - id: note\n    match: ["**/note.yml"]\n    symbols:\n      - kind: local\n        at: "$.locals.*"\n    references:\n      - pattern: "^local"\n        where: whole\n        target: { kind: local }\n',
+    text: 'dsls:\n  - id: note\n    includes: ["**/note.yml"]\n    symbols:\n      - kind: local\n        at: "$.locals.*"\n    references:\n      - pattern: "^local"\n        where: whole\n        target: { kind: local }\n',
     dir: '/repo',
   });
   const note = 'locals:\n  db: mock-value\nuse: local.db\n';
@@ -124,7 +132,7 @@ test('the server watches each schema path it reads and reloads a schema that cha
     capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true } } },
   });
   await connection.handlers['yaml-dsl/config']({
-    entries: [{ text: 'dsls:\n  - id: resources\n    match: ["**/mock.yml"]\n', dir: '/repo' }],
+    entries: [{ text: 'dsls:\n  - id: resources\n    includes: ["**/mock.yml"]\n', dir: '/repo' }],
   });
   const text = '# yaml-language-server: $schema=.schema/mock.schema.json\nname: plain\n';
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
@@ -166,7 +174,7 @@ test('a client without relative-pattern watching gets no registration', async ()
   const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
   connection.handlers.initialize({ capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true } } } });
   await connection.handlers['yaml-dsl/config']({
-    entries: [{ text: 'dsls:\n  - id: resources\n    match: ["**/mock.yml"]\n', dir: '/repo' }],
+    entries: [{ text: 'dsls:\n  - id: resources\n    includes: ["**/mock.yml"]\n', dir: '/repo' }],
   });
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => 'name: plain\n' } });
   await workspace.whenIdle();
@@ -178,15 +186,69 @@ test('an analysis that changes a stack tells the client which documents to repai
   const documents = fakeDocuments();
   const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
   await connection.handlers['yaml-dsl/config']({
-    entries: [{ text: 'dsls:\n  - id: resources\n    match: ["**/mock.yml"]\n', dir: '/repo' }],
+    entries: [{ text: 'dsls:\n  - id: resources\n    includes: ["**/mock.yml"]\n', dir: '/repo' }],
   });
   const text = 'name: plain\n';
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
   await workspace.whenIdle();
   const repaints = () => connection.notifications.filter((item) => item.method === 'yaml-dsl/reanalyzed');
   assert.deepEqual(repaints().at(-1).params.uris, ['file:///repo/app/mock.yml']);
+  assert.ok(connection.tokenRefreshes >= 2);
   const repaintCount = repaints().length;
   documents.handlers.change({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
   await workspace.whenIdle();
   assert.equal(repaints().length, repaintCount);
+});
+
+test('completion answers editor items that replace what was typed', async () => {
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
+  const config = 'dsls:\n  - id: note\n    includes: ["**/note.yml"]\n    symbols:\n      - kind: local\n'
+    + '        at: "$.locals.*"\n        name: { from: key }\n      - kind: resource\n        at: "$.*.*"\n'
+    + '        skip: [locals]\n        name: { from: key }\n        qualify: { type: parent }\n    references:\n'
+    + '      - pattern: "^local\\\\.(?<name>[a-z]+)$"\n        where: whole\n        target: { kind: local, name: name }\n'
+    + '      - pattern: "^ref (?<type>[a-z]+)\\\\.(?<name>[a-z]+)"\n        where: whole\n'
+    + '        target: { kind: resource, type: type, name: name }\n';
+  await connection.handlers['yaml-dsl/config']({ entries: [{ text: config, dir: '/repo' }] });
+  const note = 'locals:\n  db: mock-value\nthing:\n  one:\n    use: local.\n    link: ref \n';
+  documents.handlers.open({ document: { uri: 'file:///repo/note.yml', getText: () => note } });
+  await workspace.whenIdle();
+  const complete = (line, character) => connection.handlers.completion({
+    textDocument: { uri: 'file:///repo/note.yml' },
+    position: { line, character },
+  });
+  const [local] = complete(4, 15);
+  assert.equal(local.label, 'local.db');
+  assert.equal(local.kind, 6);
+  assert.equal(local.filterText, 'local.db');
+  assert.deepEqual(local.textEdit, {
+    range: { start: { line: 4, character: 9 }, end: { line: 4, character: 15 } },
+    newText: 'local.db',
+  });
+  assert.deepEqual(local.documentation, { kind: 'markdown', value: '```yaml-dsl\n  db: mock-value\n```' });
+  const [resource] = complete(5, 14);
+  assert.equal(resource.label, 'ref thing.one');
+  assert.equal(resource.kind, 18);
+  assert.equal(connection.handlers.initialize().capabilities.completionProvider.triggerCharacters.join(''), ' .{');
+  const bare = bind(fakeConnection(), fakeDocuments(), { readFile: async () => null, fetchText: async () => null });
+  assert.deepEqual(bare.completion('file:///repo/none.yml', { line: 0, character: 0 }), []);
+});
+
+test('semantic tokens are encoded with the legend, and a config change asks the editor to refresh them', async () => {
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
+  const legend = connection.handlers.initialize().capabilities.semanticTokensProvider.legend;
+  assert.deepEqual(legend, { tokenTypes: ['keyword', 'operator', 'type', 'variable'], tokenModifiers: ['defaultLibrary'] });
+  const config = 'dsls:\n  - id: note\n    includes: ["**/note.yml"]\n'
+    + "    placeholders: { pattern: '\\$\\{(?<body>[^}]*)\\}', builtins: [env] }\n";
+  await connection.handlers['yaml-dsl/config']({ entries: [{ text: config, dir: '/repo' }] });
+  assert.equal(connection.tokenRefreshes, 1);
+  documents.handlers.open({ document: { uri: 'file:///repo/note.yml', getText: () => 'a: ${env}\n' } });
+  await workspace.whenIdle();
+  const encoded = connection.handlers.semanticTokens({ textDocument: { uri: 'file:///repo/note.yml' } });
+  assert.deepEqual(encoded.data, [0, 3, 2, 1, 0, 0, 2, 3, 3, 1, 0, 3, 1, 1, 0]);
+  const completed = connection.handlers.completion({ textDocument: { uri: 'file:///repo/note.yml' }, position: { line: 0, character: 5 } });
+  assert.equal(completed[0].kind, 21);
 });
