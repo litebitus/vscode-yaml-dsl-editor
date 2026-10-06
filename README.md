@@ -17,6 +17,7 @@ dsls:
       - side/.schema/sample.schema.json
     layers:
       overlays: [one, two]
+      common: nearest_ancestor
     placeholders:
       pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
     functions: none
@@ -73,7 +74,7 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 | `includes` | Globs of files that belong to it |
 | `excludes` | Globs of files that do not, even when `includes` matches them |
 | `schema` | Search path used when a file does not name a schema, or the path it names is not on disk. Each entry is relative to that file. The first one on disk wins. A URL is fetched. |
-| `layers` | `overlays`, directory names of the overlays beside the common file, or `none` |
+| `layers` | `overlays`, the directory names of the overlays, and `common`, how the common layer is found (`parent` or `nearest_ancestor`); or `none` |
 | `scopes` | Each scope's `visible_from` (`stack`, `everywhere`, `following`, or a list of paths) and its builtin `names` |
 | `symbols` | Where a name is declared (`at`, `skip`, `exclude`), how it is read (`name.from` `key`, `value` or `meta_argument`), and its `scope` |
 | `references` | A `pattern` with named groups, the positions it may stand in (`where`), whether text may follow the name (`trailing_text`), and its `target` scope and name |
@@ -100,9 +101,9 @@ When no schema resolves, the modeline line gets a red squiggle, or the first lin
 
 A reference is underlined as soon as the file opens. Once the analysis answers, one that stays in this file keeps a straight underline, one that points at another file becomes a squiggle, and one that matches nothing visible turns red with a red squiggle. Otherwise the text keeps its own colors. Resting on one shows its declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing visible matches, the cursor does not move.
 
-A reference resolves in its target scope, among the names visible from where it stands: the whole stack, everywhere, the later items of the declaring list, or the paths the scope names. In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The resource's identity is the last token of its key, with `-` written as `_`. A key holding a local placeholder is also named by the local's value, spelled the same way. A local is a key under `locals`, referenced as a whole scalar `local.<name>` or `${local.<name>}` inside a scalar or a key.
+A reference resolves in its target scope, among the names visible from where it stands: the file's fold, everywhere, the later items of the declaring list, or the paths the scope names. In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The resource's identity is the last token of its key, with `-` written as `_`. A key holding a local placeholder is also named by the local's value, spelled the same way. A local is a key under `locals`, referenced as a whole scalar `local.<name>` or `${local.<name>}` inside a scalar or a key.
 
-A stack is the common layer and every adjacent overlay. When the same symbol is in more than one file, the common layer wins, then the active file, then the other overlays in path order.
+An overlay's fold is its own declarations over the common layer's: its own declaration wins, and it sees no other overlay's. The common layer sees its own declarations and a name declared in every overlay that has a file, which opens in the first such overlay `layers.overlays` lists.
 
 ## Completion
 
@@ -110,7 +111,7 @@ Typing the start of a reference, a placeholder or a call opens the list of what 
 
 ## Layers
 
-A DSL with `layers` composes a stack. One file is the common layer. Each overlay is the same filename in a directory named in `layers.overlays`, beside that file. The same shape without an extra directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
+A DSL with `layers` composes a stack. One file is the common layer. Each overlay is the same filename under a directory named in `layers.overlays` directly below the common layer's directory. With `layers.common: parent` the overlay directory holds the file itself. With `nearest_ancestor` the file may sit deeper, at the same path below the overlay directory in every overlay, so `mock-stack/one/config/sample.yml` takes `mock-stack/sample.yml`. A file below no overlay directory is a common layer. The same shape without an extra directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
 
 ```
 mock-stack/sample.yml
@@ -142,7 +143,7 @@ A file under a folder that has the config, and that one DSL's `includes` match a
 
 ## Colors
 
-A matching file uses this extension's file icon. Colors follow the HCL editor: keys are identifiers, strings are strings, and numbers and `true` / `false` / `null` are constants. References and placeholders are colored from the config: a reference rule's leading literal is a function, its target groups are types and names, a placeholder's delimiters and builtin body have their own colors, and a call's marker and function are colored as HCL colors a function call. A `#` starts a comment only at the start of a line or after whitespace.
+A matching file uses this extension's file icon. The editor's bracket pair colorization does not apply, so a bracket keeps the color of the text it stands in. Colors follow the HCL editor: keys are identifiers, strings are strings, and numbers and `true` / `false` / `null` are constants. References and placeholders are colored from the config: a reference rule's leading literal is a function, its target groups are types and names, a placeholder's delimiters and builtin body have their own colors, and a call's marker and function are colored as HCL colors a function call. A `#` starts a comment only at the start of a line or after whitespace.
 
 ## Publish
 

@@ -74,7 +74,7 @@ function stackOf(symbols, extra = {}) {
   };
 }
 
-test('the common layer wins, then the active file, then the earliest other file', () => {
+test('the active file wins, then the common layer, then the first other declaration in the fold', () => {
   const doc = analyzeDocument('source: ref mocktype.primary\n', '/repo/two/mock.yml', { references: [refRule] });
   const symbols = [
     typed('primary', '/repo/three/mock.yml'),
@@ -82,11 +82,11 @@ test('the common layer wins, then the active file, then the earliest other file'
     typed('other', '/repo/mock.yml'),
     localSymbol('primary', '/repo/mock.yml', 'no'),
   ];
-  assert.equal(definitionAt(doc, { line: 0, character: 8 }, stackOf(symbols)).path, '/repo/four/mock.yml');
+  assert.equal(definitionAt(doc, { line: 0, character: 8 }, stackOf(symbols)).path, '/repo/three/mock.yml');
   symbols.unshift(typed('primary', '/repo/mock.yml'));
   assert.equal(definitionAt(doc, { line: 0, character: 8 }, stackOf(symbols)).path, '/repo/mock.yml');
-  symbols.unshift(typed('primary', '/repo/two/mock.yml'));
-  assert.equal(definitionAt(doc, { line: 0, character: 8 }, stackOf(symbols)).path, '/repo/mock.yml');
+  const withActive = [...symbols, typed('primary', '/repo/two/mock.yml')];
+  assert.equal(definitionAt(doc, { line: 0, character: 8 }, stackOf(withActive)).path, '/repo/two/mock.yml');
   const links = linksFor(doc, stackOf(symbols));
   assert.equal(links.length, 1);
   assert.match(linkTarget(links[0].path, links[0].targetRange), /^file:\/\/\/repo\/mock\.yml#1,/);
@@ -113,7 +113,7 @@ test('the common layer wins, then the active file, then the earliest other file'
   assert.equal(definitionAt(localTyped, { line: 0, character: 8 }, stackOf(symbols)), null);
 });
 
-test('a ref named by a local value opens the common resource', () => {
+test('a ref named by a local value opens the declaration in the active file first', () => {
   const doc = analyzeDocument('item: ref mocktype.kds_bullet\n', '/repo/one/mock.yml', { references: [refRule] });
   const range = { start: { line: 2, character: 2 }, end: { line: 2, character: 8 } };
   const keyed = { spelling: 'snake', keyRange: range };
@@ -128,7 +128,7 @@ test('a ref named by a local value opens the common resource', () => {
     dsl: { scopes: stackScopes, references: [refRule, localRule], placeholders },
   });
   const hit = definitionAt(doc, { line: 0, character: 12 }, withPlaceholders(symbols));
-  assert.equal(hit.path, '/repo/mock.yml');
+  assert.equal(hit.path, '/repo/one/mock.yml');
   assert.equal(hit.range.start.line, 2);
   assert.equal(definitionAt(doc, { line: 0, character: 12 }, stackOf(symbols)), null);
   const unvalued = symbols.map((symbol) => (symbol.scope === 'local' ? { ...symbol, valueText: '' } : symbol));

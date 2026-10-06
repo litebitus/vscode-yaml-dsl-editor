@@ -34,8 +34,8 @@
     },
     "double": {
       "name": "string.quoted.double.hcl",
-      "begin": "\"",
-      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.hcl" } },
+      "begin": "(?:^|(?<=:)|(?<=[\\[{,])|(?<=^-)|(?<=\\s-))\\s*(\")",
+      "beginCaptures": { "1": { "name": "punctuation.definition.string.begin.hcl" } },
       "end": "\"",
       "endCaptures": { "0": { "name": "punctuation.definition.string.end.hcl" } },
       "patterns": [
@@ -44,9 +44,9 @@
     },
     "single": {
       "name": "string.quoted.single.hcl",
-      "begin": "'",
-      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.hcl" } },
-      "end": "'",
+      "begin": "(?:^|(?<=:)|(?<=[\\[{,])|(?<=^-)|(?<=\\s-))\\s*(')",
+      "beginCaptures": { "1": { "name": "punctuation.definition.string.begin.hcl" } },
+      "end": "'(?!')",
       "endCaptures": { "0": { "name": "punctuation.definition.string.end.hcl" } },
       "patterns": [
         { "match": "''", "name": "constant.character.escape.hcl" }

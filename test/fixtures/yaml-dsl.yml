@@ -5,6 +5,7 @@ dsls:
     schema: []
     layers:
       overlays: [one]
+      common: parent
     placeholders: none
     functions: none
     scopes:

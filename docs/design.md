@@ -34,7 +34,7 @@ Line coverage and branch coverage of the extension's own code are each at least 
 
 ## Common layer and overlays
 
-The core of a layered DSL is how a stack is composed. One `sample.yml` is the common layer. Each overlay is a `sample.yml` in a directory named `one` or `two` beside that file. The engine deep-merges the common layer under the overlay, and the folded document is what a plan sees. The same shape without an instance directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
+The core of a layered DSL is how a stack is composed. One `sample.yml` is the common layer. Each overlay is a `sample.yml` under a directory named in `layers.overlays`, `one` or `two`, directly below the common layer's directory. `layers.common` states how far below: `parent`, the overlay directory holds the file itself, `mock-stack/one/sample.yml`; `nearest_ancestor`, the file may sit deeper, at the same path below the overlay directory in every overlay, so `mock-stack/one/config/sample.yml` takes `mock-stack/sample.yml`, the nearest ancestor above an overlay directory. A file below no overlay directory is a common layer. The engine deep-merges the common layer under the overlay, and the folded document is what a plan sees. The same shape without an instance directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
 
 ```
 mock-stack/sample.yml
@@ -46,7 +46,7 @@ mock-stack/four/sample.yml
 
 An author editing one of those files sees only that file. The language server buffers the stack in the editor view: each overlay's folded document, common layer merged with that overlay. Shared config lives in the common layer, including a local that a resource references. The `layers` block in the config is this composition.
 
-While any file in the stack is active, refs and locals resolve across the common layer and every adjacent overlay. Across overlays, the editor diffs the folded documents. A block repeated in every overlay is one edit away from drifting: the next change lands in a single overlay and the others keep the old copy. The editor suggests moving that block into the common layer, and one click applies it.
+While any file in the stack is active, refs and locals resolve in that file's fold. Across overlays, the editor diffs the folded documents. A block repeated in every overlay is one edit away from drifting: the next change lands in a single overlay and the others keep the old copy. The editor suggests moving that block into the common layer, and one click applies it.
 
 ## Formatting
 
@@ -54,13 +54,13 @@ Claimed files have a document formatter. It changes indentation and whitespace. 
 
 ## Scopes
 
-A DSL is a language, and its names live in scopes. A scope says where its names may be referenced from: `visible_from` is `stack`, every file of the stack; `everywhere`; `following`, the later items of the list that declares the name, at any depth inside them; or a list of paths, the subtrees at those paths in the declaring file. A scope may list `names`, the builtins it holds. A global scope is one whose builtins are visible everywhere. Every scope a rule names is declared under `scopes`.
+A DSL is a language, and its names live in scopes. A scope says where its names may be referenced from: `visible_from` is `stack`, the file's fold; `everywhere`; `following`, the later items of the list that declares the name, at any depth inside them; or a list of paths, the subtrees at those paths in the declaring file. A scope may list `names`, the builtins it holds. A global scope is one whose builtins are visible everywhere. Every scope a rule names is declared under `scopes`.
 
 A symbol rule says where names are declared. `at` is the path: `$`, `.key`, `.*` and `[*]`. `skip` lists keys a `.*` step does not descend into, and `exclude` lists keys that are not symbols. `name.from` reads the name from the `key`, from the scalar `value`, or from a `meta_argument` of a key such as `http(id=config)`, one name per listed id. A key name takes its whole text, or its `first` or `last` whitespace-separated `token`, in the `spelling` `as_written` or `snake`, which writes `-` as `_`. `scope` is a scope name, or `{ from: parent, visible_from }`, where the mapping key enclosing the symbol names its scope.
 
 A reference rule says how names are used. `pattern` is a regular expression with named groups. `where` lists the positions a reference may stand in: `whole`, the scalar; `placeholder`, a placeholder that is the whole scalar; `placeholder_in_string`, a placeholder inside longer text; `within`, each match inside a scalar. `trailing_text` is `none` or `any`, whether text such as a field path may follow the name. `target.scope` is a scope name, or `{ group }`, the pattern group holding a parent-derived scope. `target.name` is the group holding the name.
 
-A reference resolves to a builtin of its target scope, else to a symbol of that scope, with that name, visible from the reference. A name that holds a placeholder whose value is a scalar is also known by that value, spelled by its symbol rule: a key `name ${local.thing}` whose local is `mock-thing` is the name `mock_thing`. The value is the one the file's fold sees. When the same symbol is in more than one file, the common layer wins, then the active file, then the other files in path order.
+A reference resolves to a builtin of its target scope, else to a symbol of that scope, with that name, visible from the reference. A name that holds a placeholder whose value is a scalar is also known by that value, spelled by its symbol rule: a key `name ${local.thing}` whose local is `mock-thing` is the name `mock_thing`. The value is the one the file's fold sees. An overlay's own declaration wins over the common layer's, as it does in the merge, and an overlay sees no other overlay's declarations. The common layer sees its own declarations and a name declared in every overlay that has a file, which opens in the first such overlay `layers.overlays` lists.
 
 ## Navigating references
 
@@ -70,7 +70,7 @@ In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional fi
 
 The analysis classifies every reference: local when it resolves in the same file, external when it resolves in another file of the stack, error when nothing visible matches. The editor underlines each reference from the text as soon as the file opens, using the config's reference rules, and redraws it by its class once the analysis answers: a local reference keeps a straight underline and an external one is a squiggle, both in the text's own colors. An error turns red, text and squiggle. The whole reference takes its class's underline, placeholders inside it included.
 
-The editor colors references, placeholders and calls from the config: a reference rule's leading literal, its target groups and its other literal text, a placeholder's delimiters and builtin body, and a call's marker, function and splat. The grammar colors plain YAML only. A `#` starts a comment only at the start of a line or after whitespace.
+The editor colors references, placeholders and calls from the config: a reference rule's leading literal, its target groups and its other literal text, a placeholder's delimiters and builtin body, and a call's marker, function and splat. The grammar colors plain YAML only. The extension takes the whole of a file's coloring, so the editor's bracket pair colorization does not apply: a bracket keeps the color of the text it stands in. A `#` starts a comment only at the start of a line or after whitespace.
 
 ## Completion
 
@@ -170,6 +170,7 @@ dsls:
       - one/.schema/sample.schema.json
     layers:
       overlays: [one, two]
+      common: nearest_ancestor
     placeholders:
       pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
     functions:

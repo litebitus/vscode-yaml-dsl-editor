@@ -10,6 +10,7 @@ dsls:
     schema: https://example.test/schema.json
     layers:
       overlays: [one, 2]
+      common: nearest_ancestor
     placeholders:
       pattern: '\\$\\{(?<body>[^}]*)\\}'
     functions:
@@ -65,7 +66,7 @@ test('a complete config states every field and keeps them', () => {
   assert.deepEqual(resources.includes, ['**/mock.yml']);
   assert.deepEqual(resources.excludes, ['**/skip/**']);
   assert.deepEqual(resources.schema, ['https://example.test/schema.json']);
-  assert.deepEqual(resources.layers.overlays, ['one']);
+  assert.deepEqual(resources.layers, { overlays: ['one'], common: 'nearest_ancestor' });
   assert.equal(resources.placeholders.pattern, '\\$\\{(?<body>[^}]*)\\}');
   assert.deepEqual(resources.functions.vocabulary, [
     { source: 'terraform' },
@@ -201,6 +202,10 @@ dsls:
   assert.equal(listsMissing.error.includes('one.symbols is required'), true);
   const patternBroken = parseConfig('dsls:\n  - id: two\n    placeholders: { pattern: "(" }\n');
   assert.equal(patternBroken.error.includes('two.placeholders.pattern is required'), true);
+  const layersBare = parseConfig('dsls:\n  - id: three\n    layers: {}\n');
+  assert.equal(layersBare.error.includes('three.layers.overlays is required'), true);
+  assert.equal(layersBare.error.includes('three.layers.common is required: one of parent, nearest_ancestor'), true);
+  assert.equal(layersBare.dsls[0].layers, null);
 });
 
 test('deprecated forms are read and reported, each naming its replacement', () => {
@@ -239,14 +244,14 @@ dsls:
 `);
   for (const message of [
     'old.match is deprecated: write includes',
-    'old.layers.environments is deprecated: write overlays',
+    'old.layers.environments is deprecated: write overlays and common',
     'old.symbols[0]: kind and qualify are deprecated: write scope',
     'old.references[0]: target.kind and a single where are deprecated',
     'old.placeholders: builtins and references are deprecated',
   ]) assert.ok(parsed.error.includes(message), message);
   const [old] = parsed.dsls;
   assert.deepEqual(old.includes, ['**/mock.yml']);
-  assert.deepEqual(old.layers.overlays, ['one']);
+  assert.deepEqual(old.layers, { overlays: ['one'], common: 'parent' });
   assert.deepEqual(old.symbols.map((symbol) => symbol.scope), [
     { literal: 'local' },
     { fromParent: true, visibleFrom: { kind: 'stack' } },
