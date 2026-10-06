@@ -121,7 +121,7 @@ function fakeClient(behavior = {}) {
     async sendRequest(method, params) {
       sent.push({ method, params });
       if (behavior.throwRequest) throw new Error('down');
-      if (method === 'yaml-dsl/foldsFor') return behavior.foldsFor || { stackId: null, environments: [] };
+      if (method === 'yaml-dsl/foldsFor') return behavior.foldsFor || { stackId: null, overlayNames: [] };
       if (method === 'yaml-dsl/fold') return 'folded';
       if (method === 'yaml-dsl/decorations') return behavior.decorations === undefined ? null : behavior.decorations;
       return null;
@@ -136,7 +136,7 @@ test('fold paths round-trip and reject a path that is not a fold', () => {
   const uri = foldUri({ Uri: { from: (parts) => parts } }, '/repo/mock.yml', 'one');
   const parsed = parseFoldPath(uri.path);
   assert.equal(parsed.stackId, '/repo/mock.yml');
-  assert.equal(parsed.env, 'one');
+  assert.equal(parsed.overlayName, 'one');
 });
 
 test('a search that fails does not block activation', async () => {
@@ -189,7 +189,7 @@ test('activation associates matching files and reveals the fold', async () => {
     associations: { '**/mock.yml': 'yaml-dsl' },
     openTextDocument: async (uri) => ({ uri, languageId: 'plaintext' }),
   });
-  const client = fakeClient({ foldsFor: { stackId: '/repo/mock/mock.yml', environments: ['one'] }, throwRequest: false });
+  const client = fakeClient({ foldsFor: { stackId: '/repo/mock/mock.yml', overlayNames: ['one'] }, throwRequest: false });
   const context = { subscriptions: [] };
   let started = null;
   const handle = await activateWith(vscode, context, (ctx) => { started = ctx; return client; });
@@ -213,7 +213,7 @@ test('activation associates matching files and reveals the fold', async () => {
   assert.equal(client.sent.at(-2).params.path, null);
 
   client.sendRequest = async (method) => {
-    if (method === 'yaml-dsl/foldsFor') return { stackId: '/repo/mock/mock.yml', environments: ['one', 'two'] };
+    if (method === 'yaml-dsl/foldsFor') return { stackId: '/repo/mock/mock.yml', overlayNames: ['one', 'two'] };
     return null;
   };
   vscode.window.activeTextEditor = editor;

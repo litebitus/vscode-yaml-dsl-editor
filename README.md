@@ -2,7 +2,7 @@
 
 The editor that makes a YAML DSL authorable.
 
-A DSL is a block in `yaml-dsl.yml` at the root of a workspace. Nothing about a particular DSL is compiled into the extension, and the block states every rule; there are no defaults. The block says which files belong, the DSL's scopes, where names are declared and how they are referenced, its placeholders and functions, when the DSL has layers which directories are environments, and a schema search path for a file that does not name one. Scopes, references, placeholders and calls are the same ideas in every DSL. Each block supplies the syntax.
+A DSL is a block in `yaml-dsl.yml` at the root of a workspace. Nothing about a particular DSL is compiled into the extension, and the block states every rule; there are no defaults. The block says which files belong, the DSL's scopes, where names are declared and how they are referenced, its placeholders and functions, when the DSL has layers which directories are overlays, and a schema search path for a file that does not name one. Scopes, references, placeholders and calls are the same ideas in every DSL. Each block supplies the syntax.
 
 The spec is [docs/design.md](docs/design.md).
 
@@ -16,7 +16,7 @@ dsls:
       - .schema/sample.schema.json
       - side/.schema/sample.schema.json
     layers:
-      environments: [one, two]
+      overlays: [one, two]
     placeholders:
       pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
     functions: none
@@ -73,7 +73,7 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 | `includes` | Globs of files that belong to it |
 | `excludes` | Globs of files that do not, even when `includes` matches them |
 | `schema` | Search path used when a file does not name a schema, or the path it names is not on disk. Each entry is relative to that file. The first one on disk wins. A URL is fetched. |
-| `layers` | `environments`, directory names of the overlays beside the common file, or `none` |
+| `layers` | `overlays`, directory names of the overlays beside the common file, or `none` |
 | `scopes` | Each scope's `visible_from` (`stack`, `everywhere`, `following`, or a list of paths) and its builtin `names` |
 | `symbols` | Where a name is declared (`at`, `skip`, `exclude`), how it is read (`name.from` `key`, `value` or `meta_argument`), and its `scope` |
 | `references` | A `pattern` with named groups, the positions it may stand in (`where`), whether text may follow the name (`trailing_text`), and its `target` scope and name |
@@ -106,11 +106,11 @@ A stack is the common layer and every adjacent overlay. When the same symbol is 
 
 ## Completion
 
-Typing the start of a reference, a placeholder or a call opens the list of what it can name, and every character narrows it by fuzzy match: `ref mtprim` finds `ref mocktype.primary`. Each entry names the declaring file and shows the declaration. Enter inserts it. The list holds what the file's environment sees and what is visible from the cursor: an overlay offers the common layer and its own declarations, and the common layer offers its own and those declared in every overlay. The forms come from the config's reference rules and placeholders, builtins are offered inside a placeholder, and the vocabulary after a call marker.
+Typing the start of a reference, a placeholder or a call opens the list of what it can name, and every character narrows it by fuzzy match: `ref mtprim` finds `ref mocktype.primary`. Each entry names the declaring file and shows the declaration. Enter inserts it. The list holds what the file's fold sees and what is visible from the cursor: an overlay offers the common layer and its own declarations, and the common layer offers its own and those declared in every overlay. The forms come from the config's reference rules and placeholders, builtins are offered inside a placeholder, and the vocabulary after a call marker.
 
 ## Layers
 
-A DSL with `layers` composes a stack. One file is the common layer. Each environment is an overlay: the same filename in a directory named in `layers.environments`, beside that file. The same shape without an extra directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
+A DSL with `layers` composes a stack. One file is the common layer. Each overlay is the same filename in a directory named in `layers.overlays`, beside that file. The same shape without an extra directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
 
 ```
 mock-stack/sample.yml
@@ -120,7 +120,7 @@ mock-stack/two/sample.yml
 
 Activating any file in the stack puts the common layer and every adjacent overlay in scope. Switching files inside that stack uses the copy the server already holds.
 
-Each environment's folded document is the common layer merged under that overlay. It is not opened on its own. Typing stays in the layer files. An environment with no file is an empty overlay on the common layer.
+Each overlay's folded document is the common layer merged under that overlay. It is not opened on its own. Typing stays in the layer files. An overlay with no file is empty on the common layer.
 
 The server loads a stack when a file in it becomes active. It does not load the rest at startup. The stack of the active editor is pinned, and so is any stack whose folded buffer is on screen. Capacity beyond the pins is 8 stacks. Loading one past that drops the least recently used unpinned stack and closes its folded buffers. The files on disk stay. A change to a resident stack updates it in place.
 
@@ -128,7 +128,7 @@ The server loads a stack when a file in it becomes active. It does not load the 
 
 The schema for a file is the one the file names. A `# yaml-language-server: $schema=` modeline is honored. The path is relative to that file.
 
-An overlay may name `.schema/sample.schema.json`. A common layer may name that file through an environment directory, such as `one/.schema/sample.schema.json`.
+An overlay may name `.schema/sample.schema.json`. A common layer may name that file through an overlay directory, such as `one/.schema/sample.schema.json`.
 
 A modeline that resolves is never overridden. The config `schema` list is the search path for a file with no modeline, or a modeline whose path is not on disk. The same schema bytes are one parsed copy. Different bytes are a different schema. Evicting a stack drops its layers and folded documents, not the schema.
 

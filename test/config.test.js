@@ -9,7 +9,7 @@ dsls:
     excludes: ["**/skip/**"]
     schema: https://example.test/schema.json
     layers:
-      environments: [one, 2]
+      overlays: [one, 2]
     placeholders:
       pattern: '\\$\\{(?<body>[^}]*)\\}'
     functions:
@@ -65,7 +65,7 @@ test('a complete config states every field and keeps them', () => {
   assert.deepEqual(resources.includes, ['**/mock.yml']);
   assert.deepEqual(resources.excludes, ['**/skip/**']);
   assert.deepEqual(resources.schema, ['https://example.test/schema.json']);
-  assert.deepEqual(resources.layers.environments, ['one']);
+  assert.deepEqual(resources.layers.overlays, ['one']);
   assert.equal(resources.placeholders.pattern, '\\$\\{(?<body>[^}]*)\\}');
   assert.deepEqual(resources.functions.vocabulary, [
     { source: 'terraform' },
@@ -208,6 +208,8 @@ test('deprecated forms are read and reported, each naming its replacement', () =
 dsls:
   - id: old
     match: ["**/mock.yml"]
+    layers:
+      environments: [one]
     placeholders:
       pattern: '\\$\\{(?<body>[^}]*)\\}'
       builtins: [env]
@@ -237,12 +239,14 @@ dsls:
 `);
   for (const message of [
     'old.match is deprecated: write includes',
+    'old.layers.environments is deprecated: write overlays',
     'old.symbols[0]: kind and qualify are deprecated: write scope',
     'old.references[0]: target.kind and a single where are deprecated',
     'old.placeholders: builtins and references are deprecated',
   ]) assert.ok(parsed.error.includes(message), message);
   const [old] = parsed.dsls;
   assert.deepEqual(old.includes, ['**/mock.yml']);
+  assert.deepEqual(old.layers.overlays, ['one']);
   assert.deepEqual(old.symbols.map((symbol) => symbol.scope), [
     { literal: 'local' },
     { fromParent: true, visibleFrom: { kind: 'stack' } },

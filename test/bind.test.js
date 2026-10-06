@@ -126,7 +126,7 @@ test('document events analyze and custom requests answer', async () => {
   assert.match(links[0].target, /^file:\/\/\/repo\/note\.yml#/);
   await connection.handlers['yaml-dsl/active']({ path: '/repo/app/mock.yml' });
   connection.handlers['yaml-dsl/visibleFolds']({ stackIds: ['/repo/app/mock.yml'] });
-  assert.equal(await connection.handlers['yaml-dsl/fold']({ stackId: '/repo/app/mock.yml', env: 'one' }), '');
+  assert.equal(await connection.handlers['yaml-dsl/fold']({ stackId: '/repo/app/mock.yml', overlayName: 'one' }), '');
   const noteDecorations = await connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/note.yml' });
   assert.deepEqual(noteDecorations.references.map((item) => item.kind), ['local']);
   assert.deepEqual(noteDecorations.problems, [{

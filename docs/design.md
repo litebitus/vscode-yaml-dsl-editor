@@ -1,22 +1,22 @@
 # YAML DSL editor
 
-Authoring `sample.yml` is hard without this extension, and that is why it exists. A stack is a common layer and an overlay per environment. The file on screen is one of those, not the environment's full config. A field's documentation sits beside a `$ref` the usual YAML tooling never reads. A `ref` and a `local` are strings, so nothing jumps to the declaration. The extension is the editor that makes that document authorable.
+Authoring `sample.yml` is hard without this extension, and that is why it exists. A stack is a common layer and its overlays. The file on screen is one of those, not an overlay's full config. A field's documentation sits beside a `$ref` the usual YAML tooling never reads. A `ref` and a `local` are strings, so nothing jumps to the declaration. The extension is the editor that makes that document authorable.
 
-The extension is generic. Any DSL written this way is a block in the workspace config, `yaml-dsl.yml`. Nothing about a particular DSL is compiled into the extension, and the config states every rule: the extension has no defaults, because every DSL is different. The block says which files belong, the DSL's scopes, where names are declared and how they are referenced, its placeholders and functions, when the DSL has layers which directories are environments, and a fallback schema for a document that does not name one. Scopes, references, placeholders and calls are generic: the editor validates, navigates, completes and hovers them the same way in every DSL. Each DSL's block supplies the syntax, and those syntaxes differ.
+The extension is generic. Any DSL written this way is a block in the workspace config, `yaml-dsl.yml`. Nothing about a particular DSL is compiled into the extension, and the config states every rule: the extension has no defaults, because every DSL is different. The block says which files belong, the DSL's scopes, where names are declared and how they are referenced, its placeholders and functions, when the DSL has layers which directories are overlays, and a fallback schema for a document that does not name one. Scopes, references, placeholders and calls are generic: the editor validates, navigates, completes and hovers them the same way in every DSL. Each DSL's block supplies the syntax, and those syntaxes differ.
 
 `sample.yml` is the DSL this document works through. Its field types are shared definitions, because a value may be a scalar, a `ref`, or a bare `local`. A simpler DSL uses the same engine through its own config block. The first config block, and the first files the editor is proven against, are `sample.yml`.
 
-Features are fine-tuned iteratively. The first slice is what any editor for a programming language provides: hover documentation, and navigation of refs and locals. Diffing environments, suggestions, and extraction into the common layer come after that slice and are tuned the same way.
+Features are fine-tuned iteratively. The first slice is what any editor for a programming language provides: hover documentation, and navigation of refs and locals. Diffing overlays, suggestions, and extraction into the common layer come after that slice and are tuned the same way.
 
 ## Language server
 
 The editor is a language server. It has to be. Activating any `sample.yml` puts the whole stack in scope: the common layer and every adjacent overlay. The server holds that context. Switching from one file in the stack to another uses it. Rebuilding the stack on each switch would be slow.
 
-The server keeps the stack current as the files change, including the folded document of each environment. Those folded documents are buffers in the editor view, so the author sees an environment's full config instead of assembling it from the files. Hover and navigation run against the stack in scope, not against the active file alone.
+The server keeps the stack current as the files change, including the folded document of each overlay. Those folded documents are buffers in the editor view, so the author sees an overlay's full config instead of assembling it from the files. Hover and navigation run against the stack in scope, not against the active file alone.
 
 On each change the server parses the changed YAML, reads that file's schema, and resolves references, placeholders and calls across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem is red text with a red squiggle at its range, with its message on hover, and an empty range covers its whole line.
 
-The workspace holds many stacks. The server loads one when a file in it becomes active, and does not load the rest at startup. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each environment. Switching files inside a resident stack is a hit.
+The workspace holds many stacks. The server loads one when a file in it becomes active, and does not load the rest at startup. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each overlay. Switching files inside a resident stack is a hit.
 
 The file in the active editor is worked on right away, ahead of all other files. Work on its stack goes first, the stacks of other open files next, and loading in the background last. A request about a file is answered once that file's analysis is done.
 
@@ -34,7 +34,7 @@ Line coverage and branch coverage of the extension's own code are each at least 
 
 ## Common layer and overlays
 
-The core of a layered DSL is how a stack is composed. One `sample.yml` is the common layer. Each environment is an overlay: a `sample.yml` in a directory named `one` or `two` beside that file. The engine deep-merges the common layer under the overlay, and the folded document is what a plan sees. The same shape without an instance directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
+The core of a layered DSL is how a stack is composed. One `sample.yml` is the common layer. Each overlay is a `sample.yml` in a directory named `one` or `two` beside that file. The engine deep-merges the common layer under the overlay, and the folded document is what a plan sees. The same shape without an instance directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
 
 ```
 mock-stack/sample.yml
@@ -44,9 +44,9 @@ mock-stack/three/sample.yml
 mock-stack/four/sample.yml
 ```
 
-An author editing one of those files sees only that file. The language server buffers the stack in the editor view: each environment's folded document, common layer merged with that overlay. Shared config lives in the common layer, including a local that a resource references. The `layers` block in the config is this composition.
+An author editing one of those files sees only that file. The language server buffers the stack in the editor view: each overlay's folded document, common layer merged with that overlay. Shared config lives in the common layer, including a local that a resource references. The `layers` block in the config is this composition.
 
-While any file in the stack is active, refs and locals resolve across the common layer and every adjacent overlay. Across environments, the editor diffs the folded documents. A block repeated in every overlay is one edit away from drifting: the next change lands in a single environment and the others keep the old copy. The editor suggests moving that block into the common layer, and one click applies it.
+While any file in the stack is active, refs and locals resolve across the common layer and every adjacent overlay. Across overlays, the editor diffs the folded documents. A block repeated in every overlay is one edit away from drifting: the next change lands in a single overlay and the others keep the old copy. The editor suggests moving that block into the common layer, and one click applies it.
 
 ## Formatting
 
@@ -97,7 +97,7 @@ A schema for this kind of value is built this way.
 
 This extension reads the schema document as authored. Hover walks the YAML path through `properties`, then `patternProperties`, then `additionalProperties`. On an object that carries both a `$ref` and a `description`, it keeps that `description`, then follows the `$ref` only to keep walking. The tooltip is the description kept at the field, requirement marker included (`[required]`, `[~required]`, `[optional]`). The composite's description is the value shape and is not the tooltip.
 
-The schema for a file is the one the file names. A `# yaml-language-server: $schema=` modeline is honored. Its path is relative to that file and points at the schema shipped with the grammar version the stack has initialized. An environment file names `.schema/sample.schema.json`. A common layer names that file through the environment directory that initialized the stack, such as `one/.schema/sample.schema.json`. That is the grammar the stack is actually on.
+The schema for a file is the one the file names. A `# yaml-language-server: $schema=` modeline is honored. Its path is relative to that file and points at the schema shipped with the grammar version the stack has initialized. An overlay names `.schema/sample.schema.json`. A common layer names that file through the overlay directory that initialized the stack, such as `one/.schema/sample.schema.json`. That is the grammar the stack is actually on.
 
 The config may set `schema` to a search path. It is the fallback, used when the file has no modeline or the path it names is not on disk. Each entry is relative to the file, the same way a modeline path is, and the first one on disk is the schema. A URL in the path is fetched. The search does not override a modeline that resolves. The extension embeds no schema. When neither source resolves, the file's modeline line gets a problem, or its first line when it has no modeline, and field hovers stay empty.
 
@@ -107,9 +107,9 @@ The schema is how the editor understands a field and the shape of an object: whi
 
 The schema is not the engine's checks. The editor handles everything about authoring the DSL files, and those checks are a separate pass. A check can require a group of fields only when another field has a certain value, allow a field for only one mode, or allow exactly one of two fields. The published schema has no such table. A field may be filled from the common layer, and the editor is looking at one file, so a `required` array on the resource alone does not say whether the folded document is complete. The common layer merged under the overlay remains. An extension point is not a transcription of these checks.
 
-## Diffing across environments
+## Diffing across overlays
 
-The command opens the stack's environments together. Each entry is that environment's folded document: the common layer merged with the environment file by the same deep merge the engine uses. A path whose folded value is the same in every environment is quiet. A path whose folded value differs is the diff. An environment with no file is an empty overlay on the common layer, not a missing stack.
+The command opens the stack's overlays together. Each entry is that overlay's folded document: the common layer merged with the overlay file by the same deep merge the engine uses. A path whose folded value is the same in every overlay is quiet. A path whose folded value differs is the diff. An overlay with no file is empty on the common layer, not a missing stack.
 
 ## Suggestions
 
@@ -117,13 +117,13 @@ The extension suggests an edit where it can see one. One click applies it. Extra
 
 ## Extracting the common layer
 
-A block that every environment overlay states for itself will drift. The next edit changes one environment, and the others keep the old copy. Extraction puts that block in the common layer so the stack has one copy.
+A block that every overlay states for itself will drift. The next edit changes one overlay, and the others keep the old copy. Extraction puts that block in the common layer so the stack has one copy.
 
-When every environment overlay sets a path to the same value, and moving that value into the common layer leaves every folded document unchanged, the editor suggests the extraction on that path. One click writes it to the common layer and removes it from each overlay.
+When every overlay sets a path to the same value, and moving that value into the common layer leaves every folded document unchanged, the editor suggests the extraction on that path. One click writes it to the common layer and removes it from each overlay.
 
 - The common layer has no value at that path: the click writes the value there and deletes it from each overlay.
 - The common layer already has that same value: the click deletes it from each overlay.
-- Any environment disagrees, or an overlay does not set the path: the editor makes no suggestion.
+- Any overlay disagrees, or does not set the path: the editor makes no suggestion.
 
 Folded documents before and after the click are the same.
 
@@ -169,7 +169,7 @@ dsls:
       - .schema/sample.schema.json
       - one/.schema/sample.schema.json
     layers:
-      environments: [one, two]
+      overlays: [one, two]
     placeholders:
       pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
     functions:
@@ -210,7 +210,7 @@ dsls:
         target: { scope: global, name: name }
 ```
 
-`layers` is a DSL's composition of a common layer and per-environment overlays, or `none`. A DSL without layers still formats, navigates, and hovers.
+`layers` is a DSL's composition of a common layer and its overlays, or `none`. A DSL without layers still formats, navigates, and hovers.
 
 A file matching two DSLs is reported and claimed by neither. Other YAML is untouched.
 
@@ -224,3 +224,7 @@ An extension that selects `yaml` does not own these files and does not activate 
 
 - Running the engine that accepts the file.
 - A DSL's schema or definition shipped inside the extension.
+
+## TODO
+
+- `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.

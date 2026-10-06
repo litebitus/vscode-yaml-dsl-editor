@@ -4,7 +4,7 @@ dsls:
     excludes: []
     schema: []
     layers:
-      environments: [one]
+      overlays: [one]
     placeholders: none
     functions: none
     scopes:

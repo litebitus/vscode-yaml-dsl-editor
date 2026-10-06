@@ -21,7 +21,7 @@ dsls:
     excludes: []
     schema: https://example.test/fallback.json
     layers:
-      environments: [one, two, three, four]
+      overlays: [one, two, three, four]
     placeholders:
       pattern: '\\$\\{(?<body>[^}\\n]*)\\}'
     functions: none
@@ -122,8 +122,8 @@ test('hover, definition, and folds use the whole stack', async () => {
   assert.match(within.contents.value, /mock-stack\/mock\.yml:\d+/);
   assert.match(within.contents.value, /db:/);
 
-  assert.deepEqual(ws.foldsFor(one), { stackId: common, environments: ['one'] });
-  assert.deepEqual(ws.foldsFor(common).environments, ['one', 'two', 'three', 'four']);
+  assert.deepEqual(ws.foldsFor(one), { stackId: common, overlayNames: ['one'] });
+  assert.deepEqual(ws.foldsFor(common).overlayNames, ['one', 'two', 'three', 'four']);
   const folded = ws.foldText(common, 'one');
   assert.match(folded, /the one overlay/);
   assert.match(folded, /mock-value/);
@@ -152,7 +152,7 @@ test('hover, definition, and folds use the whole stack', async () => {
   assert.equal(ws.hover('file://missing', { line: 0, character: 0 }), null);
   assert.equal(ws.definition('yaml-dsl-fold:nope', { line: 0, character: 0 }), null);
   assert.equal(ws.foldText('/missing', 'one'), '');
-  assert.deepEqual(ws.foldsFor('/missing'), { stackId: null, environments: [] });
+  assert.deepEqual(ws.foldsFor('/missing'), { stackId: null, overlayNames: [] });
   assert.equal(SCHEMA_UNAVAILABLE, 'schema is unavailable');
 });
 
@@ -223,7 +223,7 @@ dsls:
   const hover = ws.hover('file:///repo/note.yml', at('locals:\n  db: mock-value\nuse: local.db\n', 'local.db'));
   assert.match(hover.contents.value, /```yaml-dsl/);
   assert.match(hover.contents.value, /mock-value/);
-  assert.deepEqual(ws.foldsFor('/repo/note.yml'), { stackId: null, environments: [] });
+  assert.deepEqual(ws.foldsFor('/repo/note.yml'), { stackId: null, overlayNames: [] });
   assert.equal(ws.foldText('/repo/note.yml', 'one'), '');
   await ws.sync('file:///repo/note.yml', '/repo/note.yml', 'locals: [\n');
   assert.ok(ws.problems('file:///repo/note.yml').length > 0);
@@ -241,7 +241,7 @@ dsls:
   - id: resources
     includes: ["**/mock.yml"]
     layers:
-      environments: [one]
+      overlays: [one]
 `;
   const ws = workspace({}, async () => null);
   await ws.setConfigs([{ text: plain, dir: '/repo' }]);
@@ -280,9 +280,9 @@ dsls:
   assert.ok(ws.reads.includes('/repo/mock-app/.schema/sample.schema.json'));
   assert.ok(ws.reads.includes(found));
   assert.equal(ws.hover('file://' + common, at(text, 'name')).contents.value, 'from the side stack');
-  const env = '/repo/mock-app/one/mock.yml';
-  await ws.sync('file://' + env, env, text);
-  assert.equal(ws.hover('file://' + env, at(text, 'name')).contents.value, 'from the side stack');
+  const overlayPath = '/repo/mock-app/one/mock.yml';
+  await ws.sync('file://' + overlayPath, overlayPath, text);
+  assert.equal(ws.hover('file://' + overlayPath, at(text, 'name')).contents.value, 'from the side stack');
   const named = '# yaml-language-server: $schema=missing.json\n' + text;
   await ws.sync('file://' + common, common, named);
   assert.equal(ws.hover('file://' + common, at(named, 'name')).contents.value, 'from the side stack');
@@ -311,7 +311,7 @@ dsls:
     includes: ["**/mock.yml"]
     schema: schema.json
     layers:
-      environments: [one]
+      overlays: [one]
     symbols:
       - kind: local
         at: "$.locals.*"
@@ -348,7 +348,7 @@ dsls:
       - .schema/mock.schema.json
       - one/.schema/mock.schema.json
     layers:
-      environments: [one, two]
+      overlays: [one, two]
 `;
   const commonPath = '/repo/mock-app/mock.yml';
   const onePath = '/repo/mock-app/one/mock.yml';
