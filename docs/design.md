@@ -34,7 +34,7 @@ Line coverage and branch coverage of the extension's own code are each at least 
 
 ## Common layer and overlays
 
-The core of a layered DSL is how a stack is composed. One `sample.yml` is the common layer. Each overlay is a `sample.yml` under a directory named in `layers.overlays`, `one` or `two`, directly below the common layer's directory. `layers.common` states how far below: `parent`, the overlay directory holds the file itself, `mock-stack/one/sample.yml`; `nearest_ancestor`, the file may sit deeper, at the same path below the overlay directory in every overlay, so `mock-stack/one/config/sample.yml` takes `mock-stack/sample.yml`, the nearest ancestor above an overlay directory. A file below no overlay directory is a common layer. The engine deep-merges the common layer under the overlay, and the folded document is what a plan sees. The same shape without an instance directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
+The core of a layered DSL is how a stack is composed. One `sample.yml` is the common layer. Each overlay is a `sample.yml` under a directory named in `layers.overlay_folders`, `one` or `two`, directly below the common layer's directory. `layers.common_layer_discovery` states how far below: `parent`, the overlay directory holds the file itself, `mock-stack/one/sample.yml`; `ancestor`, the file may sit deeper, at the same path below the overlay directory in every overlay, so `mock-stack/one/config/sample.yml` takes `mock-stack/sample.yml`, the nearest ancestor above an overlay directory. A file below no overlay directory is a common layer. The engine deep-merges the common layer under the overlay, and the folded document is what a plan sees. The same shape without an instance directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
 
 ```
 mock-stack/sample.yml
@@ -54,13 +54,13 @@ Claimed files have a document formatter. It changes indentation and whitespace. 
 
 ## Scopes
 
-A DSL is a language, and its names live in scopes. A scope says where its names may be referenced from: `visible_from` is `stack`, the file's fold; `everywhere`; `following`, the later items of the list that declares the name, at any depth inside them; or a list of paths, the subtrees at those paths in the declaring file. A scope may list `names`, the builtins it holds. A global scope is one whose builtins are visible everywhere. Every scope a rule names is declared under `scopes`.
+A DSL is a language, and its names live in scopes. A scope's `regions` lists where its names may be referenced: a path is the subtree at that path in any file of the fold, `$` being all of it. `later_items_of_declaring_list` also makes a name visible in the later items of the list that declares it, at any depth inside them. `named_by_parent_key` makes the mapping key enclosing a declaration the scope its name is in. A scope named in capitals is logical: the config lists its `builtin_names`, and the word never appears in a document. Any other scope is literal: its name is the DSL's own word, and the document declares its names. Builtins valid only in some regions are a logical scope of their own, apart from the true globals. Every scope a rule names is declared under `scopes`.
 
-A symbol rule says where names are declared. `at` is the path: `$`, `.key`, `.*` and `[*]`. `skip` lists keys a `.*` step does not descend into, and `exclude` lists keys that are not symbols. `name.from` reads the name from the `key`, from the scalar `value`, or from a `meta_argument` of a key such as `http(id=config)`, one name per listed id. `any` declares every name of the scope at that key: a scope whose names are defined in a document the editor does not read, such as one whose path holds a placeholder, resolves each name to the key that names the document. A key name takes its whole text, or its `first` or `last` whitespace-separated `token`, in the `spelling` `as_written` or `snake`, which writes `-` as `_`. `scope` is a scope name, or `{ from: parent, visible_from }`, where the mapping key enclosing the symbol names its scope.
+A declaration rule says where names are declared. `path` is `$`, `.key`, `.*` and `[*]`. `skip_keys` lists keys a `.*` step does not descend into, and `exclude_candidates` lists keys at the last step that are not declarations. `name_source` reads the name from the `key`, from the scalar `value`, or from the `meta_argument` named by `meta_argument_name` of a key such as `http(id=config)`, one name per listed id. `declares_every_name` declares every name of the scope at that key: a scope whose names are defined in a document the editor does not read, such as one whose path holds a placeholder, resolves each name to the key that names the document. A key name takes the `key_token` `all_words`, `first_word` or `last_word`, and `null` for a name not read from the key, in the `name_spelling` `as_written` or `dashes_as_underscores`. `scope_name` is the scope declared under `scopes`.
 
-A reference rule says how names are used. `pattern` is a regular expression with named groups. `where` lists the positions a reference may stand in: `whole`, the scalar; `placeholder`, a placeholder that is the whole scalar; `placeholder_in_string`, a placeholder inside longer text; `within`, each match inside a scalar. `trailing_text` is `none` or `any`, whether text such as a field path may follow the name. `target.scope` is a scope name, or `{ group }`, the pattern group holding a parent-derived scope. `target.name` is the group holding the name.
+A reference rule says how names are used. `pattern` is a regular expression with named groups. `positions` lists where a reference may stand: `whole_scalar`, the scalar; `whole_placeholder`, a placeholder that is the whole scalar; `placeholder_in_text`, a placeholder inside longer text; `anywhere_in_scalar`, each match inside a scalar. `text_after_name_allowed` says whether text such as a field path may follow the name. `scope_name` is the scope it resolves in. `scope_group` is the pattern group holding the scope of a `named_by_parent_key` scope, and `null` otherwise. `name_group` is the group holding the name.
 
-A reference resolves to a builtin of its target scope, else to a symbol of that scope, with that name, visible from the reference. A name that holds a placeholder whose value is a scalar is also known by that value, spelled by its symbol rule: a key `name ${local.thing}` whose local is `mock-thing` is the name `mock_thing`. The value is the one the file's fold sees. An overlay's own declaration wins over the common layer's, as it does in the merge, and an overlay sees no other overlay's declarations. The common layer sees its own declarations and a name declared in every overlay that has a file, which opens in the first such overlay `layers.overlays` lists.
+A reference resolves to a builtin of its target scope whose region holds the reference, else to a symbol of that scope, with that name, visible from the reference. When several rules read the same text, each is tried in order, and the first that resolves is the reading. A name that holds a placeholder whose value is a scalar is also known by that value, spelled by its declaration rule: a key `name ${local.thing}` whose local is `mock-thing` is the name `mock_thing`. The value is the one the file's fold sees. An overlay's own declaration wins over the common layer's, as it does in the merge, and an overlay sees no other overlay's declarations. The common layer sees its own declarations and a name declared in every overlay that has a file, which opens in the first such overlay `layers.overlay_folders` lists.
 
 ## Navigating references
 
@@ -99,7 +99,7 @@ This extension reads the schema document as authored. Hover walks the YAML path 
 
 The schema for a file is the one the file names. A `# yaml-language-server: $schema=` modeline is honored. Its path is relative to that file and points at the schema shipped with the grammar version the stack has initialized. An overlay names `.schema/sample.schema.json`. A common layer names that file through the overlay directory that initialized the stack, such as `one/.schema/sample.schema.json`. That is the grammar the stack is actually on.
 
-The config may set `schema` to a search path. It is the fallback, used when the file has no modeline or the path it names is not on disk. Each entry is relative to the file, the same way a modeline path is, and the first one on disk is the schema. A URL in the path is fetched. The search does not override a modeline that resolves. The extension embeds no schema. When neither source resolves, the file's modeline line gets a problem, or its first line when it has no modeline, and field hovers stay empty.
+The config sets `schema_search_paths`, a list, `[]` when empty. It is the fallback, used when the file has no modeline or the path it names is not on disk. Each entry is relative to the file, the same way a modeline path is, and the first one on disk is the schema. A URL in the path is fetched. The search does not override a modeline that resolves. The extension embeds no schema. When neither source resolves, the file's modeline line gets a problem, or its first line when it has no modeline, and field hovers stay empty.
 
 DSL-level behavior is configured in `yaml-dsl.yml`: which files, the scopes, the syntax of declarations, references, placeholders and calls, how layers are grouped. The concepts are the editor's. The syntax is the DSL's, and each DSL may spell it differently. That syntax does not move into the schema.
 
@@ -129,15 +129,17 @@ Folded documents before and after the click are the same.
 
 ## Placeholders
 
-A placeholder splices a value into a scalar or a key, whole or as part of a longer string. `placeholders` is `none`, or a `pattern` whose `body` group is what the placeholder holds. A body is read by the reference rules whose `where` lists a placeholder position, so `${local.name}` holds `local.name`, read by a `local` rule, and `${env}` holds `env`, read by a rule targeting the global scope.
+A placeholder splices a value into a scalar or a key, whole or as part of a longer string. `placeholder` is a `pattern` whose `body` group is what the placeholder holds, and `unscanned_paths`, the paths whose text belongs to another language, such as shell commands or a Dockerfile, where `${…}` is not the DSL's and is not read. Each entry has `path`, `skip_keys` and `includes_subtree`. A body is read by the reference rules whose `positions` list a placeholder position, so `${local.name}` holds `local.name`, read by a `local` rule, and `${env}` holds `env`, read by a rule in a logical scope such as `GLOBAL`.
 
-Every placeholder is validated. A body no rule reads, text after the name where the rule's `trailing_text` is `none`, and a position the rule does not list are problems. A valid body is classified like any other reference.
+Every placeholder is validated. A body no rule reads, text after the name where the rule's `text_after_name_allowed` is `false`, and a position the rule does not list are problems. A valid body is classified like any other reference.
 
 ## Functions
 
-`functions` is `none`, or the DSL's call grammar. A call is written in a key, `<name> <marker><function>`, with `splat` after the function when the value below is a list of arguments rather than the one argument. `unnamed_calls` is `sole_key`, a key that is the marker alone being a call with no name and the only key of its map, or `refused`. `call_results_where` lists the positions from which a symbol a call declares may be referenced. `refused_at` lists the paths where a call key is a problem, each with `at`, `skip`, and `subtree`, whether everything below the path is refused too.
+`function` holds what is generic to calls. `call_result_reference_positions` lists the positions from which a name a call declares may be referenced. `calls_not_allowed_at` lists the paths where a call is a problem, each with `path`, `skip_keys`, and `includes_subtree`, whether everything below the path is covered too.
 
-`vocabulary` lists the sources of the function table, merged in order. `terraform` is the answer of `terraform metadata functions -json`, run by the language server and ignored when Terraform cannot be invoked. `{ schema: "#/<pointer>" }` is the table the file's schema publishes at that JSON pointer. While a source has not answered the vocabulary is open, and an unknown function is a problem only once every source has. A schema that publishes no table at the pointer, or a malformed one, is a problem on the modeline line.
+`marker_function` is the one call shape modeled: a call written in a key, `<name> <call_marker><function>`, with the `splat_operator` after the function when the value below is a list of arguments rather than the one argument. `calls_without_name_allowed` says whether a key that is the marker alone is a call with no name, the only key of its map.
+
+`definitions` lists the sources of the function table, merged in order. `terraform` is the answer of `terraform metadata functions -json`, run by the language server and ignored when Terraform cannot be invoked. `schema` is the table the file's schema publishes at `#/x-yaml-dsl-functions`. While a source has not answered the vocabulary is open, and an unknown function is a problem only once every source has. A schema that publishes no table there, or a malformed one, is a problem on the modeline line.
 
 Every call is checked: its function against the vocabulary, its argument count against the function's arity, and each literal argument against its type. A reference or a call standing as an argument is not typed. Hover on a function shows its signature.
 
@@ -158,66 +160,230 @@ Terraform's signatures are read into the same table: `string` is `text`, `bool` 
 
 ## What the workspace defines
 
-One `yaml-dsl.yml` at the root of a workspace folder.
+One `yaml-dsl.yml` at the root of a workspace folder. The extension ships its JSON Schema at `schemas/yaml-dsl.schema.json`.
 
 ```yaml
+version: "1"
 dsls:
-  - id: resources
-    includes: ["**/sample.yml"]
-    excludes: ["**/.github/**"]
-    schema:
-      - .schema/sample.schema.json
-      - one/.schema/sample.schema.json
+  - id: resource
+    file_includes: ["**/resources.yml"]
+    file_excludes: []
+    schema_search_paths:
+      - .terraform/modules/resources_yaml/resources.schema.json
+      - dev/.terraform/modules/resources_yaml/resources.schema.json
     layers:
-      overlays: [one, two]
-      common: nearest_ancestor
-    placeholders:
+      overlay_folders: [dev, staging]
+      common_layer_discovery: ancestor
+    placeholder:
       pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
-    functions:
-      marker: fn.
-      splat: "*"
-      vocabulary: [terraform, { schema: "#/x-yaml-dsl-functions" }]
-      unnamed_calls: sole_key
-      call_results_where: [whole]
-      refused_at:
-        - { at: "$.*", skip: [], subtree: false }
-        - { at: "$.meta", skip: [], subtree: true }
+      unscanned_paths: []
+    function:
+      definitions: [terraform]
+      call_result_reference_positions: [whole_scalar]
+      calls_not_allowed_at:
+        - { path: "$.*", skip_keys: [], includes_subtree: false }
+        - { path: "$.cloud", skip_keys: [], includes_subtree: true }
+      marker_function:
+        call_marker: fn.
+        splat_operator: "*"
+        calls_without_name_allowed: true
     scopes:
-      global: { visible_from: everywhere, names: [env, region] }
-      local: { visible_from: stack }
-    symbols:
-      - at: "$.locals.*"
-        skip: []
-        exclude: []
-        name: { from: key, token: first, spelling: as_written }
-        scope: local
-      - at: "$.*.*"
-        skip: [note, meta, locals]
-        exclude: [skipme]
-        name: { from: key, token: last, spelling: snake }
-        scope: { from: parent, visible_from: stack }
+      GLOBAL:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: [env, region]
+      RESOURCE:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: true
+        builtin_names: []
+      local:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: []
+    declarations:
+      - path: "$.locals.*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: key
+        key_token: first_word
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: local
+      - path: "$.*.*"
+        skip_keys: [cloud, locals, outputs]
+        exclude_candidates: []
+        name_source: key
+        key_token: last_word
+        name_spelling: dashes_as_underscores
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: RESOURCE
     references:
       - pattern: "^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_${}]+)"
-        where: [whole]
-        trailing_text: any
-        target: { scope: { group: type }, name: name }
+        positions: [whole_scalar]
+        text_after_name_allowed: true
+        scope_name: RESOURCE
+        scope_group: type
+        name_group: name
       - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
-        where: [whole, placeholder, placeholder_in_string]
-        trailing_text: none
-        target: { scope: local, name: name }
+        positions: [whole_scalar, whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: false
+        scope_name: local
+        scope_group: null
+        name_group: name
       - pattern: "^(?<name>[a-z_]+)$"
-        where: [placeholder, placeholder_in_string]
-        trailing_text: none
-        target: { scope: global, name: name }
+        positions: [whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: false
+        scope_name: GLOBAL
+        scope_group: null
+        name_group: name
+  - id: pipeline
+    file_includes: ["**/pipelines.yml"]
+    file_excludes: []
+    schema_search_paths:
+      - .terraform/modules/pipelines/schema.json
+    placeholder:
+      pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
+      unscanned_paths:
+        - { path: "$.build", skip_keys: [], includes_subtree: true }
+    scopes:
+      BRANCH:
+        regions: ["$.branches.deployment_target_env"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: [branch]
+      ENV_VAR_GLOBAL:
+        regions: ["$.container.environment"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: [ENVIRONMENT, VERSION]
+      GLOBAL:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: [env, region]
+    declarations: []
+    references:
+      - pattern: "^(?<name>[a-z_]+)$"
+        positions: [whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: false
+        scope_name: GLOBAL
+        scope_group: null
+        name_group: name
+      - pattern: "^(?<name>[a-z_]+)$"
+        positions: [whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: false
+        scope_name: BRANCH
+        scope_group: null
+        name_group: name
+      - pattern: "^(?<name>[A-Z_]+)$"
+        positions: [whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: false
+        scope_name: ENV_VAR_GLOBAL
+        scope_group: null
+        name_group: name
+  - id: test
+    file_includes: ["**/*.yml"]
+    file_excludes: ["**/protocols/**"]
+    schema_search_paths: []
+    placeholder:
+      pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
+      unscanned_paths: []
+    function:
+      definitions: [schema]
+      call_result_reference_positions: [whole_placeholder, placeholder_in_text]
+      calls_not_allowed_at: []
+      marker_function:
+        call_marker: fn.
+        splat_operator: "*"
+        calls_without_name_allowed: false
+    scopes:
+      GLOBAL:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: [env, region]
+      protocol:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: []
+      setup:
+        regions: ["$.cases", "$.teardown"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: []
+      step:
+        regions: []
+        later_items_of_declaring_list: true
+        named_by_parent_key: false
+        builtin_names: []
+    declarations:
+      - path: "$.cases[*].steps[*].*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: meta_argument
+        key_token: null
+        name_spelling: as_written
+        meta_argument_name: id
+        declares_every_name: false
+        scope_name: step
+      - path: "$.protocols.*.messages"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: key
+        key_token: all_words
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: true
+        scope_name: protocol
+      - path: "$.setup[*].id"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: value
+        key_token: null
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: setup
+    references:
+      - pattern: "^(?<name>[a-z_]+)$"
+        positions: [whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: false
+        scope_name: GLOBAL
+        scope_group: null
+        name_group: name
+      - pattern: "(?<![A-Za-z0-9_./])protocol\\.(?<name>[a-z0-9_]+)"
+        positions: [anywhere_in_scalar]
+        text_after_name_allowed: true
+        scope_name: protocol
+        scope_group: null
+        name_group: name
+      - pattern: "^setup\\.(?<name>[a-z0-9_]+)"
+        positions: [whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: true
+        scope_name: setup
+        scope_group: null
+        name_group: name
+      - pattern: "^step\\.(?<name>[a-z0-9_]+)"
+        positions: [whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: true
+        scope_name: step
+        scope_group: null
+        name_group: name
 ```
 
-`layers` is a DSL's composition of a common layer and its overlays, or `none`. A DSL without layers still formats, navigates, and hovers.
+`version` is the config format, read by the reader of that version. A block left out is a feature the DSL does not have: `layers` is a DSL's composition of a common layer and its overlays, and a DSL without layers still formats, navigates, and hovers.
 
 A file matching two DSLs is reported and claimed by neither. Other YAML is untouched.
 
 ## Ownership
 
-The extension contributes the language `yaml-dsl`. When the workspace config loads, each DSL's files are associated with that language: those its `includes` globs match and its `excludes` globs do not. Such a file opens as `yaml-dsl`, and the language server's document selector is that language.
+The extension contributes the language `yaml-dsl`. When the workspace config loads, each DSL's files are associated with that language: those its `file_includes` globs match and its `file_excludes` globs do not. Such a file opens as `yaml-dsl`, and the language server's document selector is that language.
 
 An extension that selects `yaml` does not own these files and does not activate on them. The Red Hat YAML extension is one of those. A file that matches no DSL pattern stays `yaml`.
 

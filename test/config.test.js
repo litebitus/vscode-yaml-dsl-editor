@@ -1,286 +1,332 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseConfig, claimFile, ownsFile } = require('../lib/config');
+const {
+  COMMON_LAYER_DISCOVERIES,
+  CONFIG_VERSIONS,
+  FUNCTION_DEFINITIONS,
+  KEY_TOKENS,
+  LOGICAL_SCOPE_NAME,
+  NAME_SOURCES,
+  NAME_SPELLINGS,
+  parseConfig,
+  claimFile,
+  ownsFile,
+} = require('../lib/config');
+const { REFERENCE_POSITIONS } = require('../lib/reference-positions');
 
 const completeConfig = `
+version: "1"
 dsls:
   - id: resources
-    includes: ["**/mock.yml", 1]
-    excludes: ["**/skip/**"]
-    schema: https://example.test/schema.json
+    file_includes: ["**/mock.yml", 1]
+    file_excludes: ["**/skip/**"]
+    schema_search_paths: [https://example.test/schema.json]
     layers:
-      overlays: [one, 2]
-      common: nearest_ancestor
-    placeholders:
+      overlay_folders: [one, 2]
+      common_layer_discovery: ancestor
+    placeholder:
       pattern: '\\$\\{(?<body>[^}]*)\\}'
-    functions:
-      marker: fn.
-      splat: '*'
-      vocabulary: [terraform, { schema: '#/x-yaml-dsl-functions' }]
-      unnamed_calls: sole_key
-      call_results_where: [whole]
-      refused_at:
-        - { at: "$.*", skip: [], subtree: false }
-        - { at: "$.cloud", skip: [], subtree: true }
+      unscanned_paths:
+        - { path: "$.build", skip_keys: [], includes_subtree: true }
+    function:
+      definitions: [terraform, schema]
+      call_result_reference_positions: [whole_scalar]
+      calls_not_allowed_at:
+        - { path: "$.*", skip_keys: [], includes_subtree: false }
+        - { path: "$.cloud", skip_keys: [], includes_subtree: true }
+      marker_function:
+        call_marker: fn.
+        splat_operator: '*'
+        calls_without_name_allowed: true
     scopes:
-      global: { visible_from: everywhere, names: [env, 1] }
-      local: { visible_from: stack }
-      step: { visible_from: following }
-      setup: { visible_from: ["$.cases", "$.teardown"] }
-    symbols:
-      - at: "$.locals.*"
-        skip: []
-        exclude: []
-        name: { from: key, token: first, spelling: as_written }
-        scope: local
-      - at: "$.*.*"
-        skip: [locals, 3]
-        exclude: [defaults]
-        name: { from: key, token: last, spelling: snake }
-        scope: { from: parent, visible_from: stack }
-      - at: "$.setup[*].*"
-        skip: []
-        exclude: []
-        name: { from: meta_argument, argument: id }
-        scope: setup
-      - at: "$.setup[*].id"
-        skip: []
-        exclude: []
-        name: { from: value }
-        scope: step
+      GLOBAL:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: [env, 1]
+      RESOURCE:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: true
+        builtin_names: []
+      local:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: []
+      step:
+        regions: []
+        later_items_of_declaring_list: true
+        named_by_parent_key: false
+        builtin_names: []
+    declarations:
+      - path: "$.locals.*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: key
+        key_token: first_word
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: local
+      - path: "$.*.*"
+        skip_keys: [locals, 3]
+        exclude_candidates: [defaults]
+        name_source: key
+        key_token: last_word
+        name_spelling: dashes_as_underscores
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: RESOURCE
+      - path: "$.steps[*].*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: meta_argument
+        key_token: null
+        name_spelling: as_written
+        meta_argument_name: id
+        declares_every_name: false
+        scope_name: step
     references:
       - pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)'
-        where: [whole]
-        trailing_text: any
-        target: { scope: { group: type }, name: name }
+        positions: [whole_scalar]
+        text_after_name_allowed: true
+        scope_name: RESOURCE
+        scope_group: type
+        name_group: name
       - pattern: '^local\\.(?<name>[a-z0-9_]+)$'
-        where: [whole, placeholder, placeholder_in_string]
-        trailing_text: none
-        target: { scope: local, name: name }
+        positions: [whole_scalar, whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: false
+        scope_name: local
+        scope_group: null
+        name_group: name
 `;
 
 test('a complete config states every field and keeps them', () => {
   const parsed = parseConfig(completeConfig);
   assert.equal(parsed.error, null);
   const [resources] = parsed.dsls;
-  assert.deepEqual(resources.includes, ['**/mock.yml']);
-  assert.deepEqual(resources.excludes, ['**/skip/**']);
-  assert.deepEqual(resources.schema, ['https://example.test/schema.json']);
-  assert.deepEqual(resources.layers, { overlays: ['one'], common: 'nearest_ancestor' });
-  assert.equal(resources.placeholders.pattern, '\\$\\{(?<body>[^}]*)\\}');
-  assert.deepEqual(resources.functions.vocabulary, [
-    { source: 'terraform' },
-    { source: 'schema', pointer: '#/x-yaml-dsl-functions' },
+  assert.deepEqual(resources.fileIncludes, ['**/mock.yml']);
+  assert.deepEqual(resources.fileExcludes, ['**/skip/**']);
+  assert.deepEqual(resources.schemaSearchPaths, ['https://example.test/schema.json']);
+  assert.deepEqual(resources.layers, { overlayFolders: ['one'], commonLayerDiscovery: 'ancestor' });
+  assert.equal(resources.placeholder.pattern, '\\$\\{(?<body>[^}]*)\\}');
+  assert.deepEqual(resources.placeholder.unscannedPaths, [
+    { path: '$.build', tokens: [{ kind: 'key', key: 'build' }], skipKeys: [], includesSubtree: true },
   ]);
-  assert.equal(resources.functions.unnamedCalls, 'sole_key');
-  assert.deepEqual(resources.functions.callResultsWhere, ['whole']);
-  assert.equal(resources.functions.refusedAt[1].subtree, true);
-  assert.deepEqual(resources.scopes.global, { visibleFrom: { kind: 'everywhere' }, names: ['env'] });
-  assert.equal(resources.scopes.setup.visibleFrom.kind, 'paths');
-  assert.equal(resources.scopes.step.visibleFrom.kind, 'following');
-  assert.deepEqual(resources.symbols.map((symbol) => symbol.name.from), ['key', 'key', 'meta_argument', 'value']);
-  assert.deepEqual(resources.symbols[1].scope, { fromParent: true, visibleFrom: { kind: 'stack' } });
-  assert.deepEqual(resources.symbols[1].skip, ['locals']);
-  assert.deepEqual(resources.references[0].target, { scope: { group: 'type' }, name: 'name' });
-  assert.equal(resources.references[1].trailingText, 'none');
+  assert.deepEqual(resources.function.definitions, ['terraform', 'schema']);
+  assert.deepEqual(resources.function.callResultReferencePositions, ['whole_scalar']);
+  assert.equal(resources.function.callsNotAllowedAt[1].includesSubtree, true);
+  assert.deepEqual(resources.function.markerFunction, {
+    callMarker: 'fn.',
+    splatOperator: '*',
+    callsWithoutNameAllowed: true,
+  });
+  assert.deepEqual(resources.scopes.GLOBAL, {
+    regions: [[]],
+    laterItemsOfDeclaringList: false,
+    namedByParentKey: false,
+    builtinNames: ['env'],
+  });
+  assert.equal(resources.scopes.RESOURCE.namedByParentKey, true);
+  assert.deepEqual(resources.scopes.step.regions, []);
+  assert.equal(resources.scopes.step.laterItemsOfDeclaringList, true);
+  assert.deepEqual(resources.declarations.map((rule) => rule.nameSource), ['key', 'key', 'meta_argument']);
+  assert.deepEqual(resources.declarations[1].skipKeys, ['locals']);
+  assert.deepEqual(resources.declarations[1].excludeCandidates, ['defaults']);
+  assert.equal(resources.declarations[1].keyToken, 'last_word');
+  assert.equal(resources.declarations[1].nameSpelling, 'dashes_as_underscores');
+  assert.equal(resources.declarations[2].metaArgumentName, 'id');
+  assert.equal(resources.declarations[2].keyToken, null);
+  assert.deepEqual(resources.references[0], {
+    pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)',
+    positions: ['whole_scalar'],
+    textAfterNameAllowed: true,
+    scopeName: 'RESOURCE',
+    scopeGroup: 'type',
+    nameGroup: 'name',
+  });
+  assert.equal(resources.references[1].textAfterNameAllowed, false);
+});
+
+test('a block the config leaves out is a feature the DSL does not have', () => {
+  const parsed = parseConfig([
+    'version: "1"',
+    'dsls:',
+    '  - id: flat',
+    '    file_includes: ["**/flat.yml"]',
+    '    file_excludes: []',
+    '    schema_search_paths: []',
+    '    scopes: {}',
+    '    declarations: []',
+    '    references: []',
+    '    function:',
+    '      definitions: [schema]',
+    '      call_result_reference_positions: []',
+    '      calls_not_allowed_at: []',
+    '',
+  ].join('\n'));
+  assert.equal(parsed.error, null);
+  const [flat] = parsed.dsls;
+  assert.equal(flat.layers, null);
+  assert.equal(flat.placeholder, null);
+  assert.equal(flat.function.markerFunction, null);
 });
 
 test('a config that leaves a field out is a problem, and the editor fills nothing in', () => {
   const parsed = parseConfig(`
+version: "1"
 dsls:
   - id: bare
-    symbols:
-      - at: "$.a.*"
-      - { at: bad }
-      - 1
-      - at: "$.b.*"
-        skip: []
-        exclude: []
-        name: { from: meta_argument }
-        scope: undeclared
-      - at: "$.c.*"
-        skip: []
-        exclude: []
-        name: 1
-        scope: { from: parent }
-      - at: "$.d.*"
-        skip: []
-        exclude: []
-        name: { from: key, token: middle, spelling: snake }
-        scope: { from: parent, visible_from: nowhere }
-    references:
-      - pattern: '^x'
-      - pattern: '('
-      - 1
-      - pattern: '^y'
-        where: [sideways]
-        trailing_text: maybe
-        target: { scope: 1 }
-      - pattern: '^z'
-        where: []
-        trailing_text: none
+    layers: { overlay_folders: 1 }
+    placeholder: { pattern: '(', unscanned_paths: [1, { path: bad }] }
+    function:
+      definitions: [elsewhere]
+      call_result_reference_positions: [nowhere]
+      calls_not_allowed_at: 1
+      marker_function: { call_marker: "" }
     scopes:
       broken: 1
-      unseen: { visible_from: [bad] }
-    functions:
-      vocabulary: [elsewhere]
-      call_results_where: [nowhere]
-      refused_at: [{ at: bad }, { at: "$.x", skip: 1, subtree: 1 }]
-  - id: blocks
-    includes: ["**/b.yml"]
-    excludes: []
-    schema: 1
+      lonely: { regions: [bad] }
+      listed:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: [mock]
+      EMPTY:
+        regions: []
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: []
+      RESOURCE:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: true
+        builtin_names: []
+    declarations:
+      - 1
+      - { path: bad }
+      - path: "$.a.*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: key
+        key_token: null
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: undeclared
+      - path: "$.b.*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: meta_argument
+        key_token: null
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: listed
+    references:
+      - 1
+      - pattern: '('
+      - pattern: '^x'
+        positions: [sideways]
+        text_after_name_allowed: maybe
+        scope_name: undeclared
+        scope_group: 1
+      - pattern: '^y'
+        positions: [whole_scalar]
+        text_after_name_allowed: false
+        scope_name: RESOURCE
+        scope_group: null
+        name_group: name
+      - pattern: '^z'
+        positions: [whole_scalar]
+        text_after_name_allowed: false
+        scope_name: listed
+        scope_group: group
+        name_group: name
+  - id: lists
+    file_includes: 1
+    file_excludes: 1
+    schema_search_paths: 1
     layers: 1
-    placeholders: { pattern: '\\$\\{[^}]*\\}' }
-    functions: 1
+    placeholder: 1
+    function: 1
     scopes: 1
-    symbols: []
-    references: []
-  - id: unused
-    includes: []
-    excludes: []
-    schema: []
-    layers: none
-    placeholders: none
-    functions: none
-    scopes: {}
-    symbols: []
-    references: []
-  - { includes: ["**/*.yml"] }
+    declarations: 1
+    references: 1
+  - { file_includes: ["**/*.yml"] }
 `);
   assert.equal(parsed.ok, false);
   const expected = [
-    'bare.includes is required',
-    'bare.excludes is required',
+    'bare.file_includes is required',
+    'bare.file_excludes is required',
+    'bare.schema_search_paths is required',
+    'bare.layers.overlay_folders is required',
+    'bare.layers.common_layer_discovery is required: one of parent, ancestor',
+    'bare.placeholder.pattern is required',
+    'bare.placeholder.unscanned_paths[0] must be a mapping',
+    'bare.placeholder.unscanned_paths[1].path is required',
+    'bare.placeholder.unscanned_paths[1].skip_keys is required',
+    'bare.placeholder.unscanned_paths[1].includes_subtree is required',
+    'bare.function.definitions is required: a list from terraform, schema',
+    'bare.function.call_result_reference_positions is required',
+    'bare.function.calls_not_allowed_at is required',
+    'bare.function.marker_function.call_marker is required',
+    'bare.function.marker_function.splat_operator is required',
+    'bare.function.marker_function.calls_without_name_allowed is required',
     'bare.scopes.broken must be a mapping',
-    'bare.scopes.unseen.visible_from is required',
-    'bare.symbols[0].skip is required',
-    'bare.symbols[0].name is required',
-    'bare.symbols[0].scope is required',
-    'bare.symbols[1].at is required',
-    'bare.symbols[2] must be a mapping',
-    'bare.symbols[3].name.argument is required',
-    'bare.symbols[4].scope.visible_from is required',
-    'bare.symbols[5].name.token must be one of whole, first, last',
-    'bare.references[0].where is required',
-    'bare.references[0].trailing_text is required',
-    'bare.references[0].target is required',
+    'bare.scopes.lonely.regions is required',
+    'bare.scopes.lonely.later_items_of_declaring_list is required',
+    'bare.scopes.listed: builtin_names and named_by_parent_key are for a logical scope',
+    'bare.scopes.EMPTY: a scope needs regions, or later_items_of_declaring_list',
+    'bare.declarations[0] must be a mapping',
+    'bare.declarations[1].path is required',
+    'bare.declarations[1].name_source is required',
+    'bare.declarations[2].key_token is required when name_source is key',
+    'bare.declarations[2]: scope undeclared is not declared in scopes',
+    'bare.declarations[3].meta_argument_name is required when name_source is meta_argument',
+    'bare.references[0] must be a mapping',
     'bare.references[1].pattern is required',
-    'bare.references[2] must be a mapping',
-    'bare.references[3].where takes whole, placeholder, placeholder_in_string, within',
-    'bare.references[3].trailing_text must be one of none, any',
-    'bare.references[3].target.scope is required',
-    'bare.references[3].target.name is required',
-    'bare.references[4].target is required',
-    'bare.placeholders is required',
-    'bare.functions.marker is required',
-    'bare.functions.splat is required',
-    'bare.functions.vocabulary is required',
-    'bare.functions.unnamed_calls is required',
-    'bare.functions.call_results_where is required',
-    'bare.functions.refused_at[0].at is required',
-    'bare.functions.refused_at[1].skip is required',
-    'bare.functions.refused_at[1].subtree is required',
-    'bare.schema is required',
-    'bare.layers is required',
-    'blocks.schema is required',
-    'blocks.layers is required',
-    "blocks.placeholders.pattern must name the placeholder's body",
-    'blocks.functions is required',
-    'blocks.scopes is required',
+    'bare.references[2].positions is required',
+    'bare.references[2].text_after_name_allowed is required',
+    'bare.references[2].scope_group is required',
+    'bare.references[2].name_group is required',
+    'bare.references[2]: scope undeclared is not declared in scopes',
+    'bare.references[3].scope_group is required: RESOURCE is named by a parent key',
+    'bare.references[4].scope_group must be null: listed is not named by a parent key',
+    'lists.layers must be a mapping',
+    'lists.placeholder must be a mapping',
+    'lists.function must be a mapping',
+    'lists.scopes is required',
+    'lists.declarations is required',
+    'lists.references is required',
   ];
   for (const message of expected) assert.ok(parsed.error.includes(message), message);
-  const [bare, blocks, unused] = parsed.dsls;
-  assert.deepEqual(bare.symbols, []);
+  const [bare, lists] = parsed.dsls;
+  assert.deepEqual(bare.declarations, []);
   assert.deepEqual(bare.references, []);
-  assert.equal(blocks.placeholders, null);
-  assert.deepEqual(unused.schema, []);
-  assert.equal(unused.layers, null);
-  assert.equal(unused.placeholders, null);
-  assert.equal(unused.functions, null);
-  const listsMissing = parseConfig('dsls:\n  - id: one\n    symbols: 1\n    references: 1\n');
-  assert.equal(listsMissing.error.includes('one.symbols is required'), true);
-  const patternBroken = parseConfig('dsls:\n  - id: two\n    placeholders: { pattern: "(" }\n');
-  assert.equal(patternBroken.error.includes('two.placeholders.pattern is required'), true);
-  const layersBare = parseConfig('dsls:\n  - id: three\n    layers: {}\n');
-  assert.equal(layersBare.error.includes('three.layers.overlays is required'), true);
-  assert.equal(layersBare.error.includes('three.layers.common is required: one of parent, nearest_ancestor'), true);
-  assert.equal(layersBare.dsls[0].layers, null);
+  assert.equal(bare.placeholder, null);
+  assert.equal(bare.function, null);
+  assert.deepEqual(lists.fileIncludes, []);
 });
 
-test('deprecated forms are read and reported, each naming its replacement', () => {
-  const parsed = parseConfig(`
-dsls:
-  - id: old
-    match: ["**/mock.yml"]
-    layers:
-      environments: [one]
-    placeholders:
-      pattern: '\\$\\{(?<body>[^}]*)\\}'
-      builtins: [env]
-      references: [local, ref]
-    symbols:
-      - kind: local
-        at: "$.locals.*"
-        name: { from: key }
-      - kind: resource
-        at: "$.*.*"
-        skip: [locals]
-        name: { token: last, spelling: snake }
-        qualify: { type: parent }
-      - kind: thing
-        at: "$.things.*"
-        name: { token: first }
-    references:
-      - pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)'
-        where: whole
-        target: { kind: resource, type: type, name: name }
-      - pattern: '^local\\.(?<name>[a-z0-9_]+)$'
-        where: whole
-        target: { kind: local, name: name }
-      - pattern: 'use (?<name>[a-z]+)'
-        where: within
-        target: { kind: thing, name: name }
-`);
-  for (const message of [
-    'old.match is deprecated: write includes',
-    'old.layers.environments is deprecated: write overlays and common',
-    'old.symbols[0]: kind and qualify are deprecated: write scope',
-    'old.references[0]: target.kind and a single where are deprecated',
-    'old.placeholders: builtins and references are deprecated',
-  ]) assert.ok(parsed.error.includes(message), message);
-  const [old] = parsed.dsls;
-  assert.deepEqual(old.includes, ['**/mock.yml']);
-  assert.deepEqual(old.layers, { overlays: ['one'], common: 'parent' });
-  assert.deepEqual(old.symbols.map((symbol) => symbol.scope), [
-    { literal: 'local' },
-    { fromParent: true, visibleFrom: { kind: 'stack' } },
-    { literal: 'thing' },
-  ]);
-  assert.deepEqual(old.symbols[0].name, { from: 'key', token: 'whole', spelling: 'as_written' });
-  assert.deepEqual(old.symbols[2].name.token, 'first');
-  assert.deepEqual(old.references[0].where, ['whole', 'placeholder', 'placeholder_in_string']);
-  assert.deepEqual(old.references[0].target, { scope: { group: 'type' }, name: 'name' });
-  assert.deepEqual(old.references[1].where, ['whole', 'placeholder', 'placeholder_in_string']);
-  assert.deepEqual(old.references[2].where, ['within']);
-  assert.equal(old.references[3].target.scope.literal, 'global');
-  assert.deepEqual(old.scopes.global.names, ['env']);
-  assert.equal(old.scopes.local.visibleFrom.kind, 'stack');
-  assert.equal(old.scopes.thing.visibleFrom.kind, 'stack');
-  const both = parseConfig('dsls:\n  - id: both\n    match: ["**/a.yml"]\n    includes: ["**/b.yml"]\n');
-  assert.deepEqual(both.dsls[0].includes, ['**/b.yml']);
+test('a config states its version, and only a version this extension reads is read', () => {
+  const versionless = parseConfig('dsls: []\n');
+  assert.equal(versionless.ok, false);
+  assert.equal(versionless.error, 'yaml-dsl.yml version is required: one of "1"');
+  assert.equal(parseConfig('version: 1\ndsls: []\n').ok, false);
+  assert.equal(parseConfig('version: "2"\ndsls: []\n').ok, false);
+  assert.deepEqual(parseConfig('version: "1"\ndsls: []\n'), { ok: true, error: null, dsls: [] });
+  assert.deepEqual(parseConfig('version: "1"\n').dsls, []);
 });
 
 test('a config that is not a mapping is rejected', () => {
-  assert.equal(parseConfig('[').ok, false);
-  assert.equal(parseConfig('[]').ok, false);
-  assert.equal(parseConfig('').ok, false);
-  assert.equal(parseConfig('name: only').dsls.length, 0);
-  assert.equal(parseConfig('dsls: 1').dsls.length, 0);
+  assert.equal(parseConfig('- a\n- b\n').ok, false);
+  assert.equal(parseConfig('key: [unclosed\n').ok, false);
 });
 
-test('includes and excludes decide the files a DSL owns, and two owners claim nothing', () => {
-  const owner = (id, includes, excludes = []) => ({ id, includes, excludes });
+test('file_includes and file_excludes decide the files a DSL owns, and two owners claim nothing', () => {
+  const owner = (id, fileIncludes, fileExcludes = []) => ({ id, fileIncludes, fileExcludes });
   const suites = owner('suites', ['**/*.yml'], ['**/.github/**', '**/protocols/**']);
   assert.equal(ownsFile(suites, '/repo/games/slot-api.yml'), true);
   assert.equal(ownsFile(suites, '/repo/.github/workflows/test.yml'), false);
@@ -297,4 +343,17 @@ test('includes and excludes decide the files a DSL owns, and two owners claim no
   assert.equal(claimFile('/repo-a/resources.yml', [{ ...shared, dir: '/repo' }]).status, 'none');
   assert.equal(claimFile('/repo/a/resources.yml', [{ ...shared, dir: '/' }]).status, 'none');
   assert.equal(claimFile('/repo/readme.md', [{ ...shared, dir: '/repo' }]).status, 'none');
+});
+
+test('the shipped schema of the config states the values the reader accepts', () => {
+  const shipped = require('../schemas/yaml-dsl.schema.json');
+  const { definitions } = shipped;
+  assert.deepEqual(shipped.properties.version.enum, CONFIG_VERSIONS);
+  assert.deepEqual(definitions.layers.properties.common_layer_discovery.enum, COMMON_LAYER_DISCOVERIES);
+  assert.deepEqual(definitions.function.properties.definitions.items.enum, FUNCTION_DEFINITIONS);
+  assert.deepEqual(definitions.declaration.properties.name_source.enum, NAME_SOURCES);
+  assert.deepEqual(definitions.declaration.properties.key_token.enum, [...KEY_TOKENS, null]);
+  assert.deepEqual(definitions.declaration.properties.name_spelling.enum, NAME_SPELLINGS);
+  assert.deepEqual(definitions.positions.items.enum, REFERENCE_POSITIONS);
+  assert.deepEqual(Object.keys(definitions.scopes.patternProperties), [LOGICAL_SCOPE_NAME.source]);
 });

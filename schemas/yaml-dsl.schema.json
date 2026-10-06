@@ -1,0 +1,332 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://open-vsx.org/extension/lite2073/yaml-dsl-editor/yaml-dsl.schema.json",
+  "title": "yaml-dsl.yml",
+  "description": "The workspace's YAML DSLs: which files each one owns and the syntax of its names, references, placeholders and calls.",
+  "type": "object",
+  "required": ["version", "dsls"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "enum": ["1"],
+      "description": "Config format version."
+    },
+    "dsls": {
+      "type": "array",
+      "description": "One entry per DSL.",
+      "items": { "$ref": "#/definitions/dsl" }
+    }
+  },
+  "definitions": {
+    "dsl": {
+      "type": "object",
+      "required": [
+        "id",
+        "file_includes",
+        "file_excludes",
+        "schema_search_paths",
+        "scopes",
+        "declarations",
+        "references"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the DSL."
+        },
+        "file_includes": {
+          "$ref": "#/definitions/globs",
+          "description": "Globs of the files the DSL owns."
+        },
+        "file_excludes": {
+          "$ref": "#/definitions/globs",
+          "description": "Globs of files the DSL does not own, even when file_includes matches them."
+        },
+        "schema_search_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Schemas tried in order when a file names none, or the one it names is not on disk. Each path is relative to the file; a URL is fetched."
+        },
+        "layers": { "$ref": "#/definitions/layers" },
+        "placeholder": { "$ref": "#/definitions/placeholder" },
+        "function": { "$ref": "#/definitions/function" },
+        "scopes": { "$ref": "#/definitions/scopes" },
+        "declarations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/declaration" },
+          "description": "Where names are declared."
+        },
+        "references": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/reference" },
+          "description": "How names are referenced. Rules reading the same text are tried in order."
+        }
+      }
+    },
+    "layers": {
+      "type": "object",
+      "description": "The common layer and its overlays. Left out for a DSL without layers.",
+      "required": ["overlay_folders", "common_layer_discovery"],
+      "additionalProperties": false,
+      "properties": {
+        "overlay_folders": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Folder names of the overlays."
+        },
+        "common_layer_discovery": {
+          "enum": ["parent", "ancestor"],
+          "description": "Where the common layer sits: the overlay folder's parent, or the nearest ancestor above an overlay folder."
+        }
+      }
+    },
+    "placeholder": {
+      "type": "object",
+      "description": "The placeholder syntax. Left out for a DSL without placeholders.",
+      "required": ["pattern", "unscanned_paths"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "pattern": "\\(\\?<body>",
+          "description": "Regular expression of a placeholder, with a (?<body>...) group."
+        },
+        "unscanned_paths": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/path_entry" },
+          "description": "Paths whose text is another language's and is not read for placeholders."
+        }
+      }
+    },
+    "function": {
+      "type": "object",
+      "description": "Function calls. Left out for a DSL without calls.",
+      "required": ["definitions", "call_result_reference_positions", "calls_not_allowed_at"],
+      "additionalProperties": false,
+      "properties": {
+        "definitions": {
+          "type": "array",
+          "items": { "enum": ["terraform", "schema"] },
+          "uniqueItems": true,
+          "description": "Sources of the function table, merged in order."
+        },
+        "call_result_reference_positions": {
+          "$ref": "#/definitions/positions",
+          "description": "Positions from which a name a call declares may be referenced."
+        },
+        "calls_not_allowed_at": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/path_entry" },
+          "description": "Paths where a call is a problem."
+        },
+        "marker_function": { "$ref": "#/definitions/marker_function" }
+      }
+    },
+    "marker_function": {
+      "type": "object",
+      "description": "A call written in a key: <name> <call_marker><function>. Left out when the DSL's calls take another shape.",
+      "required": ["call_marker", "splat_operator", "calls_without_name_allowed"],
+      "additionalProperties": false,
+      "properties": {
+        "call_marker": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Text that opens a call in a key."
+        },
+        "splat_operator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Suffix after the function that spreads a list value into the arguments."
+        },
+        "calls_without_name_allowed": {
+          "type": "boolean",
+          "description": "Whether a key that is the marker alone is a call, the only key of its map."
+        }
+      }
+    },
+    "scopes": {
+      "type": "object",
+      "description": "The DSL's scopes. A name in capitals is a logical scope; any other name is the DSL's own word.",
+      "patternProperties": {
+        "^[A-Z][A-Z0-9_]*$": { "$ref": "#/definitions/scope" }
+      },
+      "additionalProperties": {
+        "allOf": [
+          { "$ref": "#/definitions/scope" },
+          {
+            "properties": {
+              "named_by_parent_key": { "const": false },
+              "builtin_names": { "maxItems": 0 }
+            }
+          }
+        ]
+      }
+    },
+    "scope": {
+      "type": "object",
+      "required": ["regions", "later_items_of_declaring_list", "named_by_parent_key", "builtin_names"],
+      "additionalProperties": false,
+      "properties": {
+        "regions": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/path" },
+          "description": "Paths whose subtree in any file of the fold sees the scope's names; $ is the whole fold."
+        },
+        "later_items_of_declaring_list": {
+          "type": "boolean",
+          "description": "Whether a name is also visible in the later items of the list that declares it."
+        },
+        "named_by_parent_key": {
+          "type": "boolean",
+          "description": "Whether the mapping key enclosing a declaration is the scope its name is in. Logical scopes only."
+        },
+        "builtin_names": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Names the scope holds without a declaration. Logical scopes only."
+        }
+      },
+      "if": { "properties": { "regions": { "maxItems": 0 } } },
+      "then": { "properties": { "later_items_of_declaring_list": { "const": true } } }
+    },
+    "declaration": {
+      "type": "object",
+      "required": [
+        "path",
+        "skip_keys",
+        "exclude_candidates",
+        "name_source",
+        "key_token",
+        "name_spelling",
+        "meta_argument_name",
+        "declares_every_name",
+        "scope_name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "$ref": "#/definitions/path" },
+        "skip_keys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keys a .* step does not descend into."
+        },
+        "exclude_candidates": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keys at the last step that declare nothing."
+        },
+        "name_source": {
+          "enum": ["key", "value", "meta_argument"],
+          "description": "Where the name is read: the key, the scalar value, or a meta argument of the key."
+        },
+        "key_token": {
+          "enum": ["all_words", "first_word", "last_word", null],
+          "description": "The words of the key that are the name; null when the name is not read from the key."
+        },
+        "name_spelling": {
+          "enum": ["as_written", "dashes_as_underscores"],
+          "description": "How the name is spelled for references."
+        },
+        "meta_argument_name": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "The meta argument holding the name; null when the name is not read from a meta argument."
+        },
+        "declares_every_name": {
+          "type": "boolean",
+          "description": "Whether the key declares every name of the scope, for names defined in a document the editor does not read."
+        },
+        "scope_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A scope declared under scopes."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "name_source": { "const": "key" } } },
+          "then": { "properties": { "key_token": { "type": "string" } } }
+        },
+        {
+          "if": { "properties": { "name_source": { "const": "meta_argument" } } },
+          "then": { "properties": { "meta_argument_name": { "type": "string" } } }
+        }
+      ]
+    },
+    "reference": {
+      "type": "object",
+      "required": [
+        "pattern",
+        "positions",
+        "text_after_name_allowed",
+        "scope_name",
+        "scope_group",
+        "name_group"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Regular expression of a reference, with named groups."
+        },
+        "positions": {
+          "$ref": "#/definitions/positions",
+          "description": "Positions the reference may stand in."
+        },
+        "text_after_name_allowed": {
+          "type": "boolean",
+          "description": "Whether text such as a field path may follow the name."
+        },
+        "scope_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The scope the reference resolves in, declared under scopes."
+        },
+        "scope_group": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "The pattern group holding the scope of a named_by_parent_key scope; null for any other scope."
+        },
+        "name_group": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The pattern group holding the name."
+        }
+      }
+    },
+    "positions": {
+      "type": "array",
+      "items": { "enum": ["whole_scalar", "whole_placeholder", "placeholder_in_text", "anywhere_in_scalar"] },
+      "uniqueItems": true
+    },
+    "path_entry": {
+      "type": "object",
+      "required": ["path", "skip_keys", "includes_subtree"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "$ref": "#/definitions/path" },
+        "skip_keys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keys a .* step does not descend into."
+        },
+        "includes_subtree": {
+          "type": "boolean",
+          "description": "Whether everything below the path is covered too."
+        }
+      }
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^\\$(\\.(\\*|[^.\\[*][^.\\[]*)|\\[\\*\\])*$",
+      "description": "A document path from $, with .key, .* and [*] steps."
+    },
+    "globs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

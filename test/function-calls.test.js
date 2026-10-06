@@ -11,16 +11,16 @@ const {
   callProblems,
 } = require('../lib/function-calls');
 
-const functions = {
-  marker: 'fn.',
-  splat: '*',
-  vocabulary: [],
-  unnamedCalls: 'sole_key',
-  callResultsWhere: ['whole'],
-  refusedAt: [
-    { tokens: parseAt('$.*'), skip: [], subtree: false },
-    { tokens: parseAt('$.cloud'), skip: [], subtree: true },
+const markerFunction = { callMarker: 'fn.', splatOperator: '*', callsWithoutNameAllowed: true };
+
+const functionConfig = {
+  definitions: [],
+  callResultReferencePositions: ['whole_scalar'],
+  callsNotAllowedAt: [
+    { path: '$.*', tokens: parseAt('$.*'), skipKeys: [], includesSubtree: false },
+    { path: '$.cloud', tokens: parseAt('$.cloud'), skipKeys: [], includesSubtree: true },
   ],
+  markerFunction,
 };
 
 const table = {
@@ -48,13 +48,14 @@ const isExpression = (text, isKey) => (
   isKey ? text.startsWith('fn.') : text.startsWith('${') || text.startsWith('ref ')
 );
 
-function problemsFor(text, vocabulary = { table, complete: true }, config = functions) {
-  const doc = analyzeDocument(text, '/repo/mock.yml', { functions: config, references: [], placeholders: null });
+function problemsFor(text, vocabulary = { table, complete: true }, config = functionConfig) {
+  const dsl = { function: config, scopes: {}, declarations: [], references: [], placeholder: null };
+  const doc = analyzeDocument(text, '/repo/mock.yml', dsl);
   return callProblems(doc.calls, config, vocabulary, isExpression).map((problem) => problem.message);
 }
 
 test('a key carries a call as a name and the marker, or the marker alone', () => {
-  assert.deepEqual(parseFunctionKey('user fn.format*', functions), {
+  assert.deepEqual(parseFunctionKey('user fn.format*', markerFunction), {
     name: 'user',
     functionName: 'format',
     splat: true,
@@ -63,12 +64,12 @@ test('a key carries a call as a name and the marker, or the marker alone', () =>
     nameEnd: 14,
     callEnd: 15,
   });
-  assert.equal(parseFunctionKey('fn.values', functions).name, null);
-  assert.equal(parseFunctionKey('/etc/a.conf fn.templatefile*', functions).name, '/etc/a.conf');
-  assert.equal(parseFunctionKey('plain', functions), null);
-  assert.equal(parseFunctionKey('bad fn.1x', functions), null);
+  assert.equal(parseFunctionKey('fn.values', markerFunction).name, null);
+  assert.equal(parseFunctionKey('/etc/a.conf fn.templatefile*', markerFunction).name, '/etc/a.conf');
+  assert.equal(parseFunctionKey('plain', markerFunction), null);
+  assert.equal(parseFunctionKey('bad fn.1x', markerFunction), null);
   assert.equal(parseFunctionKey('x fn.ssm', null), null);
-  assert.equal(parseFunctionKey(3, functions), null);
+  assert.equal(parseFunctionKey(3, markerFunction), null);
 });
 
 test('calls are checked for name, arity, argument types, placement and unnamed form', () => {
@@ -100,7 +101,7 @@ test('calls are checked for name, arity, argument types, placement and unnamed f
   ].join('\n');
   assert.deepEqual(problemsFor(text), [
     'range takes 3 arguments, given 2',
-    'fn range with the splat form needs a list of arguments',
+    'range with the splat operator needs a list of arguments',
     'unknown function nope',
     'range argument stop expects whole_number',
     'toggle argument flag expects boolean',
@@ -111,7 +112,7 @@ test('calls are checked for name, arity, argument types, placement and unnamed f
     'a function call is not allowed at this key',
     'a function call is not allowed at this key',
   ]);
-  const refusing = { ...functions, unnamedCalls: 'refused' };
+  const refusing = { ...functionConfig, markerFunction: { ...markerFunction, callsWithoutNameAllowed: false } };
   const refused = problemsFor('x:\n  - fn.ssm: /mock/key\n', { table, complete: true }, refusing);
   assert.deepEqual(refused, ['a function call needs a name before it']);
   assert.deepEqual(problemsFor('x:\n  y fn.nope: 1\n', { table: {}, complete: false }), []);

@@ -8,46 +8,83 @@ The spec is [docs/design.md](docs/design.md).
 
 ```yaml
 # yaml-dsl.yml
+version: "1"
 dsls:
-  - id: sample
-    includes: ["**/sample.yml"]
-    excludes: []
-    schema:
-      - .schema/sample.schema.json
-      - side/.schema/sample.schema.json
+  - id: resource
+    file_includes: ["**/resources.yml"]
+    file_excludes: []
+    schema_search_paths:
+      - .terraform/modules/resources_yaml/resources.schema.json
+      - dev/.terraform/modules/resources_yaml/resources.schema.json
     layers:
-      overlays: [one, two]
-      common: nearest_ancestor
-    placeholders:
+      overlay_folders: [dev, staging]
+      common_layer_discovery: ancestor
+    placeholder:
       pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
-    functions: none
+      unscanned_paths: []
+    function:
+      definitions: [terraform]
+      call_result_reference_positions: [whole_scalar]
+      calls_not_allowed_at:
+        - { path: "$.*", skip_keys: [], includes_subtree: false }
+      marker_function:
+        call_marker: fn.
+        splat_operator: "*"
+        calls_without_name_allowed: true
     scopes:
-      global: { visible_from: everywhere, names: [env] }
-      local: { visible_from: stack }
-    symbols:
-      - at: "$.locals.*"
-        skip: []
-        exclude: []
-        name: { from: key, token: whole, spelling: as_written }
-        scope: local
-      - at: "$.*.*"
-        skip: [meta]
-        exclude: [skipme]
-        name: { from: key, token: last, spelling: snake }
-        scope: { from: parent, visible_from: stack }
+      GLOBAL:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: [env, region]
+      RESOURCE:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: true
+        builtin_names: []
+      local:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: []
+    declarations:
+      - path: "$.locals.*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: key
+        key_token: first_word
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: local
+      - path: "$.*.*"
+        skip_keys: [locals, outputs]
+        exclude_candidates: []
+        name_source: key
+        key_token: last_word
+        name_spelling: dashes_as_underscores
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: RESOURCE
     references:
-      - pattern: "^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)"
-        where: [whole]
-        trailing_text: any
-        target: { scope: { group: type }, name: name }
+      - pattern: "^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_${}]+)"
+        positions: [whole_scalar]
+        text_after_name_allowed: true
+        scope_name: RESOURCE
+        scope_group: type
+        name_group: name
       - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
-        where: [whole, placeholder, placeholder_in_string]
-        trailing_text: none
-        target: { scope: local, name: name }
+        positions: [whole_scalar, whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: false
+        scope_name: local
+        scope_group: null
+        name_group: name
       - pattern: "^(?<name>[a-z_]+)$"
-        where: [placeholder, placeholder_in_string]
-        trailing_text: none
-        target: { scope: global, name: name }
+        positions: [whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: false
+        scope_name: GLOBAL
+        scope_group: null
+        name_group: name
 ```
 
 Open a file the config matches. When the DSL has layers, that file is one layer of a stack. The language server holds the common layer and every adjacent overlay.
@@ -66,24 +103,26 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 
 ## The DSL
 
-`yaml-dsl.yml` is one file at the workspace root. Each entry under `dsls` is one language.
+`yaml-dsl.yml` is one file at the workspace root. `version` is the config format, `"1"`. Each entry under `dsls` is one language. A block left out is a feature the DSL does not have.
 
 | Field | What it sets |
-| --- | --- |
+|---|---|
 | `id` | Name of the DSL |
-| `includes` | Globs of files that belong to it |
-| `excludes` | Globs of files that do not, even when `includes` matches them |
-| `schema` | Search path used when a file does not name a schema, or the path it names is not on disk. Each entry is relative to that file. The first one on disk wins. A URL is fetched. |
-| `layers` | `overlays`, the directory names of the overlays, and `common`, how the common layer is found (`parent` or `nearest_ancestor`); or `none` |
-| `scopes` | Each scope's `visible_from` (`stack`, `everywhere`, `following`, or a list of paths) and its builtin `names` |
-| `symbols` | Where a name is declared (`at`, `skip`, `exclude`), how it is read (`name.from` `key`, `value` or `meta_argument`, or `any` for every name of the scope at that key), and its `scope` |
-| `references` | A `pattern` with named groups, the positions it may stand in (`where`), whether text may follow the name (`trailing_text`), and its `target` scope and name |
-| `placeholders` | The placeholder's `pattern` with a `body` group, or `none` |
-| `functions` | The call grammar (`marker`, `splat`, `unnamed_calls`, `call_results_where`, `refused_at`) and its `vocabulary` sources, or `none` |
+| `file_includes` | Globs of files that belong to it |
+| `file_excludes` | Globs of files that do not, even when `file_includes` matches them |
+| `schema_search_paths` | Search path used when a file does not name a schema, or the path it names is not on disk. Each entry is relative to that file. The first one on disk wins. A URL is fetched. |
+| `layers` | `overlay_folders`, the folder names of the overlays, and `common_layer_discovery`, how the common layer is found (`parent` or `ancestor`) |
+| `placeholder` | The placeholder's `pattern` with a `body` group, and `unscanned_paths`, the paths whose text is another language's |
+| `function` | Where the function definitions come from (`definitions`), the positions a call result may be referenced from (`call_result_reference_positions`), the paths where a call is a problem (`calls_not_allowed_at`), and the call grammar of a marker function (`marker_function`) |
+| `scopes` | Each scope's `regions`, a list of paths (`$` is the whole fold); `later_items_of_declaring_list`; `named_by_parent_key`; and `builtin_names`. A logical scope is named in capitals. |
+| `declarations` | Where a name is declared (`path`, `skip_keys`, `exclude_candidates`), how it is read (`name_source` `key`, `value` or `meta_argument`, with `key_token`, `name_spelling` and `meta_argument_name`), `declares_every_name`, and its `scope_name` |
+| `references` | A `pattern` with named groups, the `positions` it may stand in, `text_after_name_allowed`, the `scope_name`, and the groups holding a parent-key scope (`scope_group`) and the name (`name_group`) |
 
-`where` lists `whole`, the scalar; `placeholder`, a placeholder that is the whole scalar; `placeholder_in_string`, a placeholder inside longer text; and `within`, each match inside a scalar.
+`positions` lists `whole_scalar`, the scalar; `whole_placeholder`, a placeholder that is the whole scalar; `placeholder_in_text`, a placeholder inside longer text; and `anywhere_in_scalar`, each match inside a scalar.
 
-A function vocabulary is `terraform`, read from `terraform metadata functions -json` when Terraform can be invoked, and `{ schema: "#/<pointer>" }`, a table the file's schema publishes in the format of [schemas/x-yaml-dsl-functions.schema.json](schemas/x-yaml-dsl-functions.schema.json).
+`function.definitions` lists `terraform`, read from `terraform metadata functions -json` when Terraform can be invoked, and `schema`, the table the file's schema publishes at `#/x-yaml-dsl-functions` in the format of [schemas/x-yaml-dsl-functions.schema.json](schemas/x-yaml-dsl-functions.schema.json).
+
+Calls are modeled in one shape only, the marker function: a call written in a key, `<name> <call_marker><function>`, with the splat operator after the function when the value below is a list of arguments. A call written in a value, such as `hosts: concat(["a", "b"])`, is a plain string to the extension. A DSL whose calls take another shape gets no call checks, hover, completion or coloring.
 
 Every reference, placeholder and call is checked. A reference that resolves to nothing visible, a placeholder no rule reads, a call to an unknown function, a wrong argument count or a literal argument of the wrong type is red. References, placeholders and calls are colored from these rules.
 
@@ -101,9 +140,9 @@ When no schema resolves, the modeline line gets a red squiggle, or the first lin
 
 A reference is underlined as soon as the file opens. Once the analysis answers, one that stays in this file keeps a straight underline, one that points at another file becomes a squiggle, and one that matches nothing visible turns red with a red squiggle. Otherwise the text keeps its own colors. Resting on one shows its declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing visible matches, the cursor does not move.
 
-A reference resolves in its target scope, among the names visible from where it stands: the file's fold, everywhere, the later items of the declaring list, or the paths the scope names. In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The resource's identity is the last token of its key, with `-` written as `_`. A key holding a local placeholder is also named by the local's value, spelled the same way. A local is a key under `locals`, referenced as a whole scalar `local.<name>` or `${local.<name>}` inside a scalar or a key.
+A reference resolves in its target scope, among the names whose scope's regions hold where it stands: the paths the scope names, `$` being the whole fold, or the later items of the declaring list. In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The resource's identity is the last token of its key, with `-` written as `_`. A key holding a local placeholder is also named by the local's value, spelled the same way. A local is a key under `locals`, referenced as a whole scalar `local.<name>` or `${local.<name>}` inside a scalar or a key.
 
-An overlay's fold is its own declarations over the common layer's: its own declaration wins, and it sees no other overlay's. The common layer sees its own declarations and a name declared in every overlay that has a file, which opens in the first such overlay `layers.overlays` lists.
+An overlay's fold is its own declarations over the common layer's: its own declaration wins, and it sees no other overlay's. The common layer sees its own declarations and a name declared in every overlay that has a file, which opens in the first such overlay `layers.overlay_folders` lists.
 
 ## Completion
 
@@ -111,7 +150,7 @@ Typing the start of a reference, a placeholder or a call opens the list of what 
 
 ## Layers
 
-A DSL with `layers` composes a stack. One file is the common layer. Each overlay is the same filename under a directory named in `layers.overlays` directly below the common layer's directory. With `layers.common: parent` the overlay directory holds the file itself. With `nearest_ancestor` the file may sit deeper, at the same path below the overlay directory in every overlay, so `mock-stack/one/config/sample.yml` takes `mock-stack/sample.yml`. A file below no overlay directory is a common layer. The same shape without an extra directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
+A DSL with `layers` composes a stack. One file is the common layer. Each overlay is the same filename under a directory named in `layers.overlay_folders` directly below the common layer's directory. With `layers.common_layer_discovery: parent` the overlay directory holds the file itself. With `ancestor` the file may sit deeper, at the same path below the overlay directory in every overlay, so `mock-stack/one/config/sample.yml` takes `mock-stack/sample.yml`. A file below no overlay directory is a common layer. The same shape without an extra directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
 
 ```
 mock-stack/sample.yml
@@ -131,7 +170,7 @@ The schema for a file is the one the file names. A `# yaml-language-server: $sch
 
 An overlay may name `.schema/sample.schema.json`. A common layer may name that file through an overlay directory, such as `one/.schema/sample.schema.json`.
 
-A modeline that resolves is never overridden. The config `schema` list is the search path for a file with no modeline, or a modeline whose path is not on disk. The same schema bytes are one parsed copy. Different bytes are a different schema. Evicting a stack drops its layers and folded documents, not the schema.
+A modeline that resolves is never overridden. The config `schema_search_paths` list is the search path for a file with no modeline, or a modeline whose path is not on disk. The same schema bytes are one parsed copy. Different bytes are a different schema. Evicting a stack drops its layers and folded documents, not the schema.
 
 The extension ships no DSL's schema or definition.
 
@@ -139,7 +178,7 @@ The extension ships no DSL's schema or definition.
 
 The extension contributes the language `yaml-dsl`. It starts only when a workspace folder contains `yaml-dsl.yml`. A folder without that file is left alone, including in a window that also has a folder with the file.
 
-A file under a folder that has the config, and that one DSL's `includes` match and its `excludes` do not, opens as `yaml-dsl`. The language server's document selector is that language. A file that matches no DSL pattern stays `yaml`. A file that matches two DSLs is reported and claimed by neither.
+A file under a folder that has the config, and that one DSL's `file_includes` match and its `file_excludes` do not, opens as `yaml-dsl`. The language server's document selector is that language. A file that matches no DSL pattern stays `yaml`. A file that matches two DSLs is reported and claimed by neither.
 
 ## Colors
 

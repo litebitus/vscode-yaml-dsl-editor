@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const { discoverStack, overlayNameOf } = require('../lib/discover');
 
 const overlayNames = ['one', 'two', 'three', 'four'];
-const parentLayers = { overlays: overlayNames, common: 'parent' };
-const ancestorLayers = { overlays: overlayNames, common: 'nearest_ancestor' };
+const parentLayers = { overlayFolders: overlayNames, commonLayerDiscovery: 'parent' };
+const ancestorLayers = { overlayFolders: overlayNames, commonLayerDiscovery: 'ancestor' };
 const root = '/repo';
 
 test('an overlay and a family file find the same common layer', () => {
@@ -22,7 +22,7 @@ test('an overlay and a family file find the same common layer', () => {
   }
 });
 
-test('nearest_ancestor takes the common layer directly above the nearest overlay directory', () => {
+test('ancestor takes the common layer directly above the nearest overlay folder', () => {
   const nested = discoverStack('/repo/mock-stack/one/config/mock.yml', ancestorLayers, root);
   assert.equal(nested.common, '/repo/mock-stack/mock.yml');
   assert.equal(nested.activeOverlay, 'one');

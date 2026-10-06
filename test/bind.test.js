@@ -1,6 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { bind } = require('../lib/bind');
+const {
+  scope,
+  declaration,
+  reference,
+  placeholder,
+  dslEntry,
+  configText,
+} = require('./config-builders');
+
+const resourcesConfig = configText(dslEntry('resources'));
 
 function fakeConnection() {
   const handlers = {};
@@ -75,7 +85,7 @@ test('document events analyze and custom requests answer', async () => {
   });
   await connection.handlers['yaml-dsl/config']({
     entries: [{
-      text: 'dsls:\n  - id: resources\n    includes: ["**/mock.yml"]\n    schema: schema.json\n',
+      text: configText(dslEntry('resources', { schema_search_paths: ['schema.json'] })),
       dir: '/repo',
     }],
   });
@@ -88,29 +98,12 @@ test('document events analyze and custom requests answer', async () => {
   const missing = await connection.handlers.definition({ textDocument: { uri: 'file:///repo/app/mock.yml' }, position: { line: 1, character: 0 } });
   assert.equal(missing, null);
   await connection.handlers['yaml-dsl/config']({
-    text: [
-      'dsls:',
-      '  - id: note',
-      '    includes: ["**/note.yml"]',
-      '    excludes: []',
-      '    schema: []',
-      '    layers: none',
-      '    placeholders: none',
-      '    functions: none',
-      '    scopes: { local: { visible_from: stack } }',
-      '    symbols:',
-      '      - at: "$.locals.*"',
-      '        skip: []',
-      '        exclude: []',
-      '        name: { from: key, token: whole, spelling: as_written }',
-      '        scope: local',
-      '    references:',
-      '      - pattern: "^local\\\\.(?<name>[a-z]+)$"',
-      '        where: [whole]',
-      '        trailing_text: none',
-      '        target: { scope: local, name: name }',
-      '',
-    ].join('\n'),
+    text: configText(dslEntry('note', {
+      file_includes: ['**/note.yml'],
+      scopes: { local: scope() },
+      declarations: [declaration('$.locals.*', 'local')],
+      references: [reference('^local\\.(?<name>[a-z]+)$', 'local')],
+    })),
     dir: '/repo',
   });
   const note = 'locals:\n  db: mock-value\nuse: local.db\n';
@@ -154,7 +147,7 @@ test('the server watches each schema path it reads and reloads a schema that cha
     capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true } } },
   });
   await connection.handlers['yaml-dsl/config']({
-    entries: [{ text: 'dsls:\n  - id: resources\n    includes: ["**/mock.yml"]\n', dir: '/repo' }],
+    entries: [{ text: resourcesConfig, dir: '/repo' }],
   });
   const text = '# yaml-language-server: $schema=.schema/mock.schema.json\nname: plain\n';
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
@@ -196,7 +189,7 @@ test('a client without relative-pattern watching gets no registration', async ()
   const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
   connection.handlers.initialize({ capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true } } } });
   await connection.handlers['yaml-dsl/config']({
-    entries: [{ text: 'dsls:\n  - id: resources\n    includes: ["**/mock.yml"]\n', dir: '/repo' }],
+    entries: [{ text: resourcesConfig, dir: '/repo' }],
   });
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => 'name: plain\n' } });
   await workspace.whenIdle();
@@ -208,7 +201,7 @@ test('an analysis that changes a stack tells the client which documents to repai
   const documents = fakeDocuments();
   const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
   await connection.handlers['yaml-dsl/config']({
-    entries: [{ text: 'dsls:\n  - id: resources\n    includes: ["**/mock.yml"]\n', dir: '/repo' }],
+    entries: [{ text: resourcesConfig, dir: '/repo' }],
   });
   const text = 'name: plain\n';
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
@@ -226,12 +219,21 @@ test('completion answers editor items that replace what was typed', async () => 
   const connection = fakeConnection();
   const documents = fakeDocuments();
   const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
-  const config = 'dsls:\n  - id: note\n    includes: ["**/note.yml"]\n    symbols:\n      - kind: local\n'
-    + '        at: "$.locals.*"\n        name: { from: key }\n      - kind: resource\n        at: "$.*.*"\n'
-    + '        skip: [locals]\n        name: { from: key }\n        qualify: { type: parent }\n    references:\n'
-    + '      - pattern: "^local\\\\.(?<name>[a-z]+)$"\n        where: whole\n        target: { kind: local, name: name }\n'
-    + '      - pattern: "^ref (?<type>[a-z]+)\\\\.(?<name>[a-z]+)"\n        where: whole\n'
-    + '        target: { kind: resource, type: type, name: name }\n';
+  const config = configText(dslEntry('note', {
+    file_includes: ['**/note.yml'],
+    scopes: { local: scope(), RESOURCE: scope({ named_by_parent_key: true }) },
+    declarations: [
+      declaration('$.locals.*', 'local'),
+      declaration('$.*.*', 'RESOURCE', { skip_keys: ['locals'] }),
+    ],
+    references: [
+      reference('^local\\.(?<name>[a-z]+)$', 'local'),
+      reference('^ref (?<type>[a-z]+)\\.(?<name>[a-z]+)', 'RESOURCE', {
+        text_after_name_allowed: true,
+        scope_group: 'type',
+      }),
+    ],
+  }));
   await connection.handlers['yaml-dsl/config']({ entries: [{ text: config, dir: '/repo' }] });
   const note = 'locals:\n  db: mock-value\nthing:\n  one:\n    use: local.\n    link: ref \n';
   documents.handlers.open({ document: { uri: 'file:///repo/note.yml', getText: () => note } });
@@ -266,8 +268,12 @@ test('semantic tokens are encoded with the legend, and a config change asks the 
     tokenTypes: ['function', 'keyword', 'operator', 'type', 'variable'],
     tokenModifiers: ['defaultLibrary'],
   });
-  const config = 'dsls:\n  - id: note\n    includes: ["**/note.yml"]\n'
-    + "    placeholders: { pattern: '\\$\\{(?<body>[^}]*)\\}', builtins: [env] }\n";
+  const config = configText(dslEntry('note', {
+    file_includes: ['**/note.yml'],
+    placeholder: placeholder(),
+    scopes: { GLOBAL: scope({ builtin_names: ['env'] }) },
+    references: [reference('^(?<name>[a-z0-9_]+)$', 'GLOBAL', { positions: ['whole_placeholder', 'placeholder_in_text'] })],
+  }));
   await connection.handlers['yaml-dsl/config']({ entries: [{ text: config, dir: '/repo' }] });
   assert.equal(connection.tokenRefreshes, 1);
   documents.handlers.open({ document: { uri: 'file:///repo/note.yml', getText: () => 'a: ${env}\n' } });

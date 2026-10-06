@@ -1,45 +1,21 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { analyzeDocument } = require('../lib/analyze');
-const { parseAt } = require('../lib/document-path');
+const {
+  scope,
+  declaration,
+  reference,
+  placeholder,
+  markerFunction,
+  dslEntry,
+  parsedDsl,
+} = require('./config-builders');
 
-function rule(at, extra = {}) {
-  return {
-    at,
-    tokens: parseAt(at),
-    skip: [],
-    exclude: [],
-    name: { from: 'key', token: 'whole', spelling: 'as_written' },
-    scope: { literal: 'thing' },
-    ...extra,
-  };
+function doc(text, fields) {
+  return analyzeDocument(text, '/repo/mock.yml', parsedDsl(dslEntry('mock', fields)));
 }
 
-function reference(pattern, where, extra = {}) {
-  return {
-    pattern,
-    where,
-    trailingText: 'none',
-    target: { scope: { literal: 'thing' }, name: 'name' },
-    ...extra,
-  };
-}
-
-const functions = {
-  marker: 'fn.',
-  splat: '*',
-  vocabulary: [],
-  unnamedCalls: 'sole_key',
-  callResultsWhere: ['whole'],
-  refusedAt: [],
-};
-
-function doc(text, dsl) {
-  const empty = { symbols: [], references: [], placeholders: null, functions: null };
-  return analyzeDocument(text, '/repo/mock.yml', { ...empty, ...dsl });
-}
-
-test('a key names a symbol by a token, spelled as the rule says, in a literal or enclosing scope', () => {
+test('a key names a symbol by a token, spelled as the rule says, in a declared or parent-key scope', () => {
   const text = [
     'mocktype:',
     '  primary: {}',
@@ -52,18 +28,16 @@ test('a key names a symbol by a token, spelled as the rule says, in a literal or
     '',
   ].join('\n');
   const analyzed = doc(text, {
-    functions,
-    symbols: [
-      rule('$.*.*', {
-        skip: ['schema_version', 'locals'],
-        exclude: ['defaults'],
-        name: { from: 'key', token: 'last', spelling: 'snake' },
-        scope: { fromParent: true, visibleFrom: { kind: 'stack' } },
+    function: markerFunction(),
+    scopes: { RESOURCE: scope({ named_by_parent_key: true }), local: scope() },
+    declarations: [
+      declaration('$.*.*', 'RESOURCE', {
+        skip_keys: ['schema_version', 'locals'],
+        exclude_candidates: ['defaults'],
+        key_token: 'last_word',
+        name_spelling: 'dashes_as_underscores',
       }),
-      rule('$.locals.*', {
-        name: { from: 'key', token: 'first', spelling: 'as_written' },
-        scope: { literal: 'local' },
-      }),
+      declaration('$.locals.*', 'local', { key_token: 'first_word' }),
     ],
   });
   const names = analyzed.symbols.map((symbol) => `${symbol.scope}:${symbol.name}`);
@@ -72,7 +46,7 @@ test('a key names a symbol by a token, spelled as the rule says, in a literal or
   assert.deepEqual([local.valueText, local.valueIsScalar, local.call], ['mock-value', true, false]);
   assert.equal(analyzed.symbols.find((symbol) => symbol.name === 'operator_key').call, true);
   assert.deepEqual(analyzed.symbols[0].documentPath, ['mocktype', 'primary']);
-  assert.deepEqual(analyzed.symbols[0].visibility, { kind: 'stack' });
+  assert.deepEqual([analyzed.symbols[0].scopeName, local.scopeName], ['RESOURCE', 'local']);
 });
 
 test('a name can come from a value or from a meta argument, one symbol per listed id', () => {
@@ -92,10 +66,12 @@ test('a name can come from a value or from a meta argument, one symbol per liste
     '  - id: 1',
     '',
   ].join('\n');
+  const fromValue = { name_source: 'value', key_token: null };
   const analyzed = doc(text, {
-    symbols: [
-      rule('$.setup[*].*', { name: { from: 'meta_argument', argument: 'id' }, scope: { literal: 'setup' } }),
-      rule('$.setup[*].id', { name: { from: 'value', spelling: 'as_written' }, scope: { literal: 'setup' } }),
+    scopes: { setup: scope() },
+    declarations: [
+      declaration('$.setup[*].*', 'setup', { name_source: 'meta_argument', key_token: null, meta_argument_name: 'id' }),
+      declaration('$.setup[*].id', 'setup', fromValue),
     ],
   });
   assert.deepEqual(analyzed.symbols.map((symbol) => symbol.name), ['config', 'alice', 'bob', 'quoted, id', 'after']);
@@ -106,7 +82,8 @@ test('a name can come from a value or from a meta argument, one symbol per liste
   const after = analyzed.symbols.find((symbol) => symbol.name === 'after');
   assert.deepEqual(after.documentPath, ['setup', 0, 'id']);
   const listed = doc('packages: [mock-messages, { not: scalar }, mock-protos]\n', {
-    symbols: [rule('$.packages[*]', { name: { from: 'value', spelling: 'as_written' } })],
+    scopes: { package: scope() },
+    declarations: [declaration('$.packages[*]', 'package', fromValue)],
   });
   assert.deepEqual(listed.symbols.map((symbol) => [symbol.name, symbol.documentPath]), [
     ['mock-messages', ['packages', 0]],
@@ -116,15 +93,16 @@ test('a name can come from a value or from a meta argument, one symbol per liste
 
 test('path steps that do not match a node produce no symbol', () => {
   const analyzed = doc('a: 1\nitems:\n  - primary: 1\n    other: 2\nkeys:\n  k: [1]\n', {
-    symbols: [
-      rule('$.missing'),
-      rule('$.a.b'),
-      rule('$.a.*'),
-      rule('$.items[*]'),
-      rule('$.a[*].*'),
-      rule('$.items[*].*'),
-      rule('$.*', { scope: { fromParent: true, visibleFrom: { kind: 'stack' } } }),
-      rule('$.keys.k', { name: { from: 'value', spelling: 'as_written' } }),
+    scopes: { thing: scope(), PARENT: scope({ named_by_parent_key: true }) },
+    declarations: [
+      declaration('$.missing', 'thing'),
+      declaration('$.a.b', 'thing'),
+      declaration('$.a.*', 'thing'),
+      declaration('$.items[*]', 'thing'),
+      declaration('$.a[*].*', 'thing'),
+      declaration('$.items[*].*', 'thing'),
+      declaration('$.*', 'PARENT'),
+      declaration('$.keys.k', 'thing', { name_source: 'value', key_token: null }),
     ],
   });
   assert.deepEqual(analyzed.symbols.map((symbol) => symbol.name), ['primary', 'other']);
@@ -147,49 +125,51 @@ test('references are found in each position their rule allows, and refused in th
     '',
   ].join('\n');
   const analyzed = doc(text, {
-    placeholders: { pattern: '\\$\\{(?<body>[^}]*)\\}' },
+    placeholder: placeholder(),
+    scopes: { RESOURCE: scope({ named_by_parent_key: true }), local: scope(), thing: scope() },
     references: [
-      reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)', ['whole'], {
-        trailingText: 'any',
-        target: { scope: { group: 'type' }, name: 'name' },
+      reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)', 'RESOURCE', {
+        text_after_name_allowed: true,
+        scope_group: 'type',
       }),
-      reference('^local\\.(?<name>[a-z0-9_]+)', ['whole', 'placeholder', 'placeholder_in_string'], {
-        target: { scope: { literal: 'local' }, name: 'name' },
+      reference('^local\\.(?<name>[a-z0-9_]+)', 'local', {
+        positions: ['whole_scalar', 'whole_placeholder', 'placeholder_in_text'],
       }),
-      reference('use (?<name>[a-z]+)', ['within']),
+      reference('use (?<name>[a-z]+)', 'thing', { positions: ['anywhere_in_scalar'] }),
     ],
   });
   const keyOf = (line) => text.split('\n')[line].split(':')[0];
   const found = analyzed.references.map((ref) => `${ref.position}:${keyOf(ref.range.start.line)}`);
   assert.deepEqual(found.sort(), [
-    'placeholder:${local.db}',
-    'placeholder:alone',
-    'placeholder_in_string:name ${local.db}-x',
-    'placeholder_in_string:note',
-    'whole:plain',
-    'whole:source',
-    'within:free',
+    'whole_placeholder:${local.db}',
+    'whole_placeholder:alone',
+    'placeholder_in_text:name ${local.db}-x',
+    'placeholder_in_text:note',
+    'whole_scalar:plain',
+    'whole_scalar:source',
+    'anywhere_in_scalar:free',
   ].sort());
-  const plain = analyzed.references.find((ref) => ref.position === 'whole' && ref.groups.name === 'db');
+  const plain = analyzed.references.find((ref) => ref.position === 'whole_scalar' && ref.groups.name === 'db');
   assert.deepEqual(plain.documentPath, ['plain']);
   const problems = analyzed.referenceProblems.map((problem) => problem.message);
   assert.deepEqual(problems.sort(), [
-    'a reference matching ^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+) is not allowed as placeholder',
+    'a reference matching ^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+) is not allowed as whole_placeholder',
     'unexpected text after the reference',
     'unexpected text after the reference in ${local.db.more}',
     'unknown placeholder ${nope}',
   ].sort());
-  assert.equal(analyzed.placeholders.filter((placeholder) => placeholder.valid).length, 4);
+  assert.equal(analyzed.placeholders.filter((scanned) => scanned.valid).length, 4);
 });
 
 test('a placeholder reference spans its whole body, the path after the name included', () => {
   const text = 'get: "${setup.login.body.token} x"\n';
   const analyzed = doc(text, {
-    placeholders: { pattern: '\\$\\{(?<body>[^}]*)\\}' },
+    placeholder: placeholder(),
+    scopes: { setup: scope() },
     references: [
-      reference('^setup\\.(?<name>[a-z0-9_]+)', ['placeholder_in_string'], {
-        trailingText: 'any',
-        target: { scope: { literal: 'setup' }, name: 'name' },
+      reference('^setup\\.(?<name>[a-z0-9_]+)', 'setup', {
+        positions: ['placeholder_in_text'],
+        text_after_name_allowed: true,
       }),
     ],
   });
@@ -197,9 +177,31 @@ test('a placeholder reference spans its whole body, the path after the name incl
   assert.equal(text.slice(range.start.character, range.end.character), 'setup.login.body.token');
 });
 
-test('a document with no placeholders block scans no placeholders', () => {
+test('placeholders under an unscanned path are another language\'s text and are not read', () => {
+  const text = [
+    'build:',
+    '  commands:',
+    '    - export MOCK=${SHELL_VALUE:0:7}',
+    'dockerfile: FROM mock:${MOCK_VERSION}',
+    'name: ${nope}',
+    '',
+  ].join('\n');
+  const analyzed = doc(text, {
+    placeholder: placeholder({
+      unscanned_paths: [
+        { path: '$.build', skip_keys: [], includes_subtree: true },
+        { path: '$.dockerfile', skip_keys: [], includes_subtree: false },
+      ],
+    }),
+  });
+  assert.deepEqual(analyzed.placeholders.map((scanned) => scanned.text), ['${nope}']);
+  assert.deepEqual(analyzed.referenceProblems.map((problem) => problem.message), ['unknown placeholder ${nope}']);
+});
+
+test('a DSL with no placeholder block scans no placeholders', () => {
   const analyzed = doc('a: ${local.db}\n', {
-    references: [reference('^local\\.(?<name>[a-z]+)', ['placeholder'])],
+    scopes: { local: scope() },
+    references: [reference('^local\\.(?<name>[a-z]+)', 'local', { positions: ['whole_placeholder'] })],
   });
   assert.deepEqual(analyzed.references, []);
   assert.deepEqual(analyzed.placeholders, []);

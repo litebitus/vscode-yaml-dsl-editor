@@ -34,24 +34,34 @@ test('hover and definition outside a reference or a field are empty', () => {
 
 const refRule = {
   pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)',
-  where: ['whole'],
-  trailingText: 'any',
-  target: { scope: { group: 'type' }, name: 'name' },
+  positions: ['whole_scalar'],
+  textAfterNameAllowed: true,
+  scopeName: 'RESOURCE',
+  scopeGroup: 'type',
+  nameGroup: 'name',
 };
 const localRule = {
   pattern: '^local\\.(?<name>[a-z0-9_]+)$',
-  where: ['whole', 'placeholder', 'placeholder_in_string'],
-  trailingText: 'none',
-  target: { scope: { literal: 'local' }, name: 'name' },
+  positions: ['whole_scalar', 'whole_placeholder', 'placeholder_in_text'],
+  textAfterNameAllowed: false,
+  scopeName: 'local',
+  scopeGroup: null,
+  nameGroup: 'name',
 };
-const stackScopes = { local: { visibleFrom: { kind: 'stack' }, names: null } };
+const declaredScope = (fields = {}) => ({
+  regions: [[]],
+  laterItemsOfDeclaringList: false,
+  namedByParentKey: false,
+  builtinNames: [],
+  ...fields,
+});
+const stackScopes = { local: declaredScope(), RESOURCE: declaredScope({ namedByParentKey: true }) };
 const zero = { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
 
 function typed(name, file, extra = {}) {
   return {
     scope: 'mocktype',
-    scopeFromParent: true,
-    visibility: { kind: 'stack' },
+    scopeName: 'RESOURCE',
     name,
     file,
     keyRange: zero,
@@ -62,7 +72,7 @@ function typed(name, file, extra = {}) {
 }
 
 function localSymbol(name, file, valueText, extra = {}) {
-  return { scope: 'local', name, file, keyRange: zero, valueText, valueIsScalar: true, ...extra };
+  return { scope: 'local', scopeName: 'local', name, file, keyRange: zero, valueText, valueIsScalar: true, ...extra };
 }
 
 function stackOf(symbols, extra = {}) {
@@ -116,16 +126,16 @@ test('the active file wins, then the common layer, then the first other declarat
 test('a ref named by a local value opens the declaration in the active file first', () => {
   const doc = analyzeDocument('item: ref mocktype.kds_bullet\n', '/repo/one/mock.yml', { references: [refRule] });
   const range = { start: { line: 2, character: 2 }, end: { line: 2, character: 8 } };
-  const keyed = { spelling: 'snake', keyRange: range };
+  const keyed = { nameSpelling: 'dashes_as_underscores', keyRange: range };
   const symbols = [
     localSymbol('bullet', '/repo/one/mock.yml', '"kds-bullet"'),
     localSymbol('bullet', '/repo/mock.yml', 'other-bullet'),
     typed('${local.bullet}', '/repo/one/mock.yml', keyed),
     typed('${local.bullet}', '/repo/mock.yml', keyed),
   ];
-  const placeholders = { pattern: '\\$\\{(?<body>[^}]*)\\}' };
+  const placeholder = { pattern: '\\$\\{(?<body>[^}]*)\\}', unscannedPaths: [] };
   const withPlaceholders = (list) => stackOf(list, {
-    dsl: { scopes: stackScopes, references: [refRule, localRule], placeholders },
+    dsl: { scopes: stackScopes, references: [refRule, localRule], placeholder },
   });
   const hit = definitionAt(doc, { line: 0, character: 12 }, withPlaceholders(symbols));
   assert.equal(hit.path, '/repo/one/mock.yml');
@@ -140,21 +150,23 @@ test('a ref named by a local value opens the declaration in the active file firs
 test('a hover on a valued target shows its value, and a builtin names its scope', () => {
   const globalRule = {
     pattern: '^(?<name>[a-z]+)$',
-    where: ['placeholder'],
-    trailingText: 'none',
-    target: { scope: { literal: 'global' }, name: 'name' },
+    positions: ['whole_placeholder'],
+    textAfterNameAllowed: false,
+    scopeName: 'GLOBAL',
+    scopeGroup: null,
+    nameGroup: 'name',
   };
   const dsl = {
     references: [localRule, globalRule],
-    placeholders: { pattern: '\\$\\{(?<body>[^}]*)\\}' },
+    placeholder: { pattern: '\\$\\{(?<body>[^}]*)\\}', unscannedPaths: [] },
   };
   const doc = analyzeDocument('name: local.db\nwhere: ${env}\n', '/repo/a.yml', dsl);
-  const scopes = { ...stackScopes, global: { visibleFrom: { kind: 'everywhere' }, names: ['env'] } };
+  const scopes = { ...stackScopes, GLOBAL: declaredScope({ builtinNames: ['env'] }) };
   const stack = (symbols) => ({ symbols, common: '/repo/mock.yml', dsl: { ...dsl, scopes } });
   const symbol = localSymbol('db', '/repo/mock.yml', 'mock-value', { keyRange: doc.tree.range });
   assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([symbol]), null).contents.value, 'mock-value');
   assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([]), null).contents.value, 'local.db');
-  assert.equal(hoverAt(doc, { line: 1, character: 9 }, stack([]), null).contents.value, 'global env');
+  assert.equal(hoverAt(doc, { line: 1, character: 9 }, stack([]), null).contents.value, 'GLOBAL env');
   assert.equal(definitionAt(doc, { line: 1, character: 9 }, stack([])), null);
   assert.deepEqual(linksFor(doc, stack([])), []);
 });

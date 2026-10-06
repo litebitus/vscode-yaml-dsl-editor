@@ -1,32 +1,52 @@
+version: "1"
 dsls:
   - id: sample
-    includes: ["**/mock.yml"]
-    excludes: []
-    schema: []
+    file_includes: ["**/mock.yml"]
+    file_excludes: []
+    schema_search_paths: []
     layers:
-      overlays: [one]
-      common: parent
-    placeholders: none
-    functions: none
+      overlay_folders: [one]
+      common_layer_discovery: parent
     scopes:
-      local: { visible_from: stack }
-    symbols:
-      - at: "$.locals.*"
-        skip: []
-        exclude: []
-        name: { from: key, token: whole, spelling: as_written }
-        scope: local
-      - at: "$.*.*"
-        skip: [locals]
-        exclude: [defaults]
-        name: { from: key, token: last, spelling: snake }
-        scope: { from: parent, visible_from: stack }
+      local:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: []
+      RESOURCE:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: true
+        builtin_names: []
+    declarations:
+      - path: "$.locals.*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: key
+        key_token: all_words
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: local
+      - path: "$.*.*"
+        skip_keys: [locals]
+        exclude_candidates: [defaults]
+        name_source: key
+        key_token: last_word
+        name_spelling: dashes_as_underscores
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: RESOURCE
     references:
       - pattern: "^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)"
-        where: [whole]
-        trailing_text: any
-        target: { scope: { group: type }, name: name }
+        positions: [whole_scalar]
+        text_after_name_allowed: true
+        scope_name: RESOURCE
+        scope_group: type
+        name_group: name
       - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
-        where: [whole]
-        trailing_text: none
-        target: { scope: local, name: name }
+        positions: [whole_scalar]
+        text_after_name_allowed: false
+        scope_name: local
+        scope_group: null
+        name_group: name

@@ -10,6 +10,15 @@ const {
   ownedFile,
   paintUnderlines,
 } = require('../lib/client');
+const {
+  scope,
+  reference,
+  placeholder,
+  dslEntry,
+  configText,
+} = require('./config-builders');
+
+const sampleConfig = configText(dslEntry('sample'));
 
 function disposable() {
   return { dispose() {} };
@@ -52,7 +61,7 @@ function fakeVscode(options = {}) {
       workspaceFolders: options.folders === undefined ? [{ uri: { fsPath: '/repo' } }] : options.folders,
       textDocuments: options.documents || [],
       fs: {
-        readFile: options.readFile || (async () => Buffer.from('dsls:\n  - id: resources\n    includes: ["**/mock.yml"]\n')),
+        readFile: options.readFile || (async () => Buffer.from(configText(dslEntry('resources')))),
       },
       openTextDocument: options.openTextDocument,
       getConfiguration() {
@@ -147,7 +156,7 @@ test('a search that fails does not block activation', async () => {
   vscode.workspace.findFiles = async () => [];
   const client = fakeClient();
   await activateWith(vscode, { subscriptions: [] }, () => client);
-  vscode.workspace.fs.readFile = async () => Buffer.from('dsls:\n  - id: sample\n    includes: ["**/mock.yml"]\n');
+  vscode.workspace.fs.readFile = async () => Buffer.from(sampleConfig);
   vscode.workspace.findFiles = async () => { throw new Error('down'); };
   await vscode.watcher.change();
   await new Promise((resolve) => setImmediate(resolve));
@@ -156,7 +165,7 @@ test('a search that fails does not block activation', async () => {
 
 test('activation asks the server to read matching files', async () => {
   const vscode = fakeVscode({
-    readFile: async () => Buffer.from('dsls:\n  - id: sample\n    includes: ["**/mock.yml", "**/mock.yml"]\n'),
+    readFile: async () => Buffer.from(configText(dslEntry('sample', { file_includes: ['**/mock.yml', '**/mock.yml'] }))),
   });
   vscode.RelativePattern = class {
     constructor(folder, pattern) { this.folder = folder; this.pattern = pattern; }
@@ -293,8 +302,8 @@ test('evicted folds close and a workspace without config still starts', async ()
   await activateWith(changed, { subscriptions: [] }, () => fakeClient());
   assert.equal(sample.languageId, 'yaml-dsl');
   assert.equal(changed.updated, undefined);
-  assert.equal(ownedFile('/other/mock.yml', [{ dir: '/repo', text: 'dsls:\n  - id: sample\n    includes: ["**/mock.yml"]\n' }]), false);
-  assert.equal(ownedFile('/repo/mock.yml', [{ dir: '/repo', text: 'dsls:\n  - id: sample\n    includes: ["**/mock.yml"]\n' }]), true);
+  assert.equal(ownedFile('/other/mock.yml', [{ dir: '/repo', text: sampleConfig }]), false);
+  assert.equal(ownedFile('/repo/mock.yml', [{ dir: '/repo', text: sampleConfig }]), true);
   assert.deepEqual(associationPatterns(['**/mock.yml', '*.yml']), ['**/mock.yml', 'mock.yml', '*.yml']);
 });
 
@@ -455,22 +464,23 @@ function lastPaint(painted, kind) {
   return painted.filter((item) => item.kind === kind).at(-1);
 }
 
-const referenceConfig = [
-  'dsls:',
-  '  - id: sample',
-  '    includes: ["**/*.yml"]',
-  '    placeholders:',
-  "      pattern: '\\$\\{(?<body>[^}]*)\\}'",
-  '      builtins: [env]',
-  '      references: [local]',
-  '    references:',
-  "      - pattern: '^ref [a-z0-9_.${}]+'",
-  '        where: whole',
-  '        target: { kind: resource }',
-  "      - pattern: '^local\\.[a-z_]+$'",
-  '        where: whole',
-  '        target: { kind: local }',
-].join('\n');
+const referenceScopes = { local: scope(), RESOURCE: scope({ named_by_parent_key: true }) };
+const referenceRules = [
+  reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_.${}]+)', 'RESOURCE', {
+    text_after_name_allowed: true,
+    scope_group: 'type',
+  }),
+  reference('^local\\.(?<name>[a-z_]+)$', 'local', {
+    positions: ['whole_scalar', 'whole_placeholder', 'placeholder_in_text'],
+  }),
+];
+const referenceDsl = (extraRules = []) => dslEntry('sample', {
+  file_includes: ['**/*.yml'],
+  placeholder: placeholder(),
+  scopes: referenceScopes,
+  references: [...referenceRules, ...extraRules],
+});
+const referenceConfig = configText(referenceDsl());
 
 test('references are painted by the class the server gives them', async () => {
   const painted = [];
@@ -682,14 +692,12 @@ test('a hover colors the declaration by the declaring file\'s DSL, with no DSL s
   assert.match(configured, /<span style="color:#82D2CE;">\$\{local\.db\}<\/span>/);
   assert.match(configured, /<span style="color:#82D2CE;">\$\{env\}<\/span>/);
   assert.doesNotMatch(configured, /color:#82D2CE;">@\{y\}/);
-  const other = [
-    'dsls:',
-    '  - id: other',
-    '    includes: ["**/*.yml"]',
-    "    placeholders: { pattern: '@\\{(?<body>[^}]*)\\}', builtins: [y] }",
-    '    references:',
-    "      - { pattern: 'use [a-z]+', where: within, target: { kind: local } }",
-  ].join('\n');
+  const other = configText(dslEntry('other', {
+    file_includes: ['**/*.yml'],
+    placeholder: placeholder({ pattern: '@\\{(?<body>[^}]*)\\}' }),
+    scopes: { local: scope() },
+    references: [reference('use (?<name>[a-z]+)', 'local', { positions: ['anywhere_in_scalar'] })],
+  }));
   const otherDsl = (await hover(other)).contents.value;
   assert.doesNotMatch(otherDsl, /color:#efb080;">ref/);
   assert.doesNotMatch(otherDsl, /color:#82D2CE;">\$\{env\}/);
@@ -704,7 +712,9 @@ test('the text pass underlines placeholder references and within matches from th
   const painted = [];
   const doc = documentOf('a: "${local.db} ${env} ${bad}"\nb: use thing\n');
   const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
-  const withinConfig = `${referenceConfig}\n      - pattern: 'use [a-z]+'\n        where: within\n        target: { kind: local }`;
+  const withinConfig = configText(referenceDsl([
+    reference('use (?<name>[a-z]+)', 'local', { positions: ['anywhere_in_scalar'] }),
+  ]));
   await paintUnderlines(vscode, fakeClient(), referenceMarks(), [{ text: withinConfig, dir: '/repo' }]);
   const covered = lastPaint(painted, 'unclassified').ranges.map((range) => doc.getText(range));
   assert.deepEqual(covered.sort(), ['local.db', 'use thing']);
@@ -720,7 +730,10 @@ test('the text pass underlines placeholder references and within matches from th
 
 test('activation leaves excluded files out of the warm-up', async () => {
   const vscode = fakeVscode({
-    readFile: async () => Buffer.from('dsls:\n  - id: suites\n    includes: ["**/*.yml"]\n    excludes: ["**/protocols/**"]\n'),
+    readFile: async () => Buffer.from(configText(dslEntry('suites', {
+      file_includes: ['**/*.yml'],
+      file_excludes: ['**/protocols/**'],
+    }))),
   });
   vscode.RelativePattern = class { constructor(folder, pattern) { this.pattern = pattern; } };
   vscode.workspace.findFiles = async () => [{ fsPath: '/repo/games/slot.yml' }, { fsPath: '/repo/protocols/mock/protocol.yml' }];

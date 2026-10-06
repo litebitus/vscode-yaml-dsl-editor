@@ -1,6 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorkspace, SCHEMA_UNAVAILABLE } = require('../lib/workspace');
+const {
+  scope,
+  declaration,
+  reference,
+  placeholder,
+  markerFunction,
+  dslEntry,
+  configText,
+} = require('./config-builders');
 
 const schema = JSON.stringify({
   description: 'root',
@@ -14,46 +23,44 @@ const schema = JSON.stringify({
   },
 });
 
-const config = `
-dsls:
-  - id: resources
-    includes: ["**/mock.yml"]
-    excludes: []
-    schema: https://example.test/fallback.json
-    layers:
-      overlays: [one, two, three, four]
-      common: nearest_ancestor
-    placeholders:
-      pattern: '\\$\\{(?<body>[^}\\n]*)\\}'
-    functions: none
-    scopes:
-      global: { visible_from: everywhere, names: [env] }
-      local: { visible_from: stack }
-    symbols:
-      - at: "$.locals.*"
-        skip: []
-        exclude: []
-        name: { from: key, token: whole, spelling: as_written }
-        scope: local
-      - at: "$.*.*"
-        skip: [schema_version, cloud, env, locals, outputs, sync]
-        exclude: [defaults]
-        name: { from: key, token: last, spelling: snake }
-        scope: { from: parent, visible_from: stack }
-    references:
-      - pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)'
-        where: [whole]
-        trailing_text: any
-        target: { scope: { group: type }, name: name }
-      - pattern: '^local\\.(?<name>[a-z0-9_]+)$'
-        where: [whole, placeholder, placeholder_in_string]
-        trailing_text: none
-        target: { scope: local, name: name }
-      - pattern: '^(?<name>[a-z_]+)$'
-        where: [placeholder, placeholder_in_string]
-        trailing_text: none
-        target: { scope: global, name: name }
-`;
+const inPlaceholders = ['whole_placeholder', 'placeholder_in_text'];
+
+function resourceReferences(refNamePattern = '[a-z0-9_]+') {
+  return [
+    reference(`^ref (?<type>[a-z0-9_]+)\\.(?<name>${refNamePattern})`, 'RESOURCE', {
+      text_after_name_allowed: true,
+      scope_group: 'type',
+    }),
+    reference('^local\\.(?<name>[a-z0-9_]+)$', 'local', { positions: ['whole_scalar', ...inPlaceholders] }),
+    reference('^(?<name>[a-z_]+)$', 'GLOBAL', { positions: inPlaceholders }),
+  ];
+}
+
+function resourcesEntry(fields = {}, localKeyToken = 'all_words') {
+  return dslEntry('resources', {
+    schema_search_paths: ['https://example.test/fallback.json'],
+    layers: { overlay_folders: ['one', 'two', 'three', 'four'], common_layer_discovery: 'ancestor' },
+    placeholder: placeholder(),
+    scopes: {
+      GLOBAL: scope({ builtin_names: ['env'] }),
+      RESOURCE: scope({ named_by_parent_key: true }),
+      local: scope(),
+    },
+    declarations: [
+      declaration('$.locals.*', 'local', { key_token: localKeyToken }),
+      declaration('$.*.*', 'RESOURCE', {
+        skip_keys: ['schema_version', 'cloud', 'env', 'locals', 'outputs', 'sync'],
+        exclude_candidates: ['defaults'],
+        key_token: 'last_word',
+        name_spelling: 'dashes_as_underscores',
+      }),
+    ],
+    references: resourceReferences(),
+    ...fields,
+  });
+}
+
+const config = configText(resourcesEntry());
 
 const root = '/repo/mock-stack';
 const common = `${root}/mock.yml`;
@@ -166,14 +173,7 @@ test('a modeline that fails falls through to the published schema', async () => 
     '/repo/disk/mock.yml': 'name: from-disk\n',
   };
   const ws = workspace(files, async (url) => (url.endsWith('fallback.json') ? schema : null));
-  const relative = `
-dsls:
-  - id: resources
-    includes: ["**/mock.yml"]
-    schema: schema.json
-    symbols: []
-    references: []
-`;
+  const relative = configText(dslEntry('resources', { schema_search_paths: ['schema.json'] }));
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   await ws.sync('file:///repo/only/mock.yml', '/repo/only/mock.yml', files['/repo/only/mock.yml']);
   const diags = ws.problems('file:///repo/only/mock.yml');
@@ -201,22 +201,12 @@ dsls:
 });
 
 test('two DSLs, a parse error, and a DSL without layers', async () => {
-  const both = `
-dsls:
-  - id: a
-    includes: ["**/mock.yml"]
-  - id: b
-    includes: ["**/mock.yml"]
-  - id: note
-    includes: ["**/note.yml"]
-    symbols:
-      - kind: local
-        at: "$.locals.*"
-    references:
-      - pattern: '^local\\.(?<name>[a-z0-9_]+)$'
-        where: whole
-        target: { kind: local, name: name }
-`;
+  const both = configText(dslEntry('a'), dslEntry('b'), dslEntry('note', {
+    file_includes: ['**/note.yml'],
+    scopes: { local: scope() },
+    declarations: [declaration('$.locals.*', 'local')],
+    references: [reference('^local\\.(?<name>[a-z0-9_]+)$', 'local')],
+  }));
   const ws = workspace({}, async () => null);
   await ws.setConfigs([{ text: both, dir: '/repo' }]);
   await ws.sync('file:///repo/mock.yml', '/repo/mock.yml', 'name: a\n');
@@ -238,14 +228,9 @@ dsls:
 });
 
 test('loading past the pin capacity evicts the oldest unpinned stack', async () => {
-  const plain = `
-dsls:
-  - id: resources
-    includes: ["**/mock.yml"]
-    layers:
-      overlays: [one]
-      common: parent
-`;
+  const plain = configText(dslEntry('resources', {
+    layers: { overlay_folders: ['one'], common_layer_discovery: 'parent' },
+  }));
   const ws = workspace({}, async () => null);
   await ws.setConfigs([{ text: plain, dir: '/repo' }]);
   for (let i = 0; i < 10; i += 1) {
@@ -266,15 +251,9 @@ test('a missing modeline walks the schema search path from the file', async () =
   };
   const ws = workspace(files, async () => null);
   await ws.setConfigs([{
-    text: `
-dsls:
-  - id: resources
-    includes: ["**/mock.yml"]
-    schema:
-      - .schema/sample.schema.json
-      - one/.schema/sample.schema.json
-      - 1
-`,
+    text: configText(dslEntry('resources', {
+      schema_search_paths: ['.schema/sample.schema.json', 'one/.schema/sample.schema.json', 1],
+    })),
     dir: '/repo',
   }]);
   const common = '/repo/mock-app/mock.yml';
@@ -291,7 +270,7 @@ dsls:
   assert.equal(ws.hover('file://' + common, at(named, 'name')).contents.value, 'from the side stack');
   const bare = '/repo/bare/mock.yml';
   const bareText = 'name: plain\n';
-  await ws.setConfigs([{ text: 'dsls:\n  - id: sample\n    includes: ["**/mock.yml"]\n', dir: '/repo' }]);
+  await ws.setConfigs([{ text: configText(dslEntry('sample')), dir: '/repo' }]);
   await ws.sync('file://' + bare, bare, bareText);
   assert.ok(ws.problems('file://' + bare).some((item) => item.message === 'schema is unavailable'));
   assert.equal(ws.hover('file://' + bare, at(bareText, 'name')), null);
@@ -308,18 +287,12 @@ test('a line edit re-parses that file and leaves the rest of the stack', async (
   };
   const ws = workspace(files);
   await ws.setConfigs([{
-    text: `
-dsls:
-  - id: sample
-    includes: ["**/mock.yml"]
-    schema: schema.json
-    layers:
-      overlays: [one]
-      common: parent
-    symbols:
-      - kind: local
-        at: "$.locals.*"
-`,
+    text: configText(dslEntry('sample', {
+      schema_search_paths: ['schema.json'],
+      layers: { overlay_folders: ['one'], common_layer_discovery: 'parent' },
+      scopes: { local: scope() },
+      declarations: [declaration('$.locals.*', 'local')],
+    })),
     dir: '/repo',
   }]);
   await ws.warm([overlay, common, '/other/mock.yml']);
@@ -344,17 +317,10 @@ dsls:
 });
 
 test('a schema written after the file opened replaces the missing one, and a new version replaces it again', async () => {
-  const layered = `
-dsls:
-  - id: resources
-    includes: ["**/mock.yml"]
-    schema:
-      - .schema/mock.schema.json
-      - one/.schema/mock.schema.json
-    layers:
-      overlays: [one, two]
-      common: parent
-`;
+  const layered = configText(dslEntry('resources', {
+    schema_search_paths: ['.schema/mock.schema.json', 'one/.schema/mock.schema.json'],
+    layers: { overlay_folders: ['one', 'two'], common_layer_discovery: 'parent' },
+  }));
   const commonPath = '/repo/mock-app/mock.yml';
   const onePath = '/repo/mock-app/one/mock.yml';
   const schemaPath = '/repo/mock-app/one/.schema/mock.schema.json';
@@ -507,7 +473,7 @@ test('completion offers what the file\'s fold sees, written as each reference ru
   assert.deepEqual(labels(one, oneText, 'label: local.'), ['local.db']);
   assert.deepEqual(labels(one, oneText, '${local.d').sort(), ['${env}', '${local.db}']);
   const builtin = ws.completion(`file://${one}`, after(oneText, '${local.d')).find((entry) => entry.label === '${env}');
-  assert.deepEqual([builtin.kind, builtin.detail, builtin.documentation], ['builtin', 'global scope', '']);
+  assert.deepEqual([builtin.kind, builtin.detail, builtin.documentation], ['builtin', 'GLOBAL scope', '']);
   assert.deepEqual(labels(one, oneText, 'key_being_typed'), []);
   const item = ws.completion(`file://${one}`, after(oneText, 'source: ref '))
     .find((entry) => entry.label === 'ref mocktype.primary');
@@ -540,9 +506,12 @@ test('completion offers what the file\'s fold sees, written as each reference ru
 });
 
 test('completion in a DSL without layers offers the whole file', async () => {
-  const flat = 'dsls:\n  - id: flat\n    includes: ["**/flat.yml"]\n    symbols:\n      - kind: local\n        at: "$.locals.*"\n'
-    + '        name: { from: key }\n    references:\n      - pattern: "^local\\\\.(?<name>[a-z]+)$"\n        where: whole\n'
-    + '        target: { kind: local, name: name }\n';
+  const flat = configText(dslEntry('flat', {
+    file_includes: ['**/flat.yml'],
+    scopes: { local: scope() },
+    declarations: [declaration('$.locals.*', 'local')],
+    references: [reference('^local\\.(?<name>[a-z]+)$', 'local')],
+  }));
   const text = 'locals:\n  db: one\nuse: local.\n';
   const ws = workspace({ '/repo/flat.yml': text }, async () => null);
   await ws.setConfigs([{ text: flat, dir: '/repo' }]);
@@ -621,7 +590,7 @@ test('every placeholder is a builtin or a reference the config allows, and the r
   await ws.sync(`file://${common}`, common, files[common]);
   const problems = ws.problems(`file://${common}`).map((problem) => problem.message);
   assert.deepEqual(problems.filter((message) => message.includes('placeholder')), [
-    'a reference matching ^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+) is not allowed as placeholder',
+    'a reference matching ^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+) is not allowed as whole_placeholder',
   ]);
   const classes = ws.references(`file://${common}`).map((reference) => reference.kind);
   assert.deepEqual(classes.sort(), ['builtin', 'builtin', 'error', 'error', 'local', 'local']);
@@ -647,8 +616,7 @@ test('every placeholder is a builtin or a reference the config allows, and the r
 test('a ref with a builtin in its name keeps the builtin\'s own tokens', async () => {
   const text = 'mocktype:\n  user:\n    source: ref mocktype.${env}_thing\n';
   const ws = workspace({ [common]: text }, async () => schema);
-  const refTail = "'\n        where: [whole]\n        trailing_text: any";
-  const placeholderNames = config.replace(`(?<name>[a-z0-9_]+)${refTail}`, `(?<name>[a-z0-9_\${}]+)${refTail}`);
+  const placeholderNames = configText(resourcesEntry({ references: resourceReferences('[a-z0-9_${}]+') }));
   await ws.setConfigs([{ text: placeholderNames, dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, text);
   const tokens = ws.semanticTokens(`file://${common}`).map((token) => [token.character, token.length, token.type]);
@@ -680,7 +648,7 @@ test('opening a file whose stack is already analyzed still asks for a repaint', 
 });
 
 test('the active file is analyzed before the warm-up builds anything further', async () => {
-  const flatConfig = 'dsls:\n  - id: flat\n    includes: ["**/flat-*.yml"]\n';
+  const flatConfig = configText(dslEntry('flat', { file_includes: ['**/flat-*.yml'] }));
   const warmPaths = Array.from({ length: 8 }, (_, index) => `/repo/flat-${index}.yml`);
   const activeFile = '/repo/flat-active.yml';
   const reads = [];
@@ -728,22 +696,9 @@ test('a request for an open file waits for its analysis, and builds a stack nobo
   await ws.whenAnalyzed('file:///repo/unclaimed.txt');
 });
 
-const functionsBlock = [
-  '    functions:',
-  '      marker: fn.',
-  "      splat: '*'",
-  '      vocabulary: [terraform, { schema: "#/x-yaml-dsl-functions" }]',
-  '      unnamed_calls: sole_key',
-  '      call_results_where: [whole]',
-  '      refused_at: []',
-].join('\n');
-
-const functionsConfig = config
-  .replace('    functions: none', functionsBlock)
-  .replace(
-    'name: { from: key, token: whole, spelling: as_written }',
-    'name: { from: key, token: first, spelling: as_written }',
-  );
+function functionsConfig(definitions) {
+  return configText(resourcesEntry({ function: markerFunction({ definitions }) }, 'first_word'));
+}
 
 const functionsSchema = JSON.stringify({
   ...JSON.parse(schema),
@@ -770,15 +725,15 @@ test('calls are checked against Terraform and the schema once both vocabularies 
   });
   const loaded = [];
   ws.onVocabularyLoaded(() => loaded.push('terraform'));
-  await ws.setConfigs([{ text: functionsConfig, dir: '/repo' }]);
+  await ws.setConfigs([{ text: functionsConfig(['terraform', 'schema']), dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, text);
   const messages = () => ws.problems(`file://${common}`).map((problem) => problem.message);
-  assert.deepEqual(messages(), ['a call result is not allowed as placeholder in string']);
+  assert.deepEqual(messages(), ['a call result is not allowed as placeholder_in_text']);
   answer({ function_signatures: { upper: { parameters: [{ name: 'str', type: 'string' }] } } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(loaded, ['terraform']);
   await ws.whenAnalyzed(`file://${common}`);
-  assert.deepEqual(messages(), ['unknown function nope', 'a call result is not allowed as placeholder in string']);
+  assert.deepEqual(messages(), ['unknown function nope', 'a call result is not allowed as placeholder_in_text']);
   assert.equal(ws.hover(`file://${common}`, at(text, 'ssm')).contents.value, 'ssm(parameter: text)');
   assert.equal(ws.hover(`file://${common}`, at(text, 'nope')).contents.value, 'nope');
   const callTokens = ws.semanticTokens(`file://${common}`)
@@ -800,7 +755,7 @@ test('a schema that publishes nothing at the vocabulary pointer is a problem on 
     readFile: async (filePath) => (filePath === common ? text : null),
     fetchText: async () => schema,
   });
-  await ws.setConfigs([{ text: functionsConfig.replace('vocabulary: [terraform, ', 'vocabulary: ['), dir: '/repo' }]);
+  await ws.setConfigs([{ text: functionsConfig(['schema']), dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, text);
   const problems = ws.problems(`file://${common}`);
   assert.deepEqual(problems.map((problem) => [problem.message, problem.range.start.line]), [
