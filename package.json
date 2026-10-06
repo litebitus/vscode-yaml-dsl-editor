@@ -2,7 +2,7 @@
   "name": "yaml-dsl-editor",
   "displayName": "YAML DSL Editor",
   "description": "The editor that makes a YAML DSL authorable.",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "publisher": "lite2073",
   "license": "MIT",
   "repository": {
@@ -44,12 +44,24 @@
       {
         "language": "yaml-dsl",
         "scopes": {
-          "function": ["support.function.hcl"],
-          "keyword": ["support.function.builtin.hcl"],
-          "operator": ["keyword.operator.accessor.hcl"],
-          "type": ["entity.name.type.hcl"],
-          "variable": ["variable.other.readwrite.hcl"],
-          "variable.defaultLibrary": ["variable.language.hcl"]
+          "function": [
+            "support.function.hcl"
+          ],
+          "keyword": [
+            "support.function.builtin.hcl"
+          ],
+          "operator": [
+            "keyword.operator.accessor.hcl"
+          ],
+          "type": [
+            "entity.name.type.hcl"
+          ],
+          "variable": [
+            "variable.other.readwrite.hcl"
+          ],
+          "variable.defaultLibrary": [
+            "variable.language.hcl"
+          ]
         }
       }
     ],
