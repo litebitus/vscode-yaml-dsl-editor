@@ -18,6 +18,8 @@ On each change the server parses the changed YAML, reads that file's schema, and
 
 The workspace holds many stacks. The server loads one when a file in it becomes active, and does not load the rest at startup. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each environment. Switching files inside a resident stack is a hit.
 
+The file in the active editor is worked on right away, ahead of all other files. Work on its stack goes first, the stacks of other open files next, and loading in the background last. A request about a file is answered once that file's analysis is done.
+
 The cache is bounded, and the unit is the stack. The stack of the active editor is pinned, and so is any stack whose folded buffer is on screen. A pin is not an eviction candidate. Opening, editing, navigating into, or showing a stack marks it most recently used. Capacity beyond the pins is 8 stacks. Loading one past that evicts the least recently used unpinned stack: its analysis is dropped and its folded buffers close. The files on disk stay. The next activation loads that stack again. A change to a resident stack updates it in place.
 
 A stack's schema is the `schema.json` of the grammar version that stack initialized. The same grammar version is the same schema, so every stack on that version shares one parsed copy. A different grammar version is a different schema, even when the difference is small, and hover for a stack uses the schema of its own version. The server keeps every distinct schema for the life of the workspace. Evicting a stack drops its layers and folded documents, not the schema.

@@ -755,3 +755,26 @@ test('the repaint notice is handled from the moment the client starts, before ac
   await activation;
   assert.ok(painted.some((count) => count === 1));
 });
+
+test('a hover reads # as a comment only at a line start or after whitespace', async () => {
+  const vscode = {
+    MarkdownString: class {
+      constructor() { this.value = ''; }
+      appendMarkdown(text) { this.value += text; }
+    },
+    Hover: class {
+      constructor(contents, range) { this.contents = contents; this.range = range; }
+    },
+  };
+  const hover = await editorMiddleware(vscode).provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
+    contents: {
+      value: '[mock.yml:1](file:///repo/mock.yml#L1)\n\n```yaml-dsl\n'
+        + '# whole line\n  messages: ../mock/protocol.yml#mock  # trailing\n```',
+    },
+  }));
+  const body = hover.contents.value;
+  assert.match(body, /<span style="color:#6A9955;"># whole line<\/span>/);
+  assert.match(body, /protocol\.yml#mock/);
+  assert.doesNotMatch(body, /color:#6A9955;">#mock/);
+  assert.match(body, /<span style="color:#6A9955;"># trailing<\/span>/);
+});

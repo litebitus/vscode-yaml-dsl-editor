@@ -98,14 +98,14 @@ test('document events analyze and custom requests answer', async () => {
   assert.equal(hit.targetUri, 'file:///repo/note.yml');
   const whole = rangeOf(note, 'local.db');
   assert.deepEqual(hit.originSelectionRange, whole);
-  const links = connection.handlers.links({ textDocument: { uri: 'file:///repo/note.yml' } });
+  const links = await connection.handlers.links({ textDocument: { uri: 'file:///repo/note.yml' } });
   assert.equal(links.length, 1);
   assert.deepEqual(links[0].range, whole);
   assert.match(links[0].target, /^file:\/\/\/repo\/note\.yml#/);
   await connection.handlers['yaml-dsl/active']({ path: '/repo/app/mock.yml' });
   connection.handlers['yaml-dsl/visibleFolds']({ stackIds: ['/repo/app/mock.yml'] });
   assert.equal(await connection.handlers['yaml-dsl/fold']({ stackId: '/repo/app/mock.yml', env: 'one' }), '');
-  const noteDecorations = connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/note.yml' });
+  const noteDecorations = await connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/note.yml' });
   assert.deepEqual(noteDecorations.references.map((item) => item.kind), ['local']);
   assert.deepEqual(noteDecorations.problems, [{
     range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
@@ -116,7 +116,7 @@ test('document events analyze and custom requests answer', async () => {
   connection.handlers['yaml-dsl/warm']({ paths: ['/repo/note.yml'] });
   await workspace.whenIdle();
   documents.handlers.close({ document: { uri: 'file:///repo/app/mock.yml' } });
-  assert.deepEqual(connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/app/mock.yml' }).problems, []);
+  assert.deepEqual((await connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/app/mock.yml' })).problems, []);
   await documents.handlers.open({ document: { uri: 'yaml-dsl-fold:%2Frepo%2Fapp%2Fmock.yml/one', getText: () => 'name: plain\n' } });
 });
 
@@ -137,9 +137,9 @@ test('the server watches each schema path it reads and reloads a schema that cha
   const text = '# yaml-language-server: $schema=.schema/mock.schema.json\nname: plain\n';
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
   await workspace.whenIdle();
-  const unavailable = () => connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/app/mock.yml' })
+  const unavailable = async () => (await connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/app/mock.yml' }))
     .problems.some((item) => item.message === 'schema is unavailable');
-  assert.equal(unavailable(), true);
+  assert.equal(await unavailable(), true);
   assert.equal(connection.registrations.length, 1);
   assert.equal(connection.registrations[0].method, 'workspace/didChangeWatchedFiles');
   assert.deepEqual(connection.registrations[0].options.watchers, [
@@ -150,7 +150,7 @@ test('the server watches each schema path it reads and reloads a schema that cha
   files['/repo/app/.schema/mock.schema.json'] = '{"properties":{"name":{"description":"the name"}}}';
   connection.handlers.watchedFiles({ changes: [{ uri: 'file:///repo/app/.schema/mock.schema.json', type: 1 }] });
   await workspace.whenIdle();
-  assert.equal(unavailable(), false);
+  assert.equal(await unavailable(), false);
   connection.handlers['yaml-dsl/visibleFolds']({ stackIds: [] });
   connection.handlers.watchedFiles({});
   await workspace.whenIdle();
@@ -218,7 +218,7 @@ test('completion answers editor items that replace what was typed', async () => 
     textDocument: { uri: 'file:///repo/note.yml' },
     position: { line, character },
   });
-  const [local] = complete(4, 15);
+  const [local] = await complete(4, 15);
   assert.equal(local.label, 'local.db');
   assert.equal(local.kind, 6);
   assert.equal(local.filterText, 'local.db');
@@ -227,7 +227,7 @@ test('completion answers editor items that replace what was typed', async () => 
     newText: 'local.db',
   });
   assert.deepEqual(local.documentation, { kind: 'markdown', value: '```yaml-dsl\n  db: mock-value\n```' });
-  const [resource] = complete(5, 14);
+  const [resource] = await complete(5, 14);
   assert.equal(resource.label, 'ref thing.one');
   assert.equal(resource.kind, 18);
   assert.equal(connection.handlers.initialize().capabilities.completionProvider.triggerCharacters.join(''), ' .{');
@@ -247,8 +247,8 @@ test('semantic tokens are encoded with the legend, and a config change asks the 
   assert.equal(connection.tokenRefreshes, 1);
   documents.handlers.open({ document: { uri: 'file:///repo/note.yml', getText: () => 'a: ${env}\n' } });
   await workspace.whenIdle();
-  const encoded = connection.handlers.semanticTokens({ textDocument: { uri: 'file:///repo/note.yml' } });
+  const encoded = await connection.handlers.semanticTokens({ textDocument: { uri: 'file:///repo/note.yml' } });
   assert.deepEqual(encoded.data, [0, 3, 2, 1, 0, 0, 2, 3, 3, 1, 0, 3, 1, 1, 0]);
-  const completed = connection.handlers.completion({ textDocument: { uri: 'file:///repo/note.yml' }, position: { line: 0, character: 5 } });
+  const completed = await connection.handlers.completion({ textDocument: { uri: 'file:///repo/note.yml' }, position: { line: 0, character: 5 } });
   assert.equal(completed[0].kind, 21);
 });

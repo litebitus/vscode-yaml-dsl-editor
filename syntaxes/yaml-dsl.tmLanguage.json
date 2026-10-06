@@ -13,7 +13,7 @@
   "repository": {
     "comment": {
       "name": "comment.line.number-sign.hcl",
-      "match": "(#).*$",
+      "match": "(?:^|(?<=\\s))(#).*$",
       "captures": {
         "1": { "name": "punctuation.definition.comment.hcl" }
       }

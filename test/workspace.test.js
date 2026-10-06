@@ -610,3 +610,68 @@ test('a ref with a builtin in its name keeps the builtin\'s own tokens', async (
     [31, 6, 'variable'],
   ]);
 });
+
+test('opening a file whose stack is already analyzed still asks for a repaint', async () => {
+  const files = { [common]: 'name: plain\n' };
+  const ws = workspace(files, async () => schema);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.warm([common]);
+  ws.takeReanalyzedUris();
+  await ws.sync(`file://${common}`, common, files[common]);
+  assert.deepEqual(ws.takeReanalyzedUris(), [`file://${common}`]);
+  await ws.sync(`file://${common}`, common, files[common]);
+  assert.deepEqual(ws.takeReanalyzedUris(), []);
+  ws.close(`file://${common}`);
+  await ws.sync(`file://${common}`, common, files[common]);
+  ws.close(`file://${common}`);
+  assert.deepEqual(ws.takeReanalyzedUris(), []);
+});
+
+test('the active file is analyzed before the warm-up builds anything further', async () => {
+  const flatConfig = 'dsls:\n  - id: flat\n    includes: ["**/flat-*.yml"]\n';
+  const warmPaths = Array.from({ length: 8 }, (_, index) => `/repo/flat-${index}.yml`);
+  const activeFile = '/repo/flat-active.yml';
+  const reads = [];
+  let ws;
+  ws = createWorkspace({
+    readFile: async (filePath) => {
+      reads.push(filePath);
+      if (filePath === warmPaths[2]) {
+        ws.sync(`file://${activeFile}`, activeFile, 'name: active\n');
+        ws.setActive(activeFile);
+      }
+      return filePath.endsWith('.yml') ? 'name: plain\n' : null;
+    },
+    fetchText: async () => null,
+  });
+  await ws.setConfigs([{ text: flatConfig, dir: '/repo' }]);
+  const built = [];
+  const hold = ws.cache.hold;
+  ws.cache.hold = (id, data, flags) => {
+    built.push(id);
+    return hold(id, data, flags);
+  };
+  await ws.warm(warmPaths);
+  await ws.whenAnalyzed(`file://${activeFile}`);
+  assert.deepEqual(built.slice(0, 4), [warmPaths[0], warmPaths[1], warmPaths[2], activeFile]);
+  assert.deepEqual(reads.slice(0, 3), warmPaths.slice(0, 3));
+});
+
+test('a request for an open file waits for its analysis, and builds a stack nobody queued', async () => {
+  const files = { [common]: 'locals:\n  db: mock-value\nuse: local.db\n' };
+  const ws = workspace(files, async () => schema);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  const opening = ws.sync(`file://${common}`, common, files[common]);
+  await ws.whenAnalyzed(`file://${common}`);
+  assert.deepEqual(ws.references(`file://${common}`).map((reference) => reference.kind), ['local']);
+  await opening;
+  const stackId = ws.foldsFor(common).stackId;
+  for (let index = 0; index < 9; index += 1) await ws.warm([`/repo/other-${index}/mock.yml`]);
+  assert.equal(ws.cache.get(stackId), null);
+  await ws.whenAnalyzed(`file://${common}`);
+  assert.ok(ws.cache.get(stackId));
+  await ws.whenAnalyzed(`yaml-dsl-fold:${encodeURIComponent(stackId)}/one`);
+  await ws.whenAnalyzed('file:///repo/not-open.yml');
+  await ws.sync('file:///repo/unclaimed.txt', '/repo/unclaimed.txt', 'plain\n');
+  await ws.whenAnalyzed('file:///repo/unclaimed.txt');
+});
