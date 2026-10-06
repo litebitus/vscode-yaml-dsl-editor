@@ -2,7 +2,7 @@
 
 Authoring `sample.yml` is hard without this extension, and that is why it exists. A stack is a common layer and an overlay per environment. The file on screen is one of those, not the environment's full config. A field's documentation sits beside a `$ref` the usual YAML tooling never reads. A `ref` and a `local` are strings, so nothing jumps to the declaration. The extension is the editor that makes that document authorable.
 
-The extension is generic. Any DSL written this way is a block in the workspace config, `yaml-dsl.yml`. Nothing about a particular DSL is compiled into the extension. The block says which files belong, the syntax of a ref and of a local, when the DSL has layers which directories are environments, and a fallback schema for a document that does not name one. A ref and a local are generic: the editor navigates them and hovers them the same way in every DSL. Each DSL's block supplies the syntax that declares them, and those syntaxes differ.
+The extension is generic. Any DSL written this way is a block in the workspace config, `yaml-dsl.yml`. Nothing about a particular DSL is compiled into the extension, and the config states every rule: the extension has no defaults, because every DSL is different. The block says which files belong, the DSL's scopes, where names are declared and how they are referenced, its placeholders and functions, when the DSL has layers which directories are environments, and a fallback schema for a document that does not name one. Scopes, references, placeholders and calls are generic: the editor validates, navigates, completes and hovers them the same way in every DSL. Each DSL's block supplies the syntax, and those syntaxes differ.
 
 `sample.yml` is the DSL this document works through. Its field types are shared definitions, because a value may be a scalar, a `ref`, or a bare `local`. A simpler DSL uses the same engine through its own config block. The first config block, and the first files the editor is proven against, are `sample.yml`.
 
@@ -14,7 +14,7 @@ The editor is a language server. It has to be. Activating any `sample.yml` puts 
 
 The server keeps the stack current as the files change, including the folded document of each environment. Those folded documents are buffers in the editor view, so the author sees an environment's full config instead of assembling it from the files. Hover and navigation run against the stack in scope, not against the active file alone.
 
-On each change the server parses the changed YAML, reads that file's schema, and resolves refs and locals across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem is red text with a red squiggle at its range, with its message on hover, and an empty range covers its whole line.
+On each change the server parses the changed YAML, reads that file's schema, and resolves references, placeholders and calls across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem is red text with a red squiggle at its range, with its message on hover, and an empty range covers its whole line.
 
 The workspace holds many stacks. The server loads one when a file in it becomes active, and does not load the rest at startup. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each environment. Switching files inside a resident stack is a hit.
 
@@ -52,31 +52,31 @@ While any file in the stack is active, refs and locals resolve across the common
 
 Claimed files have a document formatter. It changes indentation and whitespace. Comments, key order, and the spelling of scalars stay, so a format pass does not rewrite a `ref`, a `local`, or a `${...}` placeholder into a different string.
 
-## Navigating refs
+## Scopes
 
-Go to definition on a ref opens the declaration it names. The editor has one navigation behavior. The config's reference rule is the syntax: which scalars are refs, and which symbol they point at.
+A DSL is a language, and its names live in scopes. A scope says where its names may be referenced from: `visible_from` is `stack`, every file of the stack; `everywhere`; `following`, the later items of the list that declares the name, at any depth inside them; or a list of paths, the subtrees at those paths in the declaring file. A scope may list `names`, the builtins it holds. A global scope is one whose builtins are visible everywhere. Every scope a rule names is declared under `scopes`.
 
-In `sample.yml` that syntax is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. Navigation opens the resource `<name>` under `<type>`.
+A symbol rule says where names are declared. `at` is the path: `$`, `.key`, `.*` and `[*]`. `skip` lists keys a `.*` step does not descend into, and `exclude` lists keys that are not symbols. `name.from` reads the name from the `key`, from the scalar `value`, or from a `meta_argument` of a key such as `http(id=config)`, one name per listed id. A key name takes its whole text, or its `first` or `last` whitespace-separated `token`, in the `spelling` `as_written` or `snake`, which writes `-` as `_`. `scope` is a scope name, or `{ from: parent, visible_from }`, where the mapping key enclosing the symbol names its scope.
 
-The resource's identity is the last token of its key, with `-` written as `_`. A key `name mock-thing-v2` is the ref name `mock_thing_v2`. A logical key `primary` is the ref name `primary`. A name that holds a local placeholder is also known by the local's value, spelled by the name rule: a key `name ${local.thing}` whose local is `mock-thing` is the ref name `mock_thing`. The value is the local the file's fold sees. A builtin placeholder is compared as written. When nothing in scope matches, go to definition does not move.
+A reference rule says how names are used. `pattern` is a regular expression with named groups. `where` lists the positions a reference may stand in: `whole`, the scalar; `placeholder`, a placeholder that is the whole scalar; `placeholder_in_string`, a placeholder inside longer text; `within`, each match inside a scalar. `trailing_text` is `none` or `any`, whether text such as a field path may follow the name. `target.scope` is a scope name, or `{ group }`, the pattern group holding a parent-derived scope. `target.name` is the group holding the name.
 
-Scope for a ref is the active stack: the common layer and every adjacent overlay. A ref in one file may name a resource declared in another file of that stack.
+A reference resolves to a builtin of its target scope, else to a symbol of that scope, with that name, visible from the reference. A name that holds a placeholder whose value is a scalar is also known by that value, spelled by its symbol rule: a key `name ${local.thing}` whose local is `mock-thing` is the name `mock_thing`. The value is the one the file's fold sees. When the same symbol is in more than one file, the common layer wins, then the active file, then the other files in path order.
 
-The analysis classifies every ref and local reference: local when it resolves in the same file, external when it resolves in another file of the stack, error when nothing in scope matches. The editor underlines each reference from the text as soon as the file opens, using the config's reference rules, and redraws it by its class once the analysis answers: a local reference keeps a straight underline and an external one is a squiggle, both in the text's own colors. An error turns red, text and squiggle. The whole reference takes its class's underline, placeholders inside it included.
+## Navigating references
 
-The editor colors references and placeholders from the config: a reference rule's leading literal, its target groups and its other literal text, and a placeholder's delimiters and builtin body. The grammar colors plain YAML only.
+Go to definition on a reference opens the declaration it names. Hover shows a scalar declaration's value as authored, and any other declaration's scope, name and file with its section. A builtin has no declaration. When nothing visible matches, go to definition does not move.
 
-## Locals
+In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. Its scope is `<type>`, the mapping key enclosing the resource. A local is a key under `locals`, referenced as a whole scalar `local.<name>` or as `${local.<name>}` inside a scalar. A value shared by resources is a local in the common layer.
 
-A local is a named value declared in the document. Go to definition opens that declaration. Hover shows the value as authored. Scope is the active stack, the same as a ref.
+The analysis classifies every reference: local when it resolves in the same file, external when it resolves in another file of the stack, error when nothing visible matches. The editor underlines each reference from the text as soon as the file opens, using the config's reference rules, and redraws it by its class once the analysis answers: a local reference keeps a straight underline and an external one is a squiggle, both in the text's own colors. An error turns red, text and squiggle. The whole reference takes its class's underline, placeholders inside it included.
 
-`sample.yml` declares locals as keys under `locals`, and references them as a whole scalar `local.<name>` or as `${local.<name>}` inside a scalar. Another DSL declares the same concept with its own syntax in its own config block. A value shared by resources is a local in the common layer, and each resource that uses it references the local.
+The editor colors references, placeholders and calls from the config: a reference rule's leading literal, its target groups and its other literal text, a placeholder's delimiters and builtin body, and a call's marker, function and splat. The grammar colors plain YAML only. A `#` starts a comment only at the start of a line or after whitespace.
 
 ## Completion
 
 Typing the start of a reference opens the list of what it can name. Each config reference rule is a literal with named groups, and the editor turns it into a template: `^ref (?<type>…)\.(?<name>…)` writes `ref <type>.<name>`. A symbol fills the template, and the result is kept only when the rule's own pattern reads it back as that symbol. A rule whose pattern is not a literal with named groups offers nothing.
 
-The list holds what the file's fold sees. An overlay offers the common layer's symbols and its own. The common layer offers its own symbols and those declared in every overlay. A resource keyed by a local is offered under the local's value, the spelling a ref uses for it. A ref completes up to the resource name, and the field path after it is the author's.
+The list holds what the file's fold sees and what is visible from the cursor. An overlay offers the common layer's symbols and its own. The common layer offers its own symbols and those declared in every overlay. A resource keyed by a local is offered under the local's value, the spelling a ref uses for it. A ref completes up to the resource name, and the field path after it is the author's. Inside a placeholder the list holds every reference a placeholder body may be, builtins included. After a call marker in a key, the list holds the vocabulary, each entry with its signature.
 
 The list opens as the reference starts and narrows on every character, by the editor's fuzzy match against everything typed since the reference began. Each entry names the declaring file and shows the declaration as authored.
 
@@ -97,13 +97,11 @@ A schema for this kind of value is built this way.
 
 This extension reads the schema document as authored. Hover walks the YAML path through `properties`, then `patternProperties`, then `additionalProperties`. On an object that carries both a `$ref` and a `description`, it keeps that `description`, then follows the `$ref` only to keep walking. The tooltip is the description kept at the field, requirement marker included (`[required]`, `[~required]`, `[optional]`). The composite's description is the value shape and is not the tooltip.
 
-Hover on a ref shows the target's type, identity, and file. Hover on a local shows the value as authored.
-
 The schema for a file is the one the file names. A `# yaml-language-server: $schema=` modeline is honored. Its path is relative to that file and points at the schema shipped with the grammar version the stack has initialized. An environment file names `.schema/sample.schema.json`. A common layer names that file through the environment directory that initialized the stack, such as `one/.schema/sample.schema.json`. That is the grammar the stack is actually on.
 
 The config may set `schema` to a search path. It is the fallback, used when the file has no modeline or the path it names is not on disk. Each entry is relative to the file, the same way a modeline path is, and the first one on disk is the schema. A URL in the path is fetched. The search does not override a modeline that resolves. The extension embeds no schema. When neither source resolves, the file's modeline line gets a problem, or its first line when it has no modeline, and field hovers stay empty.
 
-DSL-level behavior is configured in `yaml-dsl.yml`: which files, the syntax of a ref, the syntax of a local, how layers are grouped. The concepts are the editor's. The syntax is the DSL's, and each DSL may spell it differently. That syntax does not move into the schema.
+DSL-level behavior is configured in `yaml-dsl.yml`: which files, the scopes, the syntax of declarations, references, placeholders and calls, how layers are grouped. The concepts are the editor's. The syntax is the DSL's, and each DSL may spell it differently. That syntax does not move into the schema.
 
 The schema is how the editor understands a field and the shape of an object: which keys exist, what value shape a key takes, and the field's own description, including the text beside a `$ref`. It is read as published. If that is not enough to understand a field or a shape, the schema gains an extension point and the grammar publishes it. The extension does not grow a special case for that object. No such point is added before a field or a shape actually requires one.
 
@@ -131,11 +129,32 @@ Folded documents before and after the click are the same.
 
 ## Placeholders
 
-A placeholder holds a builtin, a local, or a ref. The config's `placeholders` block spells the placeholder with a `pattern` whose `body` group is what it holds, lists the `builtins`, and names in `references` which of local and ref a body may be. A body that is a reference is written in the reference's whole form, so `${local.name}` holds `local.name`, read by the whole `local` rule.
+A placeholder splices a value into a scalar or a key, whole or as part of a longer string. `placeholders` is `none`, or a `pattern` whose `body` group is what the placeholder holds. A body is read by the reference rules whose `where` lists a placeholder position, so `${local.name}` holds `local.name`, read by a `local` rule, and `${env}` holds `env`, read by a rule targeting the global scope.
 
-Every placeholder in a scalar or a key is validated. A body that is neither a builtin nor an allowed reference is a problem. A reference body is classified like any other reference. Completion offers the builtins and the allowed references, each in the placeholder's spelling.
+Every placeholder is validated. A body no rule reads, text after the name where the rule's `trailing_text` is `none`, and a position the rule does not list are problems. A valid body is classified like any other reference.
 
-A DSL may have placeholders and no refs or locals.
+## Functions
+
+`functions` is `none`, or the DSL's call grammar. A call is written in a key, `<name> <marker><function>`, with `splat` after the function when the value below is a list of arguments rather than the one argument. `unnamed_calls` is `sole_key`, a key that is the marker alone being a call with no name and the only key of its map, or `refused`. `call_results_where` lists the positions from which a symbol a call declares may be referenced. `refused_at` lists the paths where a call key is a problem, each with `at`, `skip`, and `subtree`, whether everything below the path is refused too.
+
+`vocabulary` lists the sources of the function table, merged in order. `terraform` is the answer of `terraform metadata functions -json`, run by the language server and ignored when Terraform cannot be invoked. `{ schema: "#/<pointer>" }` is the table the file's schema publishes at that JSON pointer. While a source has not answered the vocabulary is open, and an unknown function is a problem only once every source has. A schema that publishes no table at the pointer, or a malformed one, is a problem on the modeline line.
+
+Every call is checked: its function against the vocabulary, its argument count against the function's arity, and each literal argument against its type. A reference or a call standing as an argument is not typed. Hover on a function shows its signature.
+
+## The function table
+
+A schema publishes a DSL's functions as a mapping of function name to its arguments in call order. Each argument has a `name`, a `type`, whether it is `required`, and whether it is `repeated`, taking every remaining value. Optional arguments follow the required ones, and a repeated argument is last. `type` is `text`, `number`, `whole_number`, `boolean`, `list`, `map` or `any`. The extension ships the table's JSON Schema at `schemas/x-yaml-dsl-functions.schema.json`.
+
+```json
+"x-yaml-dsl-functions": {
+  "format": [
+    { "name": "layout", "type": "text", "required": true, "repeated": false },
+    { "name": "operands", "type": "any", "required": false, "repeated": true }
+  ]
+}
+```
+
+Terraform's signatures are read into the same table: `string` is `text`, `bool` is `boolean`, a list, set or tuple is `list`, a map or object is `map`, `dynamic` is `any`, and a variadic parameter is a repeated optional argument.
 
 ## What the workspace defines
 
@@ -153,28 +172,45 @@ dsls:
       environments: [one, two]
     placeholders:
       pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
-      builtins: [env, region]
-      references: [local]
+    functions:
+      marker: fn.
+      splat: "*"
+      vocabulary: [terraform, { schema: "#/x-yaml-dsl-functions" }]
+      unnamed_calls: sole_key
+      call_results_where: [whole]
+      refused_at:
+        - { at: "$.*", skip: [], subtree: false }
+        - { at: "$.meta", skip: [], subtree: true }
+    scopes:
+      global: { visible_from: everywhere, names: [env, region] }
+      local: { visible_from: stack }
     symbols:
-      - kind: local
-        at: "$.locals.*"
-        name: { from: key }
-      - kind: resource
-        at: "$.*.*"
+      - at: "$.locals.*"
+        skip: []
+        exclude: []
+        name: { from: key, token: first, spelling: as_written }
+        scope: local
+      - at: "$.*.*"
         skip: [note, meta, locals]
         exclude: [skipme]
         name: { from: key, token: last, spelling: snake }
-        qualify: { type: parent }
+        scope: { from: parent, visible_from: stack }
     references:
       - pattern: "^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_${}]+)"
-        where: whole
-        target: { kind: resource, type: type, name: name }
+        where: [whole]
+        trailing_text: any
+        target: { scope: { group: type }, name: name }
       - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
-        where: whole
-        target: { kind: local, name: name }
+        where: [whole, placeholder, placeholder_in_string]
+        trailing_text: none
+        target: { scope: local, name: name }
+      - pattern: "^(?<name>[a-z_]+)$"
+        where: [placeholder, placeholder_in_string]
+        trailing_text: none
+        target: { scope: global, name: name }
 ```
 
-`layers` is a DSL's composition of a common layer and per-environment overlays. A DSL without it still formats, navigates, and hovers.
+`layers` is a DSL's composition of a common layer and per-environment overlays, or `none`. A DSL without layers still formats, navigates, and hovers.
 
 A file matching two DSLs is reported and claimed by neither. Other YAML is untouched.
 
@@ -184,11 +220,7 @@ The extension contributes the language `yaml-dsl`. When the workspace config loa
 
 An extension that selects `yaml` does not own these files and does not activate on them. The Red Hat YAML extension is one of those. A file that matches no DSL pattern stays `yaml`.
 
-`at` is `$`, `.key`, `.*`, and `[*]`. `skip` lists keys a `.*` step does not descend into. `exclude` lists keys that are not symbols. `token: first` and `token: last` take the key's first and last whitespace-separated token. `spelling: snake` writes `-` as `_`. `qualify.type: parent` is the mapping key that contains the symbol, and the reference's `type` group must equal it.
-
-`where: whole` means the scalar is the reference. `where: within` means each match inside the scalar is a reference.
-
 ## Out of scope
 
 - Running the engine that accepts the file.
-- Schemas or DSL definitions shipped inside the extension.
+- A DSL's schema or definition shipped inside the extension.

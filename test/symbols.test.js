@@ -1,93 +1,206 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { analyzeDocument } = require('../lib/analyze');
+const { parseAt } = require('../lib/document-path');
 
-function rule(extra) {
+function rule(at, extra = {}) {
   return {
-    kind: 'resource',
-    at: '$.*.*',
+    at,
+    tokens: parseAt(at),
     skip: [],
     exclude: [],
-    name: { token: null, spelling: null },
-    qualify: {},
+    name: { from: 'key', token: 'whole', spelling: 'as_written' },
+    scope: { literal: 'thing' },
     ...extra,
   };
 }
 
-function doc(text, symbols, references = []) {
-  return analyzeDocument(text, '/repo/mock.yml', { symbols, references });
+function reference(pattern, where, extra = {}) {
+  return {
+    pattern,
+    where,
+    trailingText: 'none',
+    target: { scope: { literal: 'thing' }, name: 'name' },
+    ...extra,
+  };
 }
 
-test('resource identity is the last token with dashes written as underscores', () => {
-  const text = 'mocktype:\n  primary: {}\n  defaults: {}\n  "name mock-thing-v2": {}\nlocals:\n  db: mock-value\nschema_version: 3\n';
-  const analyzed = doc(text, [
-    rule({
-      at: '$.*.*',
-      skip: ['schema_version', 'locals'],
-      exclude: ['defaults'],
-      name: { token: 'last', spelling: 'snake' },
-      qualify: { type: 'parent' },
-    }),
-    rule({ kind: 'local', at: '$.locals.*', name: { token: null, spelling: null }, qualify: {} }),
+const functions = {
+  marker: 'fn.',
+  splat: '*',
+  vocabulary: [],
+  unnamedCalls: 'sole_key',
+  callResultsWhere: ['whole'],
+  refusedAt: [],
+};
+
+function doc(text, dsl) {
+  const empty = { symbols: [], references: [], placeholders: null, functions: null };
+  return analyzeDocument(text, '/repo/mock.yml', { ...empty, ...dsl });
+}
+
+test('a key names a symbol by a token, spelled as the rule says, in a literal or enclosing scope', () => {
+  const text = [
+    'mocktype:',
+    '  primary: {}',
+    '  defaults: {}',
+    '  "name mock-thing-v2": {}',
+    'locals:',
+    '  db: mock-value',
+    '  operator_key fn.ssm: /mock/key',
+    'schema_version: 3',
+    '',
+  ].join('\n');
+  const analyzed = doc(text, {
+    functions,
+    symbols: [
+      rule('$.*.*', {
+        skip: ['schema_version', 'locals'],
+        exclude: ['defaults'],
+        name: { from: 'key', token: 'last', spelling: 'snake' },
+        scope: { fromParent: true, visibleFrom: { kind: 'stack' } },
+      }),
+      rule('$.locals.*', {
+        name: { from: 'key', token: 'first', spelling: 'as_written' },
+        scope: { literal: 'local' },
+      }),
+    ],
+  });
+  const names = analyzed.symbols.map((symbol) => `${symbol.scope}:${symbol.name}`);
+  assert.deepEqual(names, ['mocktype:primary', 'mocktype:mock_thing_v2', 'local:db', 'local:operator_key']);
+  const local = analyzed.symbols.find((symbol) => symbol.name === 'db');
+  assert.deepEqual([local.valueText, local.valueIsScalar, local.call], ['mock-value', true, false]);
+  assert.equal(analyzed.symbols.find((symbol) => symbol.name === 'operator_key').call, true);
+  assert.deepEqual(analyzed.symbols[0].documentPath, ['mocktype', 'primary']);
+  assert.deepEqual(analyzed.symbols[0].visibility, { kind: 'stack' });
+});
+
+test('a name can come from a value or from a meta argument, one symbol per listed id', () => {
+  const text = [
+    'setup:',
+    '  - lua: |',
+    '      return 1',
+    '    id: after',
+    '  - http(id=config, retry=5/200ms/10s):',
+    '      url: x',
+    '  - game_session(id=[alice, bob], kind=slot):',
+    '      game: MOCK',
+    "  - websocket(id='quoted, id', if='a > 1'):",
+    '      event: x',
+    '  - lua(): x',
+    '  - plain: x',
+    '  - id: 1',
+    '',
+  ].join('\n');
+  const analyzed = doc(text, {
+    symbols: [
+      rule('$.setup[*].*', { name: { from: 'meta_argument', argument: 'id' }, scope: { literal: 'setup' } }),
+      rule('$.setup[*].id', { name: { from: 'value', spelling: 'as_written' }, scope: { literal: 'setup' } }),
+    ],
+  });
+  assert.deepEqual(analyzed.symbols.map((symbol) => symbol.name), ['config', 'alice', 'bob', 'quoted, id', 'after']);
+  const alice = analyzed.symbols.find((symbol) => symbol.name === 'alice');
+  const line = text.split('\n')[alice.keyRange.start.line];
+  assert.equal(line.slice(alice.keyRange.start.character, alice.keyRange.end.character), 'alice');
+  assert.deepEqual(alice.documentPath, ['setup', 2, 'game_session(id=[alice, bob], kind=slot)']);
+  const after = analyzed.symbols.find((symbol) => symbol.name === 'after');
+  assert.deepEqual(after.documentPath, ['setup', 0, 'id']);
+  const listed = doc('packages: [mock-messages, { not: scalar }, mock-protos]\n', {
+    symbols: [rule('$.packages[*]', { name: { from: 'value', spelling: 'as_written' } })],
+  });
+  assert.deepEqual(listed.symbols.map((symbol) => [symbol.name, symbol.documentPath]), [
+    ['mock-messages', ['packages', 0]],
+    ['mock-protos', ['packages', 2]],
   ]);
-  const names = analyzed.symbols.map((symbol) => `${symbol.kind}:${symbol.qualifiers.type || ''}:${symbol.name}`);
-  assert.ok(names.includes('resource:mocktype:primary'));
-  assert.ok(names.includes('resource:mocktype:mock_thing_v2'));
-  assert.ok(names.includes('local::db'));
-  assert.equal(names.some((name) => name.includes('defaults')), false);
-  assert.equal(names.some((name) => name.includes('schema_version')), false);
-  assert.equal(analyzed.symbols.find((symbol) => symbol.name === 'db').valueText, 'mock-value');
 });
 
 test('path steps that do not match a node produce no symbol', () => {
-  const analyzed = doc('a: 1\nitems:\n  - primary: 1\n    other: 2\n', [
-    rule({ at: 'nope' }),
-    rule({ at: '$' }),
-    rule({ at: '$.' }),
-    rule({ at: '$[0]' }),
-    rule({ at: '$.missing' }),
-    rule({ at: '$.a.b' }),
-    rule({ at: '$.*' }),
-    rule({ at: '$.a.*' }),
-    rule({ at: '$.items[*]' }),
-    rule({ at: '$.items[*].*' }),
-    rule({ at: '$.a[*].*' }),
-    rule({ kind: 'meta', at: '$.items', name: { token: null, spelling: null }, qualify: { type: 'parent' } }),
-  ]);
-  const starred = analyzed.symbols.filter((symbol) => symbol.kind === 'resource').map((symbol) => symbol.name);
-  assert.ok(starred.includes('primary'));
-  assert.ok(starred.includes('other'));
-  assert.ok(starred.includes('a'));
-  const meta = analyzed.symbols.find((symbol) => symbol.kind === 'meta');
-  assert.equal(meta.qualifiers.type, null);
+  const analyzed = doc('a: 1\nitems:\n  - primary: 1\n    other: 2\nkeys:\n  k: [1]\n', {
+    symbols: [
+      rule('$.missing'),
+      rule('$.a.b'),
+      rule('$.a.*'),
+      rule('$.items[*]'),
+      rule('$.a[*].*'),
+      rule('$.items[*].*'),
+      rule('$.*', { scope: { fromParent: true, visibleFrom: { kind: 'stack' } } }),
+      rule('$.keys.k', { name: { from: 'value', spelling: 'as_written' } }),
+    ],
+  });
+  assert.deepEqual(analyzed.symbols.map((symbol) => symbol.name), ['primary', 'other']);
 });
 
-test('whole scalars and matches inside a scalar are references', () => {
-  const text = 'source: ref mocktype.primary.label\nnote: "use ${local.db} now"\nplain: local.db\nnum: 1\nlater: xname\nescaped: "a\\n"\n';
-  const analyzed = doc(text, [], [
-    { pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)', where: 'whole', target: { kind: 'resource', type: 'type', name: 'name' } },
-    { pattern: '^local\\.(?<name>[a-z0-9_]+)$', where: 'whole', target: { kind: 'local', name: 'name' } },
-    { pattern: '\\$\\{local\\.(?<name>[a-z0-9_]+)\\}', where: 'within', target: { kind: 'local', name: 'name' } },
-    { pattern: 'name', where: 'whole', target: { kind: 'resource', name: 'name' } },
-    { pattern: 'xna', where: 'within', target: { kind: 'local', name: 'missing' } },
-  ]);
-  assert.equal(analyzed.references.length >= 3, true);
-  const ref = analyzed.references.find((item) => item.groups.type === 'mocktype');
-  assert.equal(ref.groups.name, 'primary');
-  assert.equal(ref.range.start.line, 0);
-  const within = analyzed.references.find((item) => item.groups.name === 'db' && item.range.start.line === 1);
-  assert.ok(within);
-  const keyed = doc('${local.db}: 1\n', [], [
-    { pattern: '\\$\\{local\\.(?<name>[a-z0-9_]+)\\}', where: 'within', target: { kind: 'local', name: 'name' } },
-  ]);
-  const keyRef = keyed.references.find((item) => item.groups.name === 'db');
-  assert.equal(keyRef.range.start.character, 0);
-  assert.equal(keyRef.range.end.character, 11);
-  assert.ok(analyzed.references.some((item) => item.groups.name === 'missing' || item.target.name === 'missing'));
+test('references are found in each position their rule allows, and refused in the rest', () => {
+  const text = [
+    'source: ref mocktype.primary.label',
+    'strict: local.db.extra',
+    'plain: local.db',
+    'alone: ${local.db}',
+    'note: "use ${local.db} now"',
+    'deep: ${ref mocktype.primary}',
+    'unknown: ${nope}',
+    'tail: ${local.db.more}',
+    'free: use thing here',
+    '${local.db}: keyed',
+    'name ${local.db}-x: keyed',
+    'num: 1',
+    '',
+  ].join('\n');
+  const analyzed = doc(text, {
+    placeholders: { pattern: '\\$\\{(?<body>[^}]*)\\}' },
+    references: [
+      reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)', ['whole'], {
+        trailingText: 'any',
+        target: { scope: { group: 'type' }, name: 'name' },
+      }),
+      reference('^local\\.(?<name>[a-z0-9_]+)', ['whole', 'placeholder', 'placeholder_in_string'], {
+        target: { scope: { literal: 'local' }, name: 'name' },
+      }),
+      reference('use (?<name>[a-z]+)', ['within']),
+    ],
+  });
+  const keyOf = (line) => text.split('\n')[line].split(':')[0];
+  const found = analyzed.references.map((ref) => `${ref.position}:${keyOf(ref.range.start.line)}`);
+  assert.deepEqual(found.sort(), [
+    'placeholder:${local.db}',
+    'placeholder:alone',
+    'placeholder_in_string:name ${local.db}-x',
+    'placeholder_in_string:note',
+    'whole:plain',
+    'whole:source',
+    'within:free',
+  ].sort());
+  const plain = analyzed.references.find((ref) => ref.position === 'whole' && ref.groups.name === 'db');
+  assert.deepEqual(plain.documentPath, ['plain']);
+  const problems = analyzed.referenceProblems.map((problem) => problem.message);
+  assert.deepEqual(problems.sort(), [
+    'a reference matching ^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+) is not allowed as placeholder',
+    'unexpected text after the reference',
+    'unexpected text after the reference in ${local.db.more}',
+    'unknown placeholder ${nope}',
+  ].sort());
+  assert.equal(analyzed.placeholders.filter((placeholder) => placeholder.valid).length, 4);
 });
 
-test('a first-token name reads a function-bound key by its leading word', () => {
-  const text = 'locals:\n  operator_key fn.ssm: /mock/key\n  plain: mock-value\n';
-  const analyzed = doc(text, [rule({ kind: 'local', at: '$.locals.*', name: { token: 'first', spelling: null } })]);
-  assert.deepEqual(analyzed.symbols.map((symbol) => symbol.name), ['operator_key', 'plain']);
+test('a placeholder reference spans its whole body, the path after the name included', () => {
+  const text = 'get: "${setup.login.body.token} x"\n';
+  const analyzed = doc(text, {
+    placeholders: { pattern: '\\$\\{(?<body>[^}]*)\\}' },
+    references: [
+      reference('^setup\\.(?<name>[a-z0-9_]+)', ['placeholder_in_string'], {
+        trailingText: 'any',
+        target: { scope: { literal: 'setup' }, name: 'name' },
+      }),
+    ],
+  });
+  const { range } = analyzed.references[0];
+  assert.equal(text.slice(range.start.character, range.end.character), 'setup.login.body.token');
+});
+
+test('a document with no placeholders block scans no placeholders', () => {
+  const analyzed = doc('a: ${local.db}\n', {
+    references: [reference('^local\\.(?<name>[a-z]+)', ['placeholder'])],
+  });
+  assert.deepEqual(analyzed.references, []);
+  assert.deepEqual(analyzed.placeholders, []);
 });

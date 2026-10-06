@@ -1,22 +1,31 @@
 dsls:
   - id: sample
     includes: ["**/mock.yml"]
+    excludes: []
+    schema: []
     layers:
       environments: [one]
+    placeholders: none
+    functions: none
+    scopes:
+      local: { visible_from: stack }
     symbols:
-      - kind: local
-        at: "$.locals.*"
-        name: { from: key }
-      - kind: resource
-        at: "$.*.*"
+      - at: "$.locals.*"
+        skip: []
+        exclude: []
+        name: { from: key, token: whole, spelling: as_written }
+        scope: local
+      - at: "$.*.*"
         skip: [locals]
         exclude: [defaults]
         name: { from: key, token: last, spelling: snake }
-        qualify: { type: parent }
+        scope: { from: parent, visible_from: stack }
     references:
       - pattern: "^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)"
-        where: whole
-        target: { kind: resource, type: type, name: name }
+        where: [whole]
+        trailing_text: any
+        target: { scope: { group: type }, name: name }
       - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
-        where: whole
-        target: { kind: local, name: name }
+        where: [whole]
+        trailing_text: none
+        target: { scope: local, name: name }

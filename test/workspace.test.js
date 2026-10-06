@@ -18,30 +18,40 @@ const config = `
 dsls:
   - id: resources
     includes: ["**/mock.yml"]
+    excludes: []
     schema: https://example.test/fallback.json
     layers:
       environments: [one, two, three, four]
     placeholders:
       pattern: '\\$\\{(?<body>[^}\\n]*)\\}'
-      builtins: [env]
-      references: [local]
+    functions: none
+    scopes:
+      global: { visible_from: everywhere, names: [env] }
+      local: { visible_from: stack }
     symbols:
-      - kind: local
-        at: "$.locals.*"
-        name: { from: key }
-      - kind: resource
-        at: "$.*.*"
+      - at: "$.locals.*"
+        skip: []
+        exclude: []
+        name: { from: key, token: whole, spelling: as_written }
+        scope: local
+      - at: "$.*.*"
         skip: [schema_version, cloud, env, locals, outputs, sync]
         exclude: [defaults]
-        name: { token: last, spelling: snake }
-        qualify: { type: parent }
+        name: { from: key, token: last, spelling: snake }
+        scope: { from: parent, visible_from: stack }
     references:
       - pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)'
-        where: whole
-        target: { kind: resource, type: type, name: name }
+        where: [whole]
+        trailing_text: any
+        target: { scope: { group: type }, name: name }
       - pattern: '^local\\.(?<name>[a-z0-9_]+)$'
-        where: whole
-        target: { kind: local, name: name }
+        where: [whole, placeholder, placeholder_in_string]
+        trailing_text: none
+        target: { scope: local, name: name }
+      - pattern: '^(?<name>[a-z_]+)$'
+        where: [placeholder, placeholder_in_string]
+        trailing_text: none
+        target: { scope: global, name: name }
 `;
 
 const root = '/repo/mock-stack';
@@ -490,9 +500,9 @@ test('completion offers what the file\'s fold sees, written as each reference ru
     'ref mocktype.wired',
   ]);
   assert.deepEqual(labels(one, oneText, 'label: local.'), ['local.db']);
-  assert.deepEqual(labels(one, oneText, '${local.d'), ['${env}', '${local.db}']);
+  assert.deepEqual(labels(one, oneText, '${local.d').sort(), ['${env}', '${local.db}']);
   const builtin = ws.completion(`file://${one}`, after(oneText, '${local.d')).find((entry) => entry.label === '${env}');
-  assert.deepEqual([builtin.kind, builtin.detail, builtin.documentation], ['builtin', 'builtin placeholder', '']);
+  assert.deepEqual([builtin.kind, builtin.detail, builtin.documentation], ['builtin', 'global scope', '']);
   assert.deepEqual(labels(one, oneText, 'key_being_typed'), []);
   const item = ws.completion(`file://${one}`, after(oneText, 'source: ref '))[0];
   assert.deepEqual(item.range.start, after(oneText, 'source: '));
@@ -567,12 +577,11 @@ test('every placeholder is a builtin or a reference the config allows, and the r
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, files[common]);
   const problems = ws.problems(`file://${common}`).map((problem) => problem.message);
-  assert.deepEqual(problems.filter((message) => message.startsWith('unknown placeholder')), [
-    'unknown placeholder ${envv}',
-    'unknown placeholder ${ref mocktype.x}',
+  assert.deepEqual(problems.filter((message) => message.includes('placeholder')), [
+    'a reference matching ^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+) is not allowed as placeholder',
   ]);
   const classes = ws.references(`file://${common}`).map((reference) => reference.kind);
-  assert.deepEqual(classes.sort(), ['error', 'local', 'local']);
+  assert.deepEqual(classes.sort(), ['builtin', 'builtin', 'error', 'error', 'local', 'local']);
   const tokens = ws.semanticTokens(`file://${common}`);
   const line = (number) => tokens
     .filter((token) => token.line === number)
@@ -595,7 +604,7 @@ test('every placeholder is a builtin or a reference the config allows, and the r
 test('a ref with a builtin in its name keeps the builtin\'s own tokens', async () => {
   const text = 'mocktype:\n  user:\n    source: ref mocktype.${env}_thing\n';
   const ws = workspace({ [common]: text }, async () => schema);
-  const refTail = "'\n        where: whole\n        target: { kind: resource";
+  const refTail = "'\n        where: [whole]\n        trailing_text: any";
   const placeholderNames = config.replace(`(?<name>[a-z0-9_]+)${refTail}`, `(?<name>[a-z0-9_\${}]+)${refTail}`);
   await ws.setConfigs([{ text: placeholderNames, dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, text);
@@ -674,4 +683,84 @@ test('a request for an open file waits for its analysis, and builds a stack nobo
   await ws.whenAnalyzed('file:///repo/not-open.yml');
   await ws.sync('file:///repo/unclaimed.txt', '/repo/unclaimed.txt', 'plain\n');
   await ws.whenAnalyzed('file:///repo/unclaimed.txt');
+});
+
+const functionsBlock = [
+  '    functions:',
+  '      marker: fn.',
+  "      splat: '*'",
+  '      vocabulary: [terraform, { schema: "#/x-yaml-dsl-functions" }]',
+  '      unnamed_calls: sole_key',
+  '      call_results_where: [whole]',
+  '      refused_at: []',
+].join('\n');
+
+const functionsConfig = config
+  .replace('    functions: none', functionsBlock)
+  .replace(
+    'name: { from: key, token: whole, spelling: as_written }',
+    'name: { from: key, token: first, spelling: as_written }',
+  );
+
+const functionsSchema = JSON.stringify({
+  ...JSON.parse(schema),
+  'x-yaml-dsl-functions': { ssm: [{ name: 'parameter', type: 'text', required: true, repeated: false }] },
+});
+
+test('calls are checked against Terraform and the schema once both vocabularies are known', async () => {
+  const text = [
+    'locals:',
+    '  db fn.ssm: /mock/key',
+    '  up fn.upper: x',
+    '  bad fn.nope: x',
+    'mocktype:',
+    '  user:',
+    '    label: local.db',
+    '    source: "a ${local.db}"',
+    '',
+  ].join('\n');
+  let answer;
+  const ws = createWorkspace({
+    readFile: async (filePath) => (filePath === common ? text : null),
+    fetchText: async () => functionsSchema,
+    terraformFunctions: () => new Promise((resolve) => { answer = resolve; }),
+  });
+  const loaded = [];
+  ws.onVocabularyLoaded(() => loaded.push('terraform'));
+  await ws.setConfigs([{ text: functionsConfig, dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, text);
+  const messages = () => ws.problems(`file://${common}`).map((problem) => problem.message);
+  assert.deepEqual(messages(), ['a call result is not allowed as placeholder in string']);
+  answer({ function_signatures: { upper: { parameters: [{ name: 'str', type: 'string' }] } } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(loaded, ['terraform']);
+  await ws.whenAnalyzed(`file://${common}`);
+  assert.deepEqual(messages(), ['unknown function nope', 'a call result is not allowed as placeholder in string']);
+  assert.equal(ws.hover(`file://${common}`, at(text, 'ssm')).contents.value, 'ssm(parameter: text)');
+  assert.equal(ws.hover(`file://${common}`, at(text, 'nope')).contents.value, 'nope');
+  const callTokens = ws.semanticTokens(`file://${common}`)
+    .filter((token) => token.line === 1)
+    .map((token) => [token.character, token.length, token.type]);
+  assert.deepEqual(callTokens, [[5, 3, 'keyword'], [8, 3, 'function']]);
+  const typing = text.replace('  bad fn.nope: x', '  e fn.u: x');
+  await ws.sync(`file://${common}`, common, typing);
+  const offered = ws.completion(`file://${common}`, { line: 3, character: 8 });
+  assert.deepEqual(offered.map((item) => [item.label, item.kind, item.detail]), [
+    ['fn.upper', 'function', 'upper(str: text)'],
+    ['fn.ssm', 'function', 'ssm(parameter: text)'],
+  ]);
+});
+
+test('a schema that publishes nothing at the vocabulary pointer is a problem on the modeline', async () => {
+  const text = 'locals:\n  db fn.ssm: /mock/key\n';
+  const ws = createWorkspace({
+    readFile: async (filePath) => (filePath === common ? text : null),
+    fetchText: async () => schema,
+  });
+  await ws.setConfigs([{ text: functionsConfig.replace('vocabulary: [terraform, ', 'vocabulary: ['), dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, text);
+  const problems = ws.problems(`file://${common}`);
+  assert.deepEqual(problems.map((problem) => [problem.message, problem.range.start.line]), [
+    ['the schema publishes no #/x-yaml-dsl-functions', 0],
+  ]);
 });

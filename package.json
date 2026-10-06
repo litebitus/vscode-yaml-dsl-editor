@@ -44,6 +44,7 @@
       {
         "language": "yaml-dsl",
         "scopes": {
+          "function": ["support.function.hcl"],
           "keyword": ["support.function.builtin.hcl"],
           "operator": ["keyword.operator.accessor.hcl"],
           "type": ["entity.name.type.hcl"],

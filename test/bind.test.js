@@ -88,7 +88,29 @@ test('document events analyze and custom requests answer', async () => {
   const missing = await connection.handlers.definition({ textDocument: { uri: 'file:///repo/app/mock.yml' }, position: { line: 1, character: 0 } });
   assert.equal(missing, null);
   await connection.handlers['yaml-dsl/config']({
-    text: 'dsls:\n  - id: note\n    includes: ["**/note.yml"]\n    symbols:\n      - kind: local\n        at: "$.locals.*"\n    references:\n      - pattern: "^local"\n        where: whole\n        target: { kind: local }\n',
+    text: [
+      'dsls:',
+      '  - id: note',
+      '    includes: ["**/note.yml"]',
+      '    excludes: []',
+      '    schema: []',
+      '    layers: none',
+      '    placeholders: none',
+      '    functions: none',
+      '    scopes: { local: { visible_from: stack } }',
+      '    symbols:',
+      '      - at: "$.locals.*"',
+      '        skip: []',
+      '        exclude: []',
+      '        name: { from: key, token: whole, spelling: as_written }',
+      '        scope: local',
+      '    references:',
+      '      - pattern: "^local\\\\.(?<name>[a-z]+)$"',
+      '        where: [whole]',
+      '        trailing_text: none',
+      '        target: { scope: local, name: name }',
+      '',
+    ].join('\n'),
     dir: '/repo',
   });
   const note = 'locals:\n  db: mock-value\nuse: local.db\n';
@@ -240,7 +262,10 @@ test('semantic tokens are encoded with the legend, and a config change asks the 
   const documents = fakeDocuments();
   const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
   const legend = connection.handlers.initialize().capabilities.semanticTokensProvider.legend;
-  assert.deepEqual(legend, { tokenTypes: ['keyword', 'operator', 'type', 'variable'], tokenModifiers: ['defaultLibrary'] });
+  assert.deepEqual(legend, {
+    tokenTypes: ['function', 'keyword', 'operator', 'type', 'variable'],
+    tokenModifiers: ['defaultLibrary'],
+  });
   const config = 'dsls:\n  - id: note\n    includes: ["**/note.yml"]\n'
     + "    placeholders: { pattern: '\\$\\{(?<body>[^}]*)\\}', builtins: [env] }\n";
   await connection.handlers['yaml-dsl/config']({ entries: [{ text: config, dir: '/repo' }] });
@@ -248,7 +273,7 @@ test('semantic tokens are encoded with the legend, and a config change asks the 
   documents.handlers.open({ document: { uri: 'file:///repo/note.yml', getText: () => 'a: ${env}\n' } });
   await workspace.whenIdle();
   const encoded = await connection.handlers.semanticTokens({ textDocument: { uri: 'file:///repo/note.yml' } });
-  assert.deepEqual(encoded.data, [0, 3, 2, 1, 0, 0, 2, 3, 3, 1, 0, 3, 1, 1, 0]);
+  assert.deepEqual(encoded.data, [0, 3, 2, 2, 0, 0, 2, 3, 4, 1, 0, 3, 1, 2, 0]);
   const completed = await connection.handlers.completion({ textDocument: { uri: 'file:///repo/note.yml' }, position: { line: 0, character: 5 } });
   assert.equal(completed[0].kind, 21);
 });

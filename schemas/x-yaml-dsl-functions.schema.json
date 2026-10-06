@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://open-vsx.org/extension/lite2073/yaml-dsl-editor/x-yaml-dsl-functions.schema.json",
+  "title": "x-yaml-dsl-functions",
+  "description": "A DSL's function table: each function name maps to its arguments in call order.",
+  "type": "object",
+  "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_:]*$" },
+  "additionalProperties": {
+    "type": "array",
+    "description": "The function's arguments in call order. Optional arguments follow required ones, and a repeated argument is last.",
+    "items": {
+      "type": "object",
+      "required": ["name", "type", "required", "repeated"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "Argument name." },
+        "type": {
+          "enum": ["text", "number", "whole_number", "boolean", "list", "map", "any"],
+          "description": "Value the argument takes."
+        },
+        "required": { "type": "boolean", "description": "Whether a call must pass the argument." },
+        "repeated": { "type": "boolean", "description": "Whether the argument takes every remaining value." }
+      }
+    }
+  }
+}

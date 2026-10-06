@@ -2,40 +2,51 @@
 
 The editor that makes a YAML DSL authorable.
 
-A DSL is a block in `yaml-dsl.yml` at the root of a workspace. Nothing about a particular DSL is compiled into the extension. The block says which files belong, the syntax of a ref and of a local, when the DSL has layers which directories are environments, and a schema search path for a file that does not name one. A ref and a local are the same ideas in every DSL. Each block supplies the syntax.
+A DSL is a block in `yaml-dsl.yml` at the root of a workspace. Nothing about a particular DSL is compiled into the extension, and the block states every rule; there are no defaults. The block says which files belong, the DSL's scopes, where names are declared and how they are referenced, its placeholders and functions, when the DSL has layers which directories are environments, and a schema search path for a file that does not name one. Scopes, references, placeholders and calls are the same ideas in every DSL. Each block supplies the syntax.
 
-A layered DSL is the first one the editor is proven against. Others come after that works. The spec is [docs/design.md](docs/design.md).
+The spec is [docs/design.md](docs/design.md).
 
 ```yaml
 # yaml-dsl.yml
 dsls:
   - id: sample
     includes: ["**/sample.yml"]
+    excludes: []
     schema:
       - .schema/sample.schema.json
       - side/.schema/sample.schema.json
     layers:
       environments: [one, two]
+    placeholders:
+      pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
+    functions: none
+    scopes:
+      global: { visible_from: everywhere, names: [env] }
+      local: { visible_from: stack }
     symbols:
-      - kind: local
-        at: "$.locals.*"
-        name: { from: key }
-      - kind: item
-        at: "$.*.*"
+      - at: "$.locals.*"
+        skip: []
+        exclude: []
+        name: { from: key, token: whole, spelling: as_written }
+        scope: local
+      - at: "$.*.*"
         skip: [meta]
         exclude: [skipme]
         name: { from: key, token: last, spelling: snake }
-        qualify: { type: parent }
+        scope: { from: parent, visible_from: stack }
     references:
-      - pattern: "^ref (?<type>[a-z0-9_]+)\.(?<name>[a-z0-9_]+)"
-        where: whole
-        target: { kind: item, type: type, name: name }
-      - pattern: "^local\.(?<name>[a-z0-9_]+)$"
-        where: whole
-        target: { kind: local, name: name }
-      - pattern: "\$\{local\.(?<name>[a-z0-9_]+)\}"
-        where: within
-        target: { kind: local, name: name }
+      - pattern: "^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)"
+        where: [whole]
+        trailing_text: any
+        target: { scope: { group: type }, name: name }
+      - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
+        where: [whole, placeholder, placeholder_in_string]
+        trailing_text: none
+        target: { scope: local, name: name }
+      - pattern: "^(?<name>[a-z_]+)$"
+        where: [placeholder, placeholder_in_string]
+        trailing_text: none
+        target: { scope: global, name: name }
 ```
 
 Open a file the config matches. When the DSL has layers, that file is one layer of a stack. The language server holds the common layer and every adjacent overlay.
@@ -62,40 +73,40 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 | `includes` | Globs of files that belong to it |
 | `excludes` | Globs of files that do not, even when `includes` matches them |
 | `schema` | Search path used when a file does not name a schema, or the path it names is not on disk. Each entry is relative to that file. The first one on disk wins. A URL is fetched. |
-| `layers.environments` | Directory names of the overlays, beside the common file |
-| `symbols` | Where a local or a resource is declared, and how its name is read |
-| `references` | Which scalars are refs or locals, and which symbol they point at |
-| `placeholders` | The placeholder's `pattern` with a `body` group, its `builtins`, and which of `local` and `ref` a body may be |
+| `layers` | `environments`, directory names of the overlays beside the common file, or `none` |
+| `scopes` | Each scope's `visible_from` (`stack`, `everywhere`, `following`, or a list of paths) and its builtin `names` |
+| `symbols` | Where a name is declared (`at`, `skip`, `exclude`), how it is read (`name.from` `key`, `value` or `meta_argument`), and its `scope` |
+| `references` | A `pattern` with named groups, the positions it may stand in (`where`), whether text may follow the name (`trailing_text`), and its `target` scope and name |
+| `placeholders` | The placeholder's `pattern` with a `body` group, or `none` |
+| `functions` | The call grammar (`marker`, `splat`, `unnamed_calls`, `call_results_where`, `refused_at`) and its `vocabulary` sources, or `none` |
 
-`at` is `$`, `.key`, `.*`, and `[*]`. `skip` lists keys a `.*` step does not descend into. `exclude` lists keys that are not symbols. `token: first` and `token: last` take the key's first and last whitespace-separated token. `spelling: snake` writes `-` as `_`. `qualify.type: parent` is the mapping key that contains the symbol, and the reference's `type` group must equal it.
+`where` lists `whole`, the scalar; `placeholder`, a placeholder that is the whole scalar; `placeholder_in_string`, a placeholder inside longer text; and `within`, each match inside a scalar.
 
-`where: whole` means the scalar is the reference. `where: within` means each match inside the scalar is a reference.
+A function vocabulary is `terraform`, read from `terraform metadata functions -json` when Terraform can be invoked, and `{ schema: "#/<pointer>" }`, a table the file's schema publishes in the format of [schemas/x-yaml-dsl-functions.schema.json](schemas/x-yaml-dsl-functions.schema.json).
 
-Every placeholder is checked: its body is a builtin, or a local or ref in its whole form when `references` allows it. Any other placeholder is a red squiggle. Refs, locals and placeholders are colored from these rules.
+Every reference, placeholder and call is checked. A reference that resolves to nothing visible, a placeholder no rule reads, a call to an unknown function, a wrong argument count or a literal argument of the wrong type is red. References, placeholders and calls are colored from these rules.
 
-A DSL without `layers` still hovers and navigates. Its scope is the one file.
+A DSL without `layers` still hovers and navigates. Its stack is the one file.
 
 ## Hover
 
 Hover reads the schema as authored. A field whose value `$ref`s a shared composite keeps the description written beside that `$ref`. The composite's text is the shape of the value. It is not the tooltip.
 
-Hover on a ref shows the target's type, identity, and file. Hover on a local shows the value as authored.
+Hover on a reference shows a scalar declaration's value as authored, or the target's scope, name and file. Hover on a builtin names its scope. Hover on a function shows its signature.
 
-When no schema resolves, the modeline line gets a red squiggle, or the first line when there is no modeline, and field hovers stay empty. Ref and local navigation still run.
+When no schema resolves, the modeline line gets a red squiggle, or the first line when there is no modeline, and field hovers stay empty. Navigation still runs.
 
 ## Navigation
 
-A ref or a local is underlined as soon as the file opens. Once the analysis answers, one that stays in this file keeps a straight underline, one that points at another file becomes a squiggle, and one that matches nothing in scope turns red with a red squiggle. Otherwise the text keeps its own colors. Resting on either shows that declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing in scope matches, the cursor does not move.
+A reference is underlined as soon as the file opens. Once the analysis answers, one that stays in this file keeps a straight underline, one that points at another file becomes a squiggle, and one that matches nothing visible turns red with a red squiggle. Otherwise the text keeps its own colors. Resting on one shows its declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing visible matches, the cursor does not move.
 
-In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The field path is not a separate target. The resource's identity is the last token of its key, with `-` written as `_`. A key holding a local placeholder is also named by the local's value, spelled the same way. A builtin placeholder is compared as written.
+A reference resolves in its target scope, among the names visible from where it stands: the whole stack, everywhere, the later items of the declaring list, or the paths the scope names. In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The resource's identity is the last token of its key, with `-` written as `_`. A key holding a local placeholder is also named by the local's value, spelled the same way. A local is a key under `locals`, referenced as a whole scalar `local.<name>` or `${local.<name>}` inside a scalar or a key.
 
-A local is a key under `locals`. A reference is a whole scalar `local.<name>`, or `${local.<name>}` inside a scalar or a key.
-
-Scope is the active stack: the common layer and every adjacent overlay. A ref in one file may name a declaration in another file of that stack. When the same symbol is in more than one file, the common layer wins, then the active file, then the other overlays in path order.
+A stack is the common layer and every adjacent overlay. When the same symbol is in more than one file, the common layer wins, then the active file, then the other overlays in path order.
 
 ## Completion
 
-Typing `ref `, `local.` or `${` opens the list of what the reference or placeholder can name, and every character narrows it by fuzzy match: `ref mtprim` finds `ref mocktype.primary`. Each entry names the declaring file and shows the declaration. Enter inserts it. The list holds what the file's environment sees: an overlay offers the common layer and its own declarations, and the common layer offers its own and those declared in every overlay. The forms come from the config's reference rules and placeholders, and builtins are offered inside a placeholder.
+Typing the start of a reference, a placeholder or a call opens the list of what it can name, and every character narrows it by fuzzy match: `ref mtprim` finds `ref mocktype.primary`. Each entry names the declaring file and shows the declaration. Enter inserts it. The list holds what the file's environment sees and what is visible from the cursor: an overlay offers the common layer and its own declarations, and the common layer offers its own and those declared in every overlay. The forms come from the config's reference rules and placeholders, builtins are offered inside a placeholder, and the vocabulary after a call marker.
 
 ## Layers
 
@@ -121,7 +132,7 @@ An overlay may name `.schema/sample.schema.json`. A common layer may name that f
 
 A modeline that resolves is never overridden. The config `schema` list is the search path for a file with no modeline, or a modeline whose path is not on disk. The same schema bytes are one parsed copy. Different bytes are a different schema. Evicting a stack drops its layers and folded documents, not the schema.
 
-The extension ships no schema and no DSL definition.
+The extension ships no DSL's schema or definition.
 
 ## Ownership
 
@@ -131,7 +142,7 @@ A file under a folder that has the config, and that one DSL's `includes` match a
 
 ## Colors
 
-A matching file uses this extension's file icon. Colors follow the HCL editor: keys are identifiers, strings are strings, and numbers and `true` / `false` / `null` are constants. References and placeholders are colored from the config: a reference rule's leading literal is a function, its target groups are types and names, and a placeholder's delimiters and builtin body have their own colors.
+A matching file uses this extension's file icon. Colors follow the HCL editor: keys are identifiers, strings are strings, and numbers and `true` / `false` / `null` are constants. References and placeholders are colored from the config: a reference rule's leading literal is a function, its target groups are types and names, a placeholder's delimiters and builtin body have their own colors, and a call's marker and function are colored as HCL colors a function call. A `#` starts a comment only at the start of a line or after whitespace.
 
 ## Publish
 
