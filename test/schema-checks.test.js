@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NODE_STATES, createSchemaChecks } = require('../lib/schema-checks');
+const { FAILURE_KINDS, NODE_STATES, createSchemaChecks } = require('../lib/schema-checks');
 const { schemaNodeAt } = require('../lib/schema');
 
 const mockTree = {
@@ -97,15 +97,61 @@ test('a path the schema forbids, an open path and a missing schema each have the
   assert.equal(checks.nodeCheck('mock-missing', ['resource']).state, NODE_STATES.noSchema);
 });
 
+const messageFailure = (text) => ({ kind: FAILURE_KINDS.message, text, alternatives: [] });
+
 test('the opt-out is checked against the node and fails with the schema\'s own messages', () => {
   const checks = checksOf();
-  assert.deepEqual(checks.nodeCheck('mock-base', ['resource']).optOutMessages(), []);
-  assert.deepEqual(checks.nodeCheck('mock-base', ['open']).optOutMessages(), []);
-  assert.deepEqual(checks.nodeCheck('mock-base', ['resource', 'description']).optOutMessages(), [
-    '`resource.description`: must be string',
+  assert.deepEqual(checks.nodeCheck('mock-base', ['resource']).optOutFailures(), []);
+  assert.deepEqual(checks.nodeCheck('mock-base', ['open']).optOutFailures(), []);
+  assert.deepEqual(checks.nodeCheck('mock-base', ['resource', 'description']).optOutFailures(), [
+    messageFailure('must be string'),
   ]);
-  assert.deepEqual(checks.nodeCheck('mock-base', ['unknown']).optOutMessages(), [
-    '`unknown`: the schema does not allow it',
+  assert.deepEqual(checks.nodeCheck('mock-base', ['unknown']).optOutFailures(), [
+    messageFailure('the schema does not allow it'),
+  ]);
+  assert.deepEqual(checks.nodeCheck(null, ['resource']).optOutFailures(), []);
+});
+
+const alternativeSchemas = {
+  'mock-alternatives': {
+    type: 'object',
+    definitions: {
+      mock_call_form: {
+        description: '[optional] A mock object carrying a call key.',
+        type: 'object',
+        not: { propertyNames: { not: { pattern: '^call ' } } },
+      },
+    },
+    properties: {
+      any_form: {
+        type: 'object',
+        anyOf: [{ required: ['size', 'kind'] }, { $ref: '#/definitions/mock_call_form' }],
+      },
+      one_form: { oneOf: [{ type: 'object' }, { not: { type: 'string' } }] },
+      undescribed: { allOf: [{ not: { type: 'array' } }, { not: { type: 'object' } }] },
+      forbidden: false,
+    },
+  },
+};
+
+test('a failed anyOf lists its alternatives, a not failure reads as the description it guards', () => {
+  const checks = createSchemaChecks((schemaHash) => alternativeSchemas[schemaHash] || null);
+  assert.deepEqual(checks.nodeCheck('mock-alternatives', ['any_form']).optOutFailures(), [{
+    kind: FAILURE_KINDS.alternatives,
+    text: null,
+    alternatives: [
+      [messageFailure("must have required property 'size'"), messageFailure("must have required property 'kind'")],
+      [messageFailure('A mock object carrying a call key.')],
+    ],
+  }]);
+  assert.deepEqual(checks.nodeCheck('mock-alternatives', ['one_form']).optOutFailures(), [
+    messageFailure('must match exactly one alternative, matches 2'),
+  ]);
+  assert.deepEqual(checks.nodeCheck('mock-alternatives', ['undescribed']).optOutFailures(), [
+    messageFailure('must NOT be valid'),
+  ]);
+  assert.deepEqual(checks.nodeCheck('mock-alternatives', ['forbidden']).optOutFailures(), [
+    messageFailure('the schema does not allow it'),
   ]);
 });
 
@@ -160,19 +206,19 @@ function markedChecksOf() {
 
 test('a field\'s requirement marker decides its key over the parent\'s required array', () => {
   const checks = markedChecksOf();
-  assert.deepEqual(checks.nodeCheck('marker-adds', ['resource']).optOutMessages(), [
-    "`resource`: must have required property 'name'",
+  assert.deepEqual(checks.nodeCheck('marker-adds', ['resource']).optOutFailures(), [
+    messageFailure("must have required property 'name'"),
   ]);
-  assert.deepEqual(checks.nodeCheck('marker-removes', ['resource']).optOutMessages(), [
-    "`resource`: must have required property 'kind'",
+  assert.deepEqual(checks.nodeCheck('marker-removes', ['resource']).optOutFailures(), [
+    messageFailure("must have required property 'kind'"),
   ]);
-  assert.deepEqual(checks.nodeCheck('marker-removes-in-branch', ['resource']).optOutMessages(), []);
+  assert.deepEqual(checks.nodeCheck('marker-removes-in-branch', ['resource']).optOutFailures(), []);
 });
 
 test('a conditionally required field is reported, not failed, and its marker counts in the fingerprint', () => {
   const checks = markedChecksOf();
   const conditional = checks.nodeCheck('marker-conditional', ['resource']);
-  assert.deepEqual(conditional.optOutMessages(), []);
+  assert.deepEqual(conditional.optOutFailures(), []);
   assert.deepEqual(conditional.conditionallyRequiredFields(), ['resource.name']);
   const plain = checks.nodeCheck('marker-conditional-plain', ['resource']);
   assert.deepEqual(plain.conditionallyRequiredFields(), []);

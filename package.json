@@ -61,6 +61,7 @@
     "configurationDefaults": {
       "[yaml-dsl]": {
         "editor.inlayHints.enabled": "on",
+        "editor.inlayHints.maximumLength": 64,
         "editor.quickSuggestions": {
           "strings": "on"
         },

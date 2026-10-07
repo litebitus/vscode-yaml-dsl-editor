@@ -308,7 +308,10 @@ test('a block whose opt-out the shared schema node rejects is a potential move n
   assert.equal(suggestion.kind, 'potential_move');
   assert.deepEqual(suggestion.schemaGroups, []);
   assert.deepEqual(suggestion.optOutFailures, [
-    { overlay: 'production', messages: ["`queue`: must have required property 'events'"] },
+    {
+      overlay: 'production',
+      failures: [{ kind: 'message', text: "must have required property 'events'", alternatives: [] }],
+    },
   ]);
   assert.equal(suggestion.edits.size, 0);
 });

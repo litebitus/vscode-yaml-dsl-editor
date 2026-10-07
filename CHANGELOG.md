@@ -15,6 +15,7 @@
 - Settings `yaml-dsl-editor.cache.stackCapacity` and `yaml-dsl-editor.cache.schemaCapacity` bound the stack and schema caches, least recently used first.
 - A line with an error carries a gutter mark.
 - Inlay hints are on in DSL files, where an editor such as Antigravity defaults them to off.
+- DSL files set `editor.inlayHints.maximumLength`, so a suggestion's label is not truncated at the editor's default.
 - An overlay's empty map replaces the common layer's entry in a folded document, at any depth.
 
 ## 0.1.0

@@ -147,12 +147,28 @@ const schemasDiffer = {
   optOutFailures: [],
 };
 
+const messageFailure = (text) => ({ kind: 'message', text, alternatives: [] });
+
 const optOutFails = {
   ...schemasDiffer,
   schemaGroups: [],
   optOutFailures: [{
     overlay: 'uat',
-    messages: ["`queue.events`: must have required property 'size'", '`queue.events`: must match a schema in anyOf'],
+    failures: [
+      messageFailure('must be object'),
+      {
+        kind: 'alternatives',
+        text: null,
+        alternatives: [
+          [messageFailure("must have required property 'size'"), messageFailure("must have required property 'kind'")],
+          [{
+            kind: 'alternatives',
+            text: null,
+            alternatives: [[messageFailure('a mock call form')], [messageFailure('must be string')]],
+          }],
+        ],
+      },
+    ],
   }],
 };
 
@@ -170,8 +186,11 @@ test('a potential move\'s hover lists the overlays and the schema\'s messages, w
     '`queue.events` is common to 3 of 4 overlays, but the `{}` opt-out would fail the schema in:',
     '',
     '- uat',
-    "  - `queue.events`: must have required property 'size'",
-    '  - `queue.events`: must match a schema in anyOf',
+    '  - `queue.events`: must be object',
+    '  - `queue.events` matches none of these alternatives:',
+    "    1. must have required property 'size'\\",
+    "       must have required property 'kind'",
+    '    2. one of: (1) a mock call form (2) must be string',
   ].join('\n'));
   assert.doesNotMatch(hoverMarkdownText(schemasDiffer) + hoverMarkdownText(optOutFails), /command:/);
 });
@@ -209,7 +228,7 @@ test('a potential move\'s inlay hint names the check that failed', () => {
   const marksByUri = new Map([['file:///repo/dev/mock.yml', [
     { range: at(0), suggestion: schemasDiffer },
     { range: at(1), suggestion: optOutFails },
-    { range: at(2), suggestion: { ...optOutFails, optOutFailures: [...optOutFails.optOutFailures, { overlay: 'qa', messages: [] }] } },
+    { range: at(2), suggestion: { ...optOutFails, optOutFailures: [...optOutFails.optOutFailures, { overlay: 'qa', failures: [] }] } },
   ]]]);
   const document = documentOf('file:///repo/dev/mock.yml', ['queue:', 'queue:', 'queue:']);
   assert.deepEqual(suggestionInlayHints(vscode, marksByUri, document).map((hint) => hint.label[0].value), [

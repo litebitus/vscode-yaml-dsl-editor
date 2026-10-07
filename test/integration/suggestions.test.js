@@ -40,7 +40,8 @@ suite('common layer suggestions', () => {
   });
 
   test('inlay hints are on in a DSL file whatever the editor\'s own default', () => {
-    const inlayHints = vscode.workspace.getConfiguration('editor', { languageId: 'yaml-dsl' }).inspect('inlayHints.enabled');
-    assert.equal(inlayHints.defaultLanguageValue, 'on');
+    const editorSettings = vscode.workspace.getConfiguration('editor', { languageId: 'yaml-dsl' });
+    assert.equal(editorSettings.inspect('inlayHints.enabled').defaultLanguageValue, 'on');
+    assert.equal(editorSettings.inspect('inlayHints.maximumLength').defaultLanguageValue, 64);
   });
 });
