@@ -19,6 +19,12 @@ dsls:
     layers:
       overlay_folders: [dev, staging]
       common_layer_discovery: ancestor
+      duplicate_check:
+        depth: 3
+        key_depths:
+          data_source: 2
+          locals: 2
+        skip_keys: [schema_version]
     placeholder:
       pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
       unscanned_paths: []
@@ -31,6 +37,13 @@ dsls:
         call_marker: fn.
         splat_operator: "*"
         calls_without_name_allowed: true
+    locals:
+      scope_name: local
+    key_orders:
+      - { path: "$.locals", skip_keys: [], includes_subtree: false, order: alphabetical }
+      - { path: "$", skip_keys: [], includes_subtree: false, order: significance }
+      - { path: "$.*", skip_keys: [locals], includes_subtree: false, order: significance }
+      - { path: "$", skip_keys: [], includes_subtree: true, order: alphabetical }
     scopes:
       GLOBAL:
         regions: ["$"]
@@ -94,9 +107,11 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 - [Navigation](#navigation)
 - [Completion](#completion)
 - [Layers](#layers)
+- [Suggestions](#suggestions)
 - [Schema](#schema)
 - [Ownership](#ownership)
 - [Colors](#colors)
+- [Settings](#settings)
 - [Publish](#publish)
 - [Development](#development)
   - [Tests](#tests)
@@ -111,9 +126,11 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 | `file_includes` | Globs of files that belong to it |
 | `file_excludes` | Globs of files that do not, even when `file_includes` matches them |
 | `schema_search_paths` | Search path used when a file does not name a schema, or the path it names is not on disk. Each entry is relative to that file. The first one on disk wins. A URL is fetched. |
-| `layers` | `overlay_folders`, the folder names of the overlays, and `common_layer_discovery`, how the common layer is found (`parent` or `ancestor`) |
+| `layers` | `overlay_folders`, the folder names of the overlays, `common_layer_discovery`, how the common layer is found (`parent` or `ancestor`), and `duplicate_check`, the check of an overlay for what the common layer already holds: its `depth` below the root, the `key_depths` under given top-level keys, and the `skip_keys` it passes over |
+| `key_orders` | Where a suggestion places a new key, per map: a `path` entry with an `order`, `alphabetical` or `significance`; the first entry covering a map applies |
 | `placeholder` | The placeholder's `pattern` with a `body` group, and `unscanned_paths`, the paths whose text is another language's |
 | `function` | Where the function definitions come from (`definitions`), the positions a call result may be referenced from (`call_result_reference_positions`), the paths where a call is a problem (`calls_not_allowed_at`), and the call grammar of a marker function (`marker_function`) |
+| `locals` | `scope_name`, the scope whose declarations are the DSL's locals: named values, resolved recursively in each fold |
 | `scopes` | Each scope's `regions`, a list of paths (`$` is the whole fold); `later_items_of_declaring_list`; `named_by_parent_key`; and `builtin_names`. A logical scope is named in capitals. |
 | `declarations` | Where a name is declared (`path`, `skip_keys`, `exclude_candidates`), how it is read (`name_source` `key`, `value` or `meta_argument`, with `key_token`, `name_spelling` and `meta_argument_name`), `declares_every_name`, and its `scope_name` |
 | `references` | A `pattern` with named groups, the `positions` it may stand in, `text_after_name_allowed`, the `scope_name`, and the groups holding a parent-key scope (`scope_group`) and the name (`name_group`) |
@@ -132,13 +149,13 @@ A DSL without `layers` still hovers and navigates. Its stack is the one file.
 
 Hover reads the schema as authored. A field whose value `$ref`s a shared composite keeps the description written beside that `$ref`. The composite's text is the shape of the value. It is not the tooltip.
 
-Hover on a reference shows a scalar declaration's value as authored, or the target's scope, name and file. Hover on a builtin names its scope. Hover on a function shows its signature.
+Hover on a reference shows a local's value, a scalar declaration's value as authored, or the target's scope, name and file. Hover on a builtin names its scope. Hover on a function shows its signature.
 
 When no schema resolves, the modeline line gets a red squiggle, or the first line when there is no modeline, and field hovers stay empty. Navigation still runs.
 
 ## Navigation
 
-A reference is underlined as soon as the file opens. Once the analysis answers, one that stays in this file keeps a straight underline, one that points at another file becomes a squiggle, and one that matches nothing visible turns red with a red squiggle. Otherwise the text keeps its own colors. Resting on one shows its declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing visible matches, the cursor does not move.
+A reference is underlined as soon as the file opens. Once the analysis answers, one that stays in this file keeps a straight underline, one that points at another file becomes a squiggle, and one that matches nothing visible turns red with a red squiggle. A line with an error or a problem carries an error mark in the gutter. Otherwise the text keeps its own colors. Resting on one shows its declaration after a second, in this language. Command-click opens the declaration. Moving the pointer away before the delay cancels it. The references peek is not opened. When nothing visible matches, the cursor does not move.
 
 A reference resolves in its target scope, among the names whose scope's regions hold where it stands: the paths the scope names, `$` being the whole fold, or the later items of the declaring list. In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. The resource's identity is the last token of its key, with `-` written as `_`. A key holding a local placeholder is also named by the local's value, spelled the same way. A local is a key under `locals`, referenced as a whole scalar `local.<name>` or `${local.<name>}` inside a scalar or a key.
 
@@ -162,7 +179,21 @@ Activating any file in the stack puts the common layer and every adjacent overla
 
 Each overlay's folded document is the common layer merged under that overlay. It is not opened on its own. Typing stays in the layer files. An overlay with no file is empty on the common layer.
 
-The server loads a stack when a file in it becomes active. It does not load the rest at startup. The stack of the active editor is pinned, and so is any stack whose folded buffer is on screen. Capacity beyond the pins is 8 stacks. Loading one past that drops the least recently used unpinned stack and closes its folded buffers. The files on disk stay. A change to a resident stack updates it in place.
+The server loads a stack when a file in it becomes active. It does not load the rest at startup. The stack of the active editor is pinned, and so is any stack whose folded buffer is on screen. Capacity beyond the pins is a [setting](#settings). Loading one past that drops the least recently used unpinned stack and closes its folded buffers. The files on disk stay. A change to a resident stack updates it in place.
+
+## Suggestions
+
+A block most overlays hold gets a light bulb in the gutter of its key line and an inlay hint, `💡 move to common layer`, at the end of that line, in each overlay that holds it. Hovering the hint shows how many overlays hold the block, each value that differs between them, and the overlays that do not hold it. The link in its hover moves the block into the common layer in one click: each difference becomes a local, declared in the common layer with the value most overlays hold and in each overlay holding another value. An overlay without the block gets `{}` at its path. New keys land where `key_orders` says. Every file the click changes is saved. Every other folded document reads the same at the block's path after the click, and the click writes nothing when the editor finds otherwise.
+
+A move is offered only when every overlay's schema has the same node at the block's path and `{}` passes it for each overlay that opts out. Otherwise the hint is `💡 potential move: overlay schemas differ` or `💡 potential move: overlay (<overlays>) opt-out would fail the schema`, and its hover lists the overlays and the schema's messages. It has no link.
+
+An opt-out that leaves out a field marked `[~required]` is `💡 potential move: overlay (<overlays>) opt-out leaves out a conditionally required field`. The extension cannot tell whether that move is safe, so its hover names the fields and keeps the link for the user to decide.
+
+A key an overlay holds the same as the common layer gets `💡 same in common layer`, and the link in its hover deletes it from that overlay.
+
+The extension edits a file only when that link is clicked, once per click. Clicking the hint itself does nothing.
+
+Suggestions appear once typing has paused for half a second. Typing never waits for them. A [setting](#settings) turns them on or off.
 
 ## Schema
 
@@ -170,7 +201,9 @@ The schema for a file is the one the file names. A `# yaml-language-server: $sch
 
 An overlay may name `.schema/sample.schema.json`. A common layer may name that file through an overlay directory, such as `one/.schema/sample.schema.json`.
 
-A modeline that resolves is never overridden. The config `schema_search_paths` list is the search path for a file with no modeline, or a modeline whose path is not on disk. The same schema bytes are one parsed copy. Different bytes are a different schema. Evicting a stack drops its layers and folded documents, not the schema.
+A field's `description` may open with a requirement marker: `[required]`, `[~required]` (required under a condition the schema does not state) or `[optional]`. A marker decides whether its key must be present, over the parent's `required` array; a field without one follows that array.
+
+A modeline that resolves is never overridden. The config `schema_search_paths` list is the search path for a file with no modeline, or a modeline whose path is not on disk. The same schema bytes are one parsed copy. Different bytes are a different schema. A schema a loaded stack uses stays; beyond those, the number kept is a [setting](#settings), and the least recently used goes first.
 
 The extension ships no DSL's schema or definition.
 
@@ -183,6 +216,16 @@ A file under a folder that has the config, and that one DSL's `file_includes` ma
 ## Colors
 
 A matching file uses this extension's file icon. The editor's bracket pair colorization does not apply, so a bracket keeps the color of the text it stands in. Colors follow the HCL editor: keys are identifiers, strings are strings, and numbers and `true` / `false` / `null` are constants. References and placeholders are colored from the config: a reference rule's leading literal is a function, its target groups are types and names, a placeholder's delimiters and builtin body have their own colors, and a call's marker and function are colored as HCL colors a function call. A `#` starts a comment only at the start of a line or after whitespace.
+
+## Settings
+
+The extension's own settings live under `yaml-dsl-editor` in the editor's settings. They set how the editor behaves for its user. What a DSL is lives in `yaml-dsl.yml`.
+
+| Setting | Values | What it sets |
+|---|---|---|
+| `yaml-dsl-editor.cache.schemaCapacity` | a whole number, 1 or more | Distinct schemas kept beyond those a loaded stack uses |
+| `yaml-dsl-editor.cache.stackCapacity` | a whole number, 1 or more | Stacks kept beyond the pinned ones |
+| `yaml-dsl-editor.features.suggestions` | `on`, `off` | Whether [suggestions](#suggestions) are shown |
 
 ## Publish
 

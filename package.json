@@ -20,7 +20,7 @@
   "categories": [
     "Programming Languages"
   ],
-  "icon": "icon.png",
+  "icon": "media/icon.png",
   "galleryBanner": {
     "color": "#f4efe6",
     "theme": "light"
@@ -32,8 +32,35 @@
   ],
   "main": "./extension.js",
   "contributes": {
+    "configuration": {
+      "title": "YAML DSL Editor",
+      "properties": {
+        "yaml-dsl-editor.cache.schemaCapacity": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 32,
+          "description": "Distinct schemas kept beyond those a loaded stack uses. The least recently used is dropped first."
+        },
+        "yaml-dsl-editor.cache.stackCapacity": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 32,
+          "description": "Stacks kept beyond the pinned ones. The least recently used is dropped first."
+        },
+        "yaml-dsl-editor.features.suggestions": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ],
+          "default": "on",
+          "description": "Suggestions: a light bulb in the gutter and an inlay hint whose hover offers the edit."
+        }
+      }
+    },
     "configurationDefaults": {
       "[yaml-dsl]": {
+        "editor.inlayHints.enabled": "on",
         "editor.quickSuggestions": {
           "strings": "on"
         },
@@ -72,8 +99,8 @@
           "YAML DSL"
         ],
         "icon": {
-          "light": "./fileicon.svg",
-          "dark": "./fileicon.svg"
+          "light": "./media/fileicon.svg",
+          "dark": "./media/fileicon.svg"
         },
         "configuration": "./language-configuration.json"
       }
@@ -96,6 +123,7 @@
     "vscode-textmate": "9.3.2"
   },
   "dependencies": {
+    "ajv": "8.20.0",
     "vscode-languageclient": "9.0.1",
     "vscode-languageserver": "9.0.1",
     "vscode-languageserver-textdocument": "1.0.15",

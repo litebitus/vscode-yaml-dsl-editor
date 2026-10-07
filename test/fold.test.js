@@ -11,7 +11,7 @@ test('a fold is the common layer under the overlay', () => {
   assert.equal(missing.value.mocktype.primary.name, 'a');
   assert.match(missing.text, /the common layer/);
   const empty = foldDocument('three', { mocktype: { primary: { name: 'a' } } }, { mocktype: { primary: {} } }, true);
-  assert.equal(empty.value.mocktype.primary.name, 'a');
+  assert.deepEqual(empty.value.mocktype.primary, {});
   const blank = foldDocument('one', null, null, true);
   assert.deepEqual(blank.value, {});
 });

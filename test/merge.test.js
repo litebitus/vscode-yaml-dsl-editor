@@ -9,12 +9,12 @@ test('overlay wins, null deletes, and nested maps merge', () => {
   assert.deepEqual(base.keep, { x: 1, y: 2 });
 });
 
-test('null deletes a key and an empty map deletes only above depth zero', () => {
+test('null deletes a key and an empty map replaces it at any depth', () => {
   assert.deepEqual(deepMerge({ a: 1, b: 2 }, { a: null }), { b: 2 });
   assert.deepEqual(deepMerge({ a: 1 }, { missing: null }), { a: 1 });
-  assert.deepEqual(deepMerge({ a: { b: 1 } }, { a: {} }, 0), { a: { b: 1 } });
-  assert.deepEqual(deepMerge({ a: { b: 1 } }, { a: {} }, 1), {});
-  assert.deepEqual(deepMerge({ a: { b: { c: 1 } } }, { a: { b: {} } }, 1), { a: { b: { c: 1 } } });
+  assert.deepEqual(deepMerge({ a: { b: 1 } }, { a: {} }), { a: {} });
+  assert.deepEqual(deepMerge({ a: { b: { c: 1 } } }, { a: { b: {} } }), { a: { b: {} } });
+  assert.deepEqual(deepMerge({ a: 1 }, { b: {} }), { a: 1, b: {} });
 });
 
 test('a non-object base or overlay does not merge', () => {

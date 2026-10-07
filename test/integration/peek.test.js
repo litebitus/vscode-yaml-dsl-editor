@@ -53,7 +53,7 @@ suite('references peek regression', () => {
     assert.match(text, /<br>/);
     assert.equal(text.includes('```'), false);
     assert.equal(text.includes('\n'), false);
-    assert.match(text, /command:yaml-dsl\.peek\?/);
+    assert.match(text, /command:yaml-dsl-editor\.peek\?/);
     assert.match(decodeURIComponent(text), /"startLine":/);
   });
 

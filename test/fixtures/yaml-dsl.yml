@@ -5,8 +5,14 @@ dsls:
     file_excludes: []
     schema_search_paths: []
     layers:
-      overlay_folders: [one]
+      overlay_folders: [one, two]
       common_layer_discovery: parent
+      duplicate_check:
+        depth: 3
+        key_depths: {}
+        skip_keys: []
+    key_orders:
+      - { path: "$", skip_keys: [], includes_subtree: true, order: alphabetical }
     scopes:
       local:
         regions: ["$"]

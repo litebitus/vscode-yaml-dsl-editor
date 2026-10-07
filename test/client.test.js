@@ -66,7 +66,10 @@ function fakeVscode(options = {}) {
       openTextDocument: options.openTextDocument,
       getConfiguration() {
         return {
-          get() { return options.associations || {}; },
+          get(key) {
+            if (key && key.startsWith('cache.')) return options.cacheCapacity === undefined ? 32 : options.cacheCapacity;
+            return options.associations || {};
+          },
           update: async (key, value) => { vscode.updated = value; },
         };
       },
@@ -183,6 +186,26 @@ test('activation asks the server to read matching files', async () => {
   assert.deepEqual(seen, ['**/mock.yml', '**/mock.yml']);
 });
 
+test('a workspace folder added or removed reloads the configs', async () => {
+  const vscode = fakeVscode();
+  let foldersChanged = null;
+  vscode.workspace.onDidChangeWorkspaceFolders = (fn) => {
+    foldersChanged = fn;
+    return disposable();
+  };
+  const client = fakeClient();
+  await activateWith(vscode, { subscriptions: [] }, () => client);
+  const configsSent = () => client.sent.filter((item) => item.method === 'yaml-dsl/config').length;
+  const before = configsSent();
+  vscode.workspace.workspaceFolders = [{ uri: { fsPath: '/repo' } }, { uri: { fsPath: '/second' } }];
+  foldersChanged();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(configsSent(), before + 1);
+  assert.deepEqual(client.sent.filter((item) => item.method === 'yaml-dsl/config').at(-1).params.entries
+    .map((entry) => entry.dir), ['/repo', '/second']);
+});
+
 test('activation associates matching files and reveals the fold', async () => {
   const doc = { uri: { scheme: 'file', fsPath: '/repo/mock/mock.yml' }, languageId: 'yaml' };
   const outside = { uri: { scheme: 'file', fsPath: '/other/mock.yml' }, languageId: 'yaml-dsl' };
@@ -230,8 +253,8 @@ test('activation associates matching files and reveals the fold', async () => {
   assert.equal(vscode.peeked.length, 0);
 
   editor.selection = { active: { line: 0, character: 0 } };
-  await vscode.commandsByName['yaml-dsl.peek']();
-  await vscode.commandsByName['yaml-dsl.peek']({
+  await vscode.commandsByName['yaml-dsl-editor.peek']();
+  await vscode.commandsByName['yaml-dsl-editor.peek']({
     uri: 'file:///repo/mock.yml',
     startLine: 1,
     startCharacter: 0,
@@ -383,10 +406,10 @@ test('a cross-file target peeks that section and leaves this file', async () => 
   assert.match(section.contents.value, /color:#87C3FF;/);
   assert.equal(section.contents.value.includes('```'), false);
   assert.equal(section.contents.value.includes('\n'), false);
-  assert.match(section.contents.value, /command:yaml-dsl\.peek\?/);
+  assert.match(section.contents.value, /command:yaml-dsl-editor\.peek\?/);
   assert.match(decodeURIComponent(section.contents.value), /"startLine":2/);
   assert.match(section.contents.value, /data_at_rest_key/);
-  assert.equal(section.contents.isTrusted.enabledCommands[0], 'yaml-dsl.peek');
+  assert.equal(section.contents.isTrusted.enabledCommands[0], 'yaml-dsl-editor.peek');
   assert.equal(peeked.some((item) => item[0] === 'editor.action.peekLocations'), false);
   const bare = await mid.provideHover({ uri: here }, { line: 0, character: 0 }, null, async () => ({
     contents: { value: '[mock.yml:3](file:///repo/mock.yml#L3)' },

@@ -25,6 +25,7 @@
         "file_includes",
         "file_excludes",
         "schema_search_paths",
+        "key_orders",
         "scopes",
         "declarations",
         "references"
@@ -52,6 +53,12 @@
         "layers": { "$ref": "#/definitions/layers" },
         "placeholder": { "$ref": "#/definitions/placeholder" },
         "function": { "$ref": "#/definitions/function" },
+        "locals": { "$ref": "#/definitions/locals" },
+        "key_orders": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/key_order" },
+          "description": "Where an edit places a new key in each map. The first entry whose path covers the map applies."
+        },
         "scopes": { "$ref": "#/definitions/scopes" },
         "declarations": {
           "type": "array",
@@ -68,7 +75,7 @@
     "layers": {
       "type": "object",
       "description": "The common layer and its overlays. Left out for a DSL without layers.",
-      "required": ["overlay_folders", "common_layer_discovery"],
+      "required": ["overlay_folders", "common_layer_discovery", "duplicate_check"],
       "additionalProperties": false,
       "properties": {
         "overlay_folders": {
@@ -79,6 +86,29 @@
         "common_layer_discovery": {
           "enum": ["parent", "ancestor"],
           "description": "Where the common layer sits: the overlay folder's parent, or the nearest ancestor above an overlay folder."
+        },
+        "duplicate_check": {
+          "type": "object",
+          "description": "The check of an overlay for what the common layer already holds.",
+          "required": ["depth", "key_depths", "skip_keys"],
+          "additionalProperties": false,
+          "properties": {
+            "depth": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "How many levels below the document root the check runs, under a top-level key key_depths does not list."
+            },
+            "key_depths": {
+              "type": "object",
+              "additionalProperties": { "type": "integer", "minimum": 1 },
+              "description": "The depth under a given top-level key, {} when every key takes depth."
+            },
+            "skip_keys": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Keys the check passes over, at any depth."
+            }
+          }
         }
       }
     },
@@ -122,6 +152,19 @@
           "description": "Paths where a call is a problem."
         },
         "marker_function": { "$ref": "#/definitions/marker_function" }
+      }
+    },
+    "locals": {
+      "type": "object",
+      "description": "Named values. Left out for a DSL without locals.",
+      "required": ["scope_name"],
+      "additionalProperties": false,
+      "properties": {
+        "scope_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The scope, declared under scopes, whose declarations are the locals."
+        }
       }
     },
     "marker_function": {
@@ -301,6 +344,27 @@
       "type": "array",
       "items": { "enum": ["whole_scalar", "whole_placeholder", "placeholder_in_text", "anywhere_in_scalar"] },
       "uniqueItems": true
+    },
+    "key_order": {
+      "type": "object",
+      "required": ["path", "skip_keys", "includes_subtree", "order"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "$ref": "#/definitions/path" },
+        "skip_keys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keys a .* step does not descend into."
+        },
+        "includes_subtree": {
+          "type": "boolean",
+          "description": "Whether the maps below the path are covered too."
+        },
+        "order": {
+          "enum": ["alphabetical", "significance"],
+          "description": "Where a new key goes among the map's keys."
+        }
+      }
     },
     "path_entry": {
       "type": "object",

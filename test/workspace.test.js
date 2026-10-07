@@ -39,8 +39,13 @@ function resourceReferences(refNamePattern = '[a-z0-9_]+') {
 function resourcesEntry(fields = {}, localKeyToken = 'all_words') {
   return dslEntry('resources', {
     schema_search_paths: ['https://example.test/fallback.json'],
-    layers: { overlay_folders: ['one', 'two', 'three', 'four'], common_layer_discovery: 'ancestor' },
+    layers: {
+      overlay_folders: ['one', 'two', 'three', 'four'],
+      common_layer_discovery: 'ancestor',
+      duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
+    },
     placeholder: placeholder(),
+    locals: { scope_name: 'local' },
     scopes: {
       GLOBAL: scope({ builtin_names: ['env'] }),
       RESOURCE: scope({ named_by_parent_key: true }),
@@ -229,10 +234,15 @@ test('two DSLs, a parse error, and a DSL without layers', async () => {
 
 test('loading past the pin capacity evicts the oldest unpinned stack', async () => {
   const plain = configText(dslEntry('resources', {
-    layers: { overlay_folders: ['one'], common_layer_discovery: 'parent' },
+    layers: {
+      overlay_folders: ['one'],
+      common_layer_discovery: 'parent',
+      duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
+    },
   }));
   const ws = workspace({}, async () => null);
   await ws.setConfigs([{ text: plain, dir: '/repo' }]);
+  ws.setCacheCapacities({ stackCapacity: 8, schemaCapacity: 32 });
   for (let i = 0; i < 10; i += 1) {
     const file = `/repo/s${i}/mock.yml`;
     await ws.setActive(file);
@@ -289,7 +299,11 @@ test('a line edit re-parses that file and leaves the rest of the stack', async (
   await ws.setConfigs([{
     text: configText(dslEntry('sample', {
       schema_search_paths: ['schema.json'],
-      layers: { overlay_folders: ['one'], common_layer_discovery: 'parent' },
+      layers: {
+        overlay_folders: ['one'],
+        common_layer_discovery: 'parent',
+        duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
+      },
       scopes: { local: scope() },
       declarations: [declaration('$.locals.*', 'local')],
     })),
@@ -319,7 +333,11 @@ test('a line edit re-parses that file and leaves the rest of the stack', async (
 test('a schema written after the file opened replaces the missing one, and a new version replaces it again', async () => {
   const layered = configText(dslEntry('resources', {
     schema_search_paths: ['.schema/mock.schema.json', 'one/.schema/mock.schema.json'],
-    layers: { overlay_folders: ['one', 'two'], common_layer_discovery: 'parent' },
+    layers: {
+      overlay_folders: ['one', 'two'],
+      common_layer_discovery: 'parent',
+      duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
+    },
   }));
   const commonPath = '/repo/mock-app/mock.yml';
   const onePath = '/repo/mock-app/one/mock.yml';
@@ -681,6 +699,7 @@ test('a request for an open file waits for its analysis, and builds a stack nobo
   const files = { [common]: 'locals:\n  db: mock-value\nuse: local.db\n' };
   const ws = workspace(files, async () => schema);
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  ws.setCacheCapacities({ stackCapacity: 8, schemaCapacity: 32 });
   const opening = ws.sync(`file://${common}`, common, files[common]);
   await ws.whenAnalyzed(`file://${common}`);
   assert.deepEqual(ws.references(`file://${common}`).map((reference) => reference.kind), ['local']);
@@ -761,4 +780,20 @@ test('a schema that publishes nothing at the vocabulary pointer is a problem on 
   assert.deepEqual(problems.map((problem) => [problem.message, problem.range.start.line]), [
     ['the schema publishes no #/x-yaml-dsl-functions', 0],
   ]);
+});
+
+test('a changed config reaches every resident stack, and drops the stacks it no longer claims', async () => {
+  const otherCommon = '/repo/other-stack/mock.yml';
+  const files = { [common]: 'locals:\n  db: x\n', [one]: 'a: 1\n', [otherCommon]: 'b: 1\n' };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${one}`, one, files[one]);
+  await ws.warm([otherCommon]);
+  ws.close(`file://${one}`);
+  ws.takeEvicted();
+  const narrowed = configText(resourcesEntry({ file_includes: ['**/mock-stack/**/mock.yml'] }));
+  await ws.setConfigs([{ text: narrowed, dir: '/repo' }]);
+  assert.deepEqual(ws.cache.get(common).data.dsl.fileIncludes, ['**/mock-stack/**/mock.yml']);
+  assert.equal(ws.cache.get(otherCommon), null);
+  assert.deepEqual(ws.takeEvicted(), [otherCommon]);
 });

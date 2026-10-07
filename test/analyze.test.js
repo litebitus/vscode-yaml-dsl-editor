@@ -135,7 +135,7 @@ test('a ref named by a local value opens the declaration in the active file firs
   ];
   const placeholder = { pattern: '\\$\\{(?<body>[^}]*)\\}', unscannedPaths: [] };
   const withPlaceholders = (list) => stackOf(list, {
-    dsl: { scopes: stackScopes, references: [refRule, localRule], placeholder },
+    dsl: { scopes: stackScopes, references: [refRule, localRule], placeholder, locals: { scopeName: 'local' } },
   });
   const hit = definitionAt(doc, { line: 0, character: 12 }, withPlaceholders(symbols));
   assert.equal(hit.path, '/repo/one/mock.yml');

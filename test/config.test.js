@@ -4,6 +4,7 @@ const {
   COMMON_LAYER_DISCOVERIES,
   CONFIG_VERSIONS,
   FUNCTION_DEFINITIONS,
+  KEY_ORDERS,
   KEY_TOKENS,
   LOGICAL_SCOPE_NAME,
   NAME_SOURCES,
@@ -13,6 +14,13 @@ const {
   ownsFile,
 } = require('../lib/config');
 const { REFERENCE_POSITIONS } = require('../lib/reference-positions');
+const {
+  scope,
+  declaration,
+  reference,
+  dslEntry,
+  configText,
+} = require('./config-builders');
 
 const completeConfig = `
 version: "1"
@@ -24,6 +32,10 @@ dsls:
     layers:
       overlay_folders: [one, 2]
       common_layer_discovery: ancestor
+      duplicate_check:
+        depth: 3
+        key_depths: { data_source: 2 }
+        skip_keys: [schema_version]
     placeholder:
       pattern: '\\$\\{(?<body>[^}]*)\\}'
       unscanned_paths:
@@ -38,6 +50,12 @@ dsls:
         call_marker: fn.
         splat_operator: '*'
         calls_without_name_allowed: true
+    locals:
+      scope_name: local
+    key_orders:
+      - { path: "$.locals", skip_keys: [], includes_subtree: false, order: alphabetical }
+      - { path: "$.*", skip_keys: [locals], includes_subtree: false, order: significance }
+      - { path: "$", skip_keys: [], includes_subtree: true, order: alphabetical }
     scopes:
       GLOBAL:
         regions: ["$"]
@@ -107,9 +125,19 @@ test('a complete config states every field and keeps them', () => {
   assert.equal(parsed.error, null);
   const [resources] = parsed.dsls;
   assert.deepEqual(resources.fileIncludes, ['**/mock.yml']);
+  const keyOrderFields = (entry) => [entry.path, entry.skipKeys, entry.includesSubtree, entry.order];
+  assert.deepEqual(resources.keyOrders.map(keyOrderFields), [
+    ['$.locals', [], false, 'alphabetical'],
+    ['$.*', ['locals'], false, 'significance'],
+    ['$', [], true, 'alphabetical'],
+  ]);
   assert.deepEqual(resources.fileExcludes, ['**/skip/**']);
   assert.deepEqual(resources.schemaSearchPaths, ['https://example.test/schema.json']);
-  assert.deepEqual(resources.layers, { overlayFolders: ['one'], commonLayerDiscovery: 'ancestor' });
+  assert.deepEqual(resources.layers, {
+    overlayFolders: ['one'],
+    commonLayerDiscovery: 'ancestor',
+    duplicateCheck: { depth: 3, keyDepths: { data_source: 2 }, skipKeys: ['schema_version'] },
+  });
   assert.equal(resources.placeholder.pattern, '\\$\\{(?<body>[^}]*)\\}');
   assert.deepEqual(resources.placeholder.unscannedPaths, [
     { path: '$.build', tokens: [{ kind: 'key', key: 'build' }], skipKeys: [], includesSubtree: true },
@@ -122,6 +150,7 @@ test('a complete config states every field and keeps them', () => {
     splatOperator: '*',
     callsWithoutNameAllowed: true,
   });
+  assert.deepEqual(resources.locals, { scopeName: 'local' });
   assert.deepEqual(resources.scopes.GLOBAL, {
     regions: [[]],
     laterItemsOfDeclaringList: false,
@@ -157,6 +186,7 @@ test('a block the config leaves out is a feature the DSL does not have', () => {
     '    file_includes: ["**/flat.yml"]',
     '    file_excludes: []',
     '    schema_search_paths: []',
+    '    key_orders: []',
     '    scopes: {}',
     '    declarations: []',
     '    references: []',
@@ -170,7 +200,56 @@ test('a block the config leaves out is a feature the DSL does not have', () => {
   const [flat] = parsed.dsls;
   assert.equal(flat.layers, null);
   assert.equal(flat.placeholder, null);
+  assert.equal(flat.locals, null);
   assert.equal(flat.function.markerFunction, null);
+});
+
+test('the duplicate check states its depth and the keys it passes over', () => {
+  const layered = (id, duplicateCheck) => dslEntry(id, {
+    layers: { overlay_folders: ['one'], common_layer_discovery: 'parent', duplicate_check: duplicateCheck },
+  });
+  const parsed = parseConfig(configText(
+    layered('stated', { depth: 2, key_depths: { locals: 1 }, skip_keys: ['schema_version'] }),
+    layered('shallow', { depth: 0, key_depths: { locals: 0 }, skip_keys: 1 }),
+    layered('unmapped', { depth: 1, key_depths: 1, skip_keys: [] }),
+  ));
+  assert.deepEqual(parsed.dsls[0].layers.duplicateCheck, {
+    depth: 2,
+    keyDepths: { locals: 1 },
+    skipKeys: ['schema_version'],
+  });
+  assert.equal(parsed.dsls[1].layers, null);
+  assert.equal(parsed.dsls[2].layers, null);
+  for (const message of [
+    'shallow.layers.duplicate_check.depth is required: a whole number from 1',
+    'shallow.layers.duplicate_check.key_depths.locals must be a whole number from 1',
+    'shallow.layers.duplicate_check.skip_keys is required',
+    'unmapped.layers.duplicate_check.key_depths is required: a mapping of keys to whole numbers from 1',
+  ]) assert.ok(parsed.error.includes(message), message);
+});
+
+test('locals name a declared scope that a key declaration and a reference rule read', () => {
+  const localsDsl = (id, fields) => dslEntry(id, {
+    scopes: { local: scope(), step: scope() },
+    declarations: [declaration('$.locals.*', 'local'), declaration('$.steps.*', 'step', { declares_every_name: true })],
+    references: [reference('^local\\.(?<name>[a-z]+)$', 'local')],
+    ...fields,
+  });
+  const parsed = parseConfig(configText(
+    localsDsl('named', { locals: { scope_name: 'local' } }),
+    localsDsl('mapless', { locals: 'local' }),
+    localsDsl('nameless', { locals: {} }),
+    localsDsl('undeclared', { locals: { scope_name: 'missing' } }),
+    localsDsl('unread', { locals: { scope_name: 'step' } }),
+  ));
+  assert.deepEqual(parsed.dsls.map((dsl) => dsl.locals), [{ scopeName: 'local' }, null, null, null, null]);
+  for (const message of [
+    'mapless.locals must be a mapping with scope_name',
+    'nameless.locals.scope_name is required',
+    'undeclared.locals: scope missing is not declared in scopes',
+    'unread.locals: no declaration rule reads step names from keys',
+    'unread.locals: no reference rule reads step',
+  ]) assert.ok(parsed.error.includes(message), message);
 });
 
 test('a config that leaves a field out is a problem, and the editor fills nothing in', () => {
@@ -178,6 +257,7 @@ test('a config that leaves a field out is a problem, and the editor fills nothin
 version: "1"
 dsls:
   - id: bare
+    key_orders: [{ path: "$", skip_keys: [], includes_subtree: true, order: sideways }]
     layers: { overlay_folders: 1 }
     placeholder: { pattern: '(', unscanned_paths: [1, { path: bad }] }
     function:
@@ -248,6 +328,7 @@ dsls:
     file_includes: 1
     file_excludes: 1
     schema_search_paths: 1
+    key_orders: 1
     layers: 1
     placeholder: 1
     function: 1
@@ -263,6 +344,7 @@ dsls:
     'bare.schema_search_paths is required',
     'bare.layers.overlay_folders is required',
     'bare.layers.common_layer_discovery is required: one of parent, ancestor',
+    'bare.layers.duplicate_check is required: a mapping with depth, key_depths and skip_keys',
     'bare.placeholder.pattern is required',
     'bare.placeholder.unscanned_paths[0] must be a mapping',
     'bare.placeholder.unscanned_paths[1].path is required',
@@ -300,6 +382,8 @@ dsls:
     'lists.scopes is required',
     'lists.declarations is required',
     'lists.references is required',
+    'lists.key_orders is required',
+    'bare.key_orders[0].order is required: one of alphabetical, significance',
   ];
   for (const message of expected) assert.ok(parsed.error.includes(message), message);
   const [bare, lists] = parsed.dsls;
@@ -355,5 +439,6 @@ test('the shipped schema of the config states the values the reader accepts', ()
   assert.deepEqual(definitions.declaration.properties.key_token.enum, [...KEY_TOKENS, null]);
   assert.deepEqual(definitions.declaration.properties.name_spelling.enum, NAME_SPELLINGS);
   assert.deepEqual(definitions.positions.items.enum, REFERENCE_POSITIONS);
+  assert.deepEqual(definitions.key_order.properties.order.enum, KEY_ORDERS);
   assert.deepEqual(Object.keys(definitions.scopes.patternProperties), [LOGICAL_SCOPE_NAME.source]);
 });

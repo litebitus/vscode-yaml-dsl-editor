@@ -119,6 +119,8 @@ test('document events analyze and custom requests answer', async () => {
   assert.match(links[0].target, /^file:\/\/\/repo\/note\.yml#/);
   await connection.handlers['yaml-dsl/active']({ path: '/repo/app/mock.yml' });
   connection.handlers['yaml-dsl/visibleFolds']({ stackIds: ['/repo/app/mock.yml'] });
+  connection.handlers['yaml-dsl/cacheCapacities']({ stackCapacity: 4, schemaCapacity: 4 });
+  assert.throws(() => connection.handlers['yaml-dsl/cacheCapacities']({ stackCapacity: 0, schemaCapacity: 4 }));
   assert.equal(await connection.handlers['yaml-dsl/fold']({ stackId: '/repo/app/mock.yml', overlayName: 'one' }), '');
   const noteDecorations = await connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/note.yml' });
   assert.deepEqual(noteDecorations.references.map((item) => item.kind), ['local']);
@@ -282,4 +284,72 @@ test('semantic tokens are encoded with the legend, and a config change asks the 
   assert.deepEqual(encoded.data, [0, 3, 2, 2, 0, 0, 2, 3, 4, 1, 0, 3, 1, 2, 0]);
   const completed = await connection.handlers.completion({ textDocument: { uri: 'file:///repo/note.yml' }, position: { line: 0, character: 5 } });
   assert.equal(completed[0].kind, 21);
+});
+
+test('suggestions are sent as they arrive, and one is applied through the editor', async () => {
+  const connection = fakeConnection();
+  const applied = [];
+  connection.workspace = {
+    async applyEdit(edit) {
+      applied.push(edit);
+      return edit.changes['file:///refused.yml'] ? { applied: false } : { applied: true };
+    },
+  };
+  let announce = null;
+  const workspace = {
+    onVocabularyLoaded() {},
+    onSuggestions(listener) { announce = listener; },
+    suggestionMarks: (stackId) => ({ stackId, files: [{ uri: 'file:///repo/dev/mock.yml', marks: [] }] }),
+    applySuggestion(stackId, suggestionId) {
+      if (suggestionId === 'stale') return { problem: 'the suggestion no longer applies' };
+      return { edit: { changes: { [`file:///${suggestionId}.yml`]: [] } } };
+    },
+  };
+  bind(connection, fakeDocuments(), { workspace });
+  announce('/repo/mock.yml');
+  assert.deepEqual(connection.notifications.at(-1), {
+    method: 'yaml-dsl/suggestions',
+    params: { stackId: '/repo/mock.yml', files: [{ uri: 'file:///repo/dev/mock.yml', marks: [] }] },
+  });
+  const apply = connection.handlers['yaml-dsl/applySuggestion'];
+  assert.deepEqual(await apply({ stackId: '/repo/mock.yml', id: 'queue' }), {
+    applied: true,
+    message: null,
+    uris: ['file:///queue.yml'],
+  });
+  assert.deepEqual(applied, [{ changes: { 'file:///queue.yml': [] } }]);
+  assert.deepEqual(await apply({ stackId: '/repo/mock.yml', id: 'stale' }), {
+    applied: false,
+    message: 'the suggestion no longer applies',
+  });
+  assert.deepEqual(await apply({ stackId: '/repo/mock.yml', id: 'refused' }), {
+    applied: false,
+    message: 'the editor did not apply the edit',
+  });
+});
+
+test('a layer file that changes on disk is watched and read again', async () => {
+  const connection = fakeConnection();
+  const changed = [];
+  const workspace = {
+    onVocabularyLoaded() {},
+    onSuggestions() {},
+    schemaWatchTargets: () => [{ base: '/repo/.schema', pattern: 'mock.json' }],
+    layerWatchTargets: () => [{ base: '/repo/dev', pattern: 'mock.yml' }],
+    schemasChanged: async (paths) => { changed.push(['schemas', paths]); },
+    layersChanged: async (paths) => { changed.push(['layers', paths]); },
+    takeEvicted: () => [],
+    takeReanalyzedUris: () => [],
+  };
+  bind(connection, fakeDocuments(), { workspace });
+  connection.handlers.initialize({
+    capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true } } },
+  });
+  connection.handlers.watchedFiles({ changes: [{ uri: 'file:///repo/dev/mock.yml' }] });
+  await workspace.whenIdle();
+  assert.deepEqual(changed, [['schemas', ['/repo/dev/mock.yml']], ['layers', ['/repo/dev/mock.yml']]]);
+  assert.deepEqual(connection.registrations.at(-1).options.watchers.map((watcher) => watcher.globPattern.pattern), [
+    'mock.json',
+    'mock.yml',
+  ]);
 });
