@@ -9,6 +9,7 @@ const {
   applySuggestion,
 } = require('../lib/suggestion-lightbulbs');
 const { activateWith } = require('../lib/client');
+const { textHashOf } = require('../lib/text-hash');
 
 const moveSuggestion = {
   stackId: '/repo/mock.yml',
@@ -256,7 +257,7 @@ test('a potential move\'s inlay hint names the check that failed', () => {
   ]);
 });
 
-test('applying a suggestion saves every file it changed, and nothing written is a warning', async () => {
+test('applying a suggestion records and saves every file it changed, and nothing written is a warning', async () => {
   const vscode = fakeVscode([]);
   const asked = [];
   const client = (answer) => ({
@@ -277,14 +278,19 @@ test('applying a suggestion saves every file it changed, and nothing written is 
     }),
   };
   const argument = { stackId: '/repo/mock.yml', id: 'mock-move' };
-  await applySuggestion(vscode, client({ applied: true, message: null, uris: ['file:///repo/mock.yml'] }), argument);
-  await applySuggestion(vscode, client({ applied: false, message: 'no longer applies' }), argument);
-  await applySuggestion(vscode, client(new Error('down')), argument);
-  await applySuggestion(vscode, client({ applied: true, message: null, uris: ['file:///repo/locked.yml'] }), argument);
-  await applySuggestion(vscode, client({ applied: true, message: null }), argument);
-  await applySuggestion(vscode, client(null), { stackId: '/repo/mock.yml' });
+  const recorded = [];
+  const undoSaves = { recordApply: (files) => recorded.push(...files) };
+  const appliedFile = (uri) => ({ uri, textHashBefore: 'mock-before', textHashAfter: 'mock-after' });
+  const apply = (answer, applied = argument) => applySuggestion(vscode, client(answer), applied, undoSaves);
+  await apply({ applied: true, message: null, files: [appliedFile('file:///repo/mock.yml')] });
+  await apply({ applied: false, message: 'no longer applies' });
+  await apply(new Error('down'));
+  await apply({ applied: true, message: null, files: [appliedFile('file:///repo/locked.yml')] });
+  await apply({ applied: true, message: null });
+  await apply(null, { stackId: '/repo/mock.yml' });
   assert.deepEqual(asked.map((item) => item.method), Array(5).fill('yaml-dsl/applySuggestion'));
   assert.deepEqual(saved, ['file:///repo/mock.yml', 'file:///repo/locked.yml']);
+  assert.deepEqual(recorded.map((file) => file.uri), ['file:///repo/mock.yml', 'file:///repo/locked.yml']);
   assert.deepEqual(vscode.window.warnings, [
     'no longer applies',
     'down',
@@ -320,7 +326,8 @@ test('activation paints the suggestions the server sends and registers the move'
       }
       dispose() {}
     },
-    Uri: { joinPath: (base, part) => `${base}/${part}` },
+    TextDocumentChangeReason: { Undo: 1, Redo: 2 },
+    Uri: { joinPath: (base, part) => `${base}/${part}`, parse: (uri) => uri },
     workspace: {
       workspaceFolders: [],
       textDocuments: [],
@@ -455,4 +462,31 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri).badge, '💡');
   documentClosed({ uri: { toString: () => 'file:///repo/dev/mock.yml' } });
   documentClosed(null);
+  const appliedUri = 'file:///repo/dev/mock.yml';
+  const textBeforeApply = 'queue:\n  events: 1\n';
+  client.sendRequest = async () => ({
+    applied: true,
+    message: null,
+    files: [{
+      uri: appliedUri,
+      textHashBefore: textHashOf(textBeforeApply),
+      textHashAfter: textHashOf('queue: {}\n'),
+    }],
+  });
+  vscode.workspace.openTextDocument = async () => ({ save: async () => true });
+  await commands[APPLY_COMMAND]({ stackId: '/repo/mock.yml', id: 'mock-move' });
+  const undone = {
+    languageId: 'yaml-dsl',
+    isDirty: true,
+    uri: { scheme: 'file', toString: () => appliedUri },
+    getText: () => textBeforeApply,
+    saves: 0,
+    async save() { undone.saves += 1; return true; },
+  };
+  vscode.documentChanged({ document: undone, reason: undefined });
+  await new Promise((resolve) => { setImmediate(resolve); });
+  assert.equal(undone.saves, 0);
+  vscode.documentChanged({ document: undone, reason: vscode.TextDocumentChangeReason.Undo });
+  await new Promise((resolve) => { setImmediate(resolve); });
+  assert.equal(undone.saves, 1);
 });

@@ -303,7 +303,11 @@ test('suggestions are sent as they arrive, and one is applied through the editor
     suggestionMarks: (stackId) => ({ stackId, files: [{ uri: 'file:///repo/dev/mock.yml', marks: [] }] }),
     applySuggestion(stackId, suggestionId) {
       if (suggestionId === 'stale') return { problem: 'the suggestion no longer applies' };
-      return { edit: { changes: { [`file:///${suggestionId}.yml`]: [] } } };
+      const uri = `file:///${suggestionId}.yml`;
+      return {
+        edit: { changes: { [uri]: [] } },
+        files: [{ uri, textHashBefore: 'mock-before', textHashAfter: 'mock-after' }],
+      };
     },
   };
   bind(connection, fakeDocuments(), { workspace });
@@ -316,7 +320,7 @@ test('suggestions are sent as they arrive, and one is applied through the editor
   assert.deepEqual(await apply({ stackId: '/repo/mock.yml', id: 'queue' }), {
     applied: true,
     message: null,
-    uris: ['file:///queue.yml'],
+    files: [{ uri: 'file:///queue.yml', textHashBefore: 'mock-before', textHashAfter: 'mock-after' }],
   });
   assert.deepEqual(applied, [{ changes: { 'file:///queue.yml': [] } }]);
   assert.deepEqual(await apply({ stackId: '/repo/mock.yml', id: 'stale' }), {

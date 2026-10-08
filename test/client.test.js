@@ -42,6 +42,7 @@ function fakeVscode(options = {}) {
   const vscode = {
     ThemeColor: class { constructor(id) { this.id = id; } },
     ConfigurationTarget: { Workspace: 2 },
+    TextDocumentChangeReason: { Undo: 1, Redo: 2 },
     ViewColumn: { Beside: 2 },
     Position: class { constructor(line, character) { this.line = line; this.character = character; } },
     Range: class { constructor(start, end) { this.start = start; this.end = end; } },

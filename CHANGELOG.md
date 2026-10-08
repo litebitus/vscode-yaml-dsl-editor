@@ -7,6 +7,7 @@
 - Suggestions: a move is offered only when the overlays' schemas agree at the block and each opt-out passes them; otherwise the hint is a potential move with the schema's messages.
 - Suggestions: a key an overlay holds the same as the common layer, within `layers.duplicate_check`, gets a suggestion to delete it.
 - Suggestions: applying one saves every file it changed.
+- Suggestions: undoing or redoing an applied suggestion saves every file it brings back.
 - Suggestions: a stack loaded again after leaving the cache works its suggestions out without waiting for an edit, and a failure to work them out is logged instead of stopping the server.
 - Suggestions: kept in the extension's global storage per workspace and file, with the hash of the text they came from, so they survive a stack leaving the cache and an editor restart; a file changed outside the editor has its stack worked out again.
 - Work queue: the active file's work starts at once, ahead of a background job in progress.

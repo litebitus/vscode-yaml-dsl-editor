@@ -38,7 +38,7 @@ A reference nothing declares, an unknown placeholder and a call the DSL's functi
 
 ### Suggestions
 
-A block the overlays repeat moves into the common layer in one click, its differences written as locals. A repeat of the common layer is deleted from an overlay the same way. Every move is checked against each overlay's schema first.
+A block the overlays repeat moves into the common layer in one click, its differences written as locals. A repeat of the common layer is deleted from an overlay the same way. Every move is checked against each overlay's schema first. One undo reverts the whole move, across every file, and saves them.
 
 ### Responsive and bounded
 

@@ -197,6 +197,13 @@ test('suggestions wait for a quiet stack, then mark the block and move it in one
     range: { start: { line: 0, character: 0 }, end: { line: 4, character: 0 } },
     newText: 'locals:\n  queue_events_size: 2\n',
   }]);
+  assert.deepEqual(moved.files.map((file) => file.uri), Object.keys(moved.edit.changes));
+  const production = `${root}/production/mock.yml`;
+  const productionFile = moved.files.find((file) => file.uri === `file://${production}`);
+  assert.equal(productionFile.textHashBefore, textHashOf(files[production]));
+  assert.notEqual(productionFile.textHashAfter, productionFile.textHashBefore);
+  const devFile = moved.files.find((file) => file.uri === `file://${dev}`);
+  assert.equal(devFile.textHashBefore, textHashOf(`${files[dev]}\n`));
   const stale = await ws.applySuggestion(stackId, '["move",["dev"],["other"]]');
   assert.equal(stale.problem, 'the suggestion no longer applies');
   const nowhere = await ws.applySuggestion('/nowhere', devMarks[0].suggestion.id);
