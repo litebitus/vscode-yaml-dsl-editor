@@ -113,5 +113,7 @@ make publish              # bump patch; publish to Open VSX + VS Code Marketplac
 make publish BUMP=minor   # bump minor instead
 ```
 
+The version bump renames the CHANGELOG's `## Unreleased` heading to the new version and the date, in the release commit; a release without that heading stops before the bump.
+
 To only build the .vsix without publishing: `make package`.
 To retry a single store for the current version: `make publish-ovsx` / `make publish-vsce`.

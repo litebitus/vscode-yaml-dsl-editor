@@ -1,5 +1,6 @@
 .gitignore
 Makefile
+scripts/
 test/
 .vscode-test/
 .vscode-test.mjs
