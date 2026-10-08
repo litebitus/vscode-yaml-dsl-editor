@@ -209,7 +209,7 @@ Values are compared as written: a reference, a local and a placeholder are their
 One click:
 
 - writes the block into the common layer, copied from the first overlay holding it in `layers.overlay_folders` order, comments, key order and the blank lines around it included, with each difference replaced by a reference to its local;
-- declares each difference's local in the common layer with the value most of those overlays hold, the first in `layers.overlay_folders` order on a tie, and in each overlay holding another value with its own;
+- declares each difference's local in the common layer with the value most of those overlays hold, and in each overlay holding another value with its own; when no one value is held by the most overlays, each overlay declares its own value and the common layer declares the empty value of their type, `""`, `0` or `false`, so the name resolves in an overlay that opts out; tied values of differing types, or `null`, offer no move;
 - deletes the block from each overlay that holds it, and a parent map left empty by that, merging the blank lines around it into one;
 - writes `{}` at the block's path into each overlay with a file that does not hold it, so that overlay keeps none of it;
 - saves every file it changed.
@@ -553,4 +553,5 @@ The extension's own settings are VS Code settings under the extension's name, `y
 
 ## TODO
 
+- A move turns list and map differences into locals, and on a tie the common layer declares a list's local as `[]` and a map's as `{}`.
 - `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.

@@ -122,6 +122,74 @@ test('a block most overlays hold moves to the common layer, each difference a lo
   assert.equal(foldsAgreeAfter(stack, suggestion, tampered), false);
 });
 
+test('a difference whose values tie is declared in each overlay, the common layer holding the empty value of its type', () => {
+  const holder = (retention) => `queue:\n  events:\n    retention_seconds: ${retention}\n    max_receive_count: 5\n`;
+  const stack = stackOf(layeredDsl(), texts('locals:\n  team: mock-team\n', {
+    dev: holder(86400),
+    staging: holder(86400),
+    uat: holder(1209600),
+    production: holder(1209600),
+  }));
+  const [suggestion] = commonLayerSuggestions(stack, noSchemaChecks);
+  assert.equal(suggestion.kind, 'move');
+  const edited = editedTexts(stack, suggestion);
+  assert.equal(edited.get(common), [
+    'locals:',
+    '  queue_events_retention_seconds: 0',
+    '  team: mock-team',
+    'queue:',
+    '  events:',
+    '    retention_seconds: local.queue_events_retention_seconds',
+    '    max_receive_count: 5',
+    '',
+  ].join('\n'));
+  assert.equal(edited.get(overlayPath('dev')), 'locals:\n  queue_events_retention_seconds: 86400\n');
+  assert.equal(edited.get(overlayPath('production')), 'locals:\n  queue_events_retention_seconds: 1209600\n');
+  assert.equal(foldsAgreeAfter(stack, suggestion, edited), true);
+});
+
+test('a tied string or boolean takes "" or false in the common layer, and tied values of mixed types offer no move', () => {
+  const holder = (name, enabled) => `queue:\n  events:\n    name: ${name}\n    enabled: ${enabled}\n    size: 1\n`;
+  const stack = stackOf(layeredDsl(), texts('schema_version: "3"\n', {
+    dev: holder('mock-dev', true),
+    staging: holder('mock-staging', false),
+    uat: holder('mock-uat', true),
+    production: holder('mock-production', false),
+  }));
+  const [suggestion] = commonLayerSuggestions(stack, noSchemaChecks);
+  const edited = editedTexts(stack, suggestion);
+  assert.equal(edited.get(common), [
+    'schema_version: "3"',
+    'locals:',
+    '  queue_events_enabled: false',
+    '  queue_events_name: ""',
+    'queue:',
+    '  events:',
+    '    name: local.queue_events_name',
+    '    enabled: local.queue_events_enabled',
+    '    size: 1',
+    '',
+  ].join('\n'));
+  assert.equal(foldsAgreeAfter(stack, suggestion, edited), true);
+  const optingOut = stackOf(layeredDsl(), texts('schema_version: "3"\n', {
+    dev: holder('mock-dev', true),
+    staging: holder('mock-staging', true),
+    uat: holder('mock-uat', true),
+    production: 'other: {}\n',
+  }));
+  const [optOutSuggestion] = commonLayerSuggestions(optingOut, noSchemaChecks);
+  const optOutEdited = editedTexts(optingOut, optOutSuggestion);
+  assert.match(optOutEdited.get(common), /^locals:\n {2}queue_events_name: ""\n/m);
+  assert.equal(optOutEdited.get(overlayPath('production')), 'other: {}\nqueue: {}\n');
+  assert.equal(foldsAgreeAfter(optingOut, optOutSuggestion, optOutEdited), true);
+  const mixed = stackOf(layeredDsl(), texts('schema_version: "3"\n', {
+    dev: holder('mock-dev', true),
+    staging: holder(7, true),
+    uat: holder('mock-uat', true),
+  }));
+  assert.equal(commonLayerSuggestions(mixed, noSchemaChecks).filter((found) => found.kind === 'move').length, 0);
+});
+
 test('a moved block keeps the blank lines the first overlay holding it puts around it', () => {
   const holder = (env, gap) => `schema_version: "3"\nenv: ${env}\n${gap}data_source:\n  kms:\n    type: mock\n`;
   const stack = stackOf(layeredDsl(), texts('schema_version: "3"\nrds:\n  capacity: mock\n', {
