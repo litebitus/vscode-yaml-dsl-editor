@@ -122,6 +122,21 @@ test('a block most overlays hold moves to the common layer, each difference a lo
   assert.equal(foldsAgreeAfter(stack, suggestion, tampered), false);
 });
 
+test('a moved block keeps the blank lines the first overlay holding it puts around it', () => {
+  const holder = (env, gap) => `schema_version: "3"\nenv: ${env}\n${gap}data_source:\n  kms:\n    type: mock\n`;
+  const stack = stackOf(layeredDsl(), texts('schema_version: "3"\nrds:\n  capacity: mock\n', {
+    dev: holder('dev', '\n'),
+    staging: holder('staging', ''),
+    uat: holder('uat', ''),
+  }));
+  const [suggestion] = commonLayerSuggestions(stack, noSchemaChecks);
+  assert.deepEqual(suggestion.path, ['data_source']);
+  assert.equal(
+    editedTexts(stack, suggestion).get(common),
+    'schema_version: "3"\nrds:\n  capacity: mock\n\ndata_source:\n  kms:\n    type: mock\n',
+  );
+});
+
 test('a block held by half the overlays or fewer is not suggested', () => {
   const stack = stackOf(layeredDsl(), texts('', {
     dev: 'queue:\n  events:\n    a: 1\n',

@@ -113,7 +113,8 @@ test('the active file wins, then the common layer, then the first other declarat
   assert.match(full.contents.value, /line29/);
   assert.doesNotMatch(full.contents.value, /sibling:/);
   const missing = analyzeDocument('source: ref mocktype.missing\n', '/repo/two/mock.yml', { references: [refRule] });
-  assert.equal(hoverAt(missing, { line: 0, character: 8 }, stackOf([]), null).contents.value, 'mocktype.missing');
+  const missingHover = hoverAt(missing, { line: 0, character: 8 }, stackOf([]), null);
+  assert.equal(missingHover.contents.value, 'Invalid reference: mocktype.missing');
   assert.equal(definitionAt(missing, { line: 0, character: 8 }, stackOf([])), null);
   assert.deepEqual(linksFor(missing, stackOf([])), []);
   const fieldPath = 'item: ref mocktype.primary.tail\n';
@@ -165,7 +166,7 @@ test('a hover on a valued target shows its value, and a builtin names its scope'
   const stack = (symbols) => ({ symbols, common: '/repo/mock.yml', dsl: { ...dsl, scopes } });
   const symbol = localSymbol('db', '/repo/mock.yml', 'mock-value', { keyRange: doc.tree.range });
   assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([symbol]), null).contents.value, 'mock-value');
-  assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([]), null).contents.value, 'local.db');
+  assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([]), null).contents.value, 'Invalid reference: local.db');
   assert.equal(hoverAt(doc, { line: 1, character: 9 }, stack([]), null).contents.value, 'GLOBAL env');
   assert.equal(definitionAt(doc, { line: 1, character: 9 }, stack([])), null);
   assert.deepEqual(linksFor(doc, stack([])), []);

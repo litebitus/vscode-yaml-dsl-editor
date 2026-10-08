@@ -40,6 +40,7 @@ function fakeVscode(options = {}) {
   };
   const provider = {};
   const vscode = {
+    ThemeColor: class { constructor(id) { this.id = id; } },
     ConfigurationTarget: { Workspace: 2 },
     ViewColumn: { Beside: 2 },
     Position: class { constructor(line, character) { this.line = line; this.character = character; } },
@@ -453,6 +454,7 @@ function referenceMarks() {
     local: { kind: 'local' },
     external: { kind: 'external' },
     error: { kind: 'error' },
+    info: { kind: 'info' },
     unclassified: { kind: 'unclassified' },
   };
 }
@@ -529,7 +531,7 @@ test('references are painted by the class the server gives them', async () => {
   assert.deepEqual(covered('error'), ['ref five.six']);
   assert.deepEqual(covered('unclassified'), []);
   assert.deepEqual(client.sent.at(-1), { method: 'yaml-dsl/decorations', params: { uri: 'file:///repo/mock.yml' } });
-  assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0]);
+  assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0, 0]);
 });
 
 test('a classified ref takes its class underline whole, placeholders inside it included', async () => {
@@ -644,7 +646,7 @@ test('classes that arrive after a newer paint are dropped', async () => {
   assert.equal(localPaints[0].ranges[0].end.character, 2);
 });
 
-test('problems are error squiggles with their message on hover, a whole line when the range is empty', async () => {
+test('problems are error squiggles, or info underlines, with their message on hover, a whole line when the range is empty', async () => {
   const painted = [];
   const doc = documentOf('# yaml-language-server: $schema=missing.json\nname: [\nsource: ref one.two\n');
   doc.lineCount = 4;
@@ -654,17 +656,19 @@ test('problems are error squiggles with their message on hover, a whole line whe
     decorations: {
       references: null,
       problems: [
-        { range: rangeOf(0, 0, 0), message: 'schema is unavailable' },
-        { range: rangeOf(1, 6, 7), message: 'flow sequence is not closed' },
-        { range: rangeOf(9, 0, 0), message: 'past the end' },
+        { range: rangeOf(0, 0, 0), message: 'schema is unavailable', severity: 'info' },
+        { range: rangeOf(1, 6, 7), message: 'flow sequence is not closed', severity: 'error' },
+        { range: rangeOf(9, 0, 0), message: 'past the end', severity: 'error' },
       ],
     },
   });
   await paintUnderlines(vscode, client, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
   assert.deepEqual(lastPaint(painted, 'error').ranges, [
-    { range: rangeOf(0, 0, 44), hoverMessage: 'schema is unavailable' },
     { range: rangeOf(1, 6, 7), hoverMessage: 'flow sequence is not closed' },
     { range: rangeOf(9, 0, 0), hoverMessage: 'past the end' },
+  ]);
+  assert.deepEqual(lastPaint(painted, 'info').ranges, [
+    { range: rangeOf(0, 0, 44), hoverMessage: 'schema is unavailable' },
   ]);
   assert.equal(lastPaint(painted, 'unclassified').ranges.length, 1);
   assert.equal(painted.some((item) => item.kind === 'external' && item.ranges.length > 0), false);

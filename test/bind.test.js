@@ -127,6 +127,7 @@ test('document events analyze and custom requests answer', async () => {
   assert.deepEqual(noteDecorations.problems, [{
     range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
     message: 'schema is unavailable',
+    severity: 'info',
   }]);
   const folds = await connection.handlers['yaml-dsl/foldsFor']({ path: '/repo/app/mock.yml' });
   assert.equal(folds.stackId, null);

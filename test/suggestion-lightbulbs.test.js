@@ -5,6 +5,7 @@ const {
   hoverMarkdownText,
   paintLightbulbs,
   suggestionInlayHints,
+  suggestionFileDecoration,
   applySuggestion,
 } = require('../lib/suggestion-lightbulbs');
 const { activateWith } = require('../lib/client');
@@ -97,6 +98,8 @@ function inlayVscode() {
     ...fakeVscode([]),
     InlayHintLabelPart: class { constructor(value) { this.value = value; } },
     InlayHint: class { constructor(position, label) { this.position = position; this.label = label; } },
+    FileDecoration: class { constructor(badge, tooltip, color) { Object.assign(this, { badge, tooltip, color }); } },
+    ThemeColor: class { constructor(id) { this.id = id; } },
   };
 }
 
@@ -132,6 +135,21 @@ test('each suggestion is an inlay hint at the end of its line, its tooltip the d
   assert.match(label.tooltip.value, /command:yaml-dsl-editor\.applySuggestion\?/);
   assert.equal(deleteHint.label[0].value, '💡 same in common layer');
   assert.deepEqual(suggestionInlayHints(vscode, marksByUri, documentOf('file:///other.yml', ['a'])), []);
+});
+
+test('a file with a suggestion shows its name in the light bulb color, with a light bulb badge', () => {
+  const vscode = inlayVscode();
+  const at = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
+  const marksByUri = new Map([
+    ['file:///repo/dev/mock.yml', [{ range: at, suggestion: moveSuggestion }]],
+    ['file:///repo/staging/mock.yml', []],
+  ]);
+  const decoration = suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/dev/mock.yml' });
+  assert.equal(decoration.badge, '💡');
+  assert.equal(decoration.color.id, 'editorLightBulb.foreground');
+  assert.equal(decoration.propagate, true);
+  assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/staging/mock.yml' }), undefined);
+  assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/other.yml' }), undefined);
 });
 
 const schemasDiffer = {
@@ -280,7 +298,9 @@ test('activation paints the suggestions the server sends and registers the move'
   const commands = {};
   const disposable = { dispose() {} };
   let inlayChanges = 0;
+  let fileDecorationChanges = 0;
   let inlayProvider = null;
+  let fileDecorationProvider = null;
   let suggestionsSetting = 'on';
   let stackCapacitySetting = 32;
   let configurationChanged = null;
@@ -294,7 +314,10 @@ test('activation paints the suggestions the server sends and registers the move'
     InlayHint: inlayVscode().InlayHint,
     EventEmitter: class {
       constructor() { this.event = () => disposable; }
-      fire() { inlayChanges += 1; }
+      fire(changed) {
+        if (arguments.length === 1 && changed === undefined) fileDecorationChanges += 1;
+        else inlayChanges += 1;
+      }
       dispose() {}
     },
     Uri: { joinPath: (base, part) => `${base}/${part}` },
@@ -351,6 +374,10 @@ test('activation paints the suggestions the server sends and registers the move'
   };
   vscode.window.onDidChangeActiveTextEditor = () => disposable;
   vscode.window.onDidChangeVisibleTextEditors = (fn) => { vscode.visibleChanged = fn; return disposable; };
+  vscode.window.registerFileDecorationProvider = (provider) => {
+    fileDecorationProvider = provider;
+    return disposable;
+  };
   const client = {
     stop() {},
     onNotification(method, fn) { notes[method] = fn; },
@@ -372,12 +399,17 @@ test('activation paints the suggestions the server sends and registers the move'
   const lightbulb = painted.filter(isLightbulb).at(-1);
   assert.equal(lightbulb.mark.options.after, undefined);
   assert.equal(lightbulb.ranges.length, 1);
-  const errorMark = decorationTypes.find((decorationType) => decorationType.options.color === '#f14c4c');
-  assert.equal(errorMark.options.gutterIconPath, 'mock-extension/media/error-gutter-mark.svg');
+  const errorMark = decorationTypes.find((decorationType) => decorationType.options.gutterIconPath
+    === 'mock-extension/media/error-gutter-mark.svg');
+  assert.equal(errorMark.options.color, '#dc7975');
+  assert.equal(errorMark.options.textDecoration, 'underline wavy #dc7975');
   assert.deepEqual(inlayProvider.selector, { language: 'yaml-dsl' });
   assert.equal(inlayChanges, 1);
   const hints = inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:']));
   assert.equal(hints[0].label[0].value, '💡 move to common layer');
+  const devUri = { toString: () => 'file:///repo/dev/mock.yml' };
+  assert.equal(fileDecorationChanges, 1);
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri).color.id, 'editorLightBulb.foreground');
   vscode.visibleChanged();
   assert.equal(painted.filter(isLightbulb).length, 2);
   assert.equal(typeof commands[APPLY_COMMAND], 'function');
@@ -388,6 +420,7 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.equal(inlayChanges, 2);
   assert.deepEqual(painted.filter(isLightbulb).at(-1).ranges, []);
   assert.deepEqual(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])), []);
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri), undefined);
   suggestionsSetting = 'on';
   configurationChanged({ affectsConfiguration: () => true });
   assert.equal(painted.filter(isLightbulb).at(-1).ranges.length, 1);
@@ -418,7 +451,8 @@ test('activation paints the suggestions the server sends and registers the move'
   });
   assert.equal(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])).length, 1);
   notes['yaml-dsl/evicted']({ stackIds: ['/repo/mock.yml'] });
-  assert.deepEqual(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])), []);
+  assert.equal(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])).length, 1);
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri).badge, '💡');
   documentClosed({ uri: { toString: () => 'file:///repo/dev/mock.yml' } });
   documentClosed(null);
 });

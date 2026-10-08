@@ -20,7 +20,12 @@ test('aliases resolve and a broken document reports an error', () => {
   assert.equal(cycle.tree.entries[0].value.entries[0].value, null);
   const broken = parseYaml('a: [\n');
   assert.ok(broken.errors.length > 0);
-  assert.ok(broken.errors[0].range.start.line >= 0);
+  const unclosed = parseYaml('# c\nlocals:\n  db: x\nlist: [one, two\n');
+  assert.deepEqual(unclosed.errors.map((error) => error.range), [
+    { start: { line: 4, character: 0 }, end: { line: 4, character: 0 } },
+  ]);
+  const midway = parseYaml('a: 1\nb: c: d\ne: 2\n');
+  assert.deepEqual(midway.errors[0].range.start.line, 1);
   assert.equal(parseYaml('').tree, null);
   assert.equal(parseYaml('').value, null);
 });

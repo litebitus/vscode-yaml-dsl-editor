@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorkspace } = require('../lib/workspace');
+const { textHashOf } = require('../lib/text-hash');
 const {
   scope,
   declaration,
@@ -67,6 +68,96 @@ function workspaceOver(files, timerFunctions) {
   });
 }
 
+test('a stack evicted and built again without an edit works its suggestions out again', async () => {
+  const timers = fakeTimers();
+  const files = { ...stackFiles('/repo/first'), ...stackFiles('/repo/second'), ...stackFiles('/repo/third') };
+  const ws = workspaceOver(files, timers);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  ws.setCacheCapacities({ stackCapacity: 1, schemaCapacity: 32 });
+  const firstDev = '/repo/first/dev/mock.yml';
+  const secondDev = '/repo/second/dev/mock.yml';
+  const marksOf = (stackId) => ws.suggestionMarks(stackId).files.flatMap((file) => file.marks);
+  const arrivals = [];
+  ws.onSuggestions((stackId) => arrivals.push(stackId));
+  const settle = async () => {
+    timers.fireAll();
+    for (let turn = 0; turn < 20; turn += 1) await new Promise((resolve) => { setImmediate(resolve); });
+  };
+  await ws.setActive(firstDev);
+  await settle();
+  assert.ok(marksOf('/repo/first/mock.yml').length > 0);
+  await ws.setActive(secondDev);
+  await ws.setActive('/repo/third/dev/mock.yml');
+  await settle();
+  assert.ok(ws.takeEvicted().includes('/repo/first/mock.yml'));
+  assert.deepEqual(marksOf('/repo/first/mock.yml'), []);
+  arrivals.length = 0;
+  await ws.setActive(firstDev);
+  await settle();
+  assert.ok(arrivals.includes('/repo/first/mock.yml'));
+  assert.ok(marksOf('/repo/first/mock.yml').length > 0);
+  ws.takeEvicted();
+  arrivals.length = 0;
+  ws.setCacheCapacities({ stackCapacity: 3, schemaCapacity: 32 });
+  await ws.warm([secondDev]);
+  await settle();
+  assert.ok(arrivals.includes('/repo/second/mock.yml'));
+});
+
+test('a refresh works out a stack no editor holds without loading it, each file\'s marks carrying its text hash', async () => {
+  const timers = fakeTimers();
+  const files = stackFiles('/repo/mock-stack');
+  const ws = workspaceOver(files, timers);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  const reports = [];
+  ws.onSuggestions((stackId) => reports.push(ws.suggestionMarks(stackId)));
+  await ws.refreshSuggestions(['/repo/mock-stack/dev/mock.yml', '/repo/mock-stack/staging/mock.yml', '/repo/none.txt']);
+  assert.equal(ws.cache.get('/repo/mock-stack/mock.yml'), null);
+  assert.equal(reports.length, 1);
+  const dev = reports[0].files.find((file) => file.uri === 'file:///repo/mock-stack/dev/mock.yml');
+  assert.equal(dev.textHash, textHashOf(files['/repo/mock-stack/dev/mock.yml']));
+  assert.equal(dev.marks.length, 1);
+  assert.deepEqual(ws.suggestionMarks('/repo/mock-stack/mock.yml'), { stackId: '/repo/mock-stack/mock.yml', files: [] });
+  await ws.setActive('/repo/mock-stack/dev/mock.yml');
+  timers.pending.clear();
+  await ws.refreshSuggestions(['/repo/mock-stack/dev/mock.yml']);
+  assert.equal(timers.pending.size, 1);
+});
+
+test('a suggestion job that throws is logged and clears that stack\'s suggestions, and the server keeps going', async () => {
+  const root = '/repo/mock-stack';
+  const files = stackFiles(root);
+  const timers = fakeTimers();
+  const logged = [];
+  let failing = true;
+  const { commonLayerSuggestions } = require('../lib/common-layer-suggestions');
+  const ws = createWorkspace({
+    readFile: async (filePath) => (Object.prototype.hasOwnProperty.call(files, filePath) ? files[filePath] : null),
+    fetchText: async () => null,
+    timerFunctions: timers,
+    logError: (message) => logged.push(message),
+    suggestionsOfStack: (stack, schemaChecks) => {
+      if (failing) throw new Error('mock suggestion failure');
+      return commonLayerSuggestions(stack, schemaChecks);
+    },
+  });
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  const dev = `${root}/dev/mock.yml`;
+  await ws.sync(`file://${dev}`, dev, files[dev]);
+  let arrived = nextSuggestions(ws);
+  timers.fireAll();
+  const stackId = await arrived;
+  assert.equal(logged.length, 1);
+  assert.match(logged[0], /^suggestions for \/repo\/mock-stack\/mock\.yml could not be worked out: Error: mock suggestion failure/);
+  assert.deepEqual(ws.suggestionMarks(stackId).files.flatMap((file) => file.marks), []);
+  failing = false;
+  await ws.sync(`file://${dev}`, dev, `${files[dev]}\n`);
+  arrived = nextSuggestions(ws);
+  timers.fireAll();
+  await arrived;
+  assert.equal(ws.suggestionMarks(stackId).files.flatMap((file) => file.marks).length > 0, true);
+});
+
 function nextSuggestions(ws) {
   return new Promise((resolve) => { ws.onSuggestions(resolve); });
 }
@@ -95,7 +186,7 @@ test('suggestions wait for a quiet stack, then mark the block and move it in one
     { text: '2', overlays: ['production'] },
   ]);
   assert.equal(marks.files.find((file) => file.uri === `file://${root}/mock.yml`).marks.length, 0);
-  const moved = ws.applySuggestion(stackId, devMarks[0].suggestion.id);
+  const moved = await ws.applySuggestion(stackId, devMarks[0].suggestion.id);
   assert.deepEqual(Object.keys(moved.edit.changes).sort(), [
     `file://${root}/dev/mock.yml`,
     `file://${root}/mock.yml`,
@@ -106,8 +197,14 @@ test('suggestions wait for a quiet stack, then mark the block and move it in one
     range: { start: { line: 0, character: 0 }, end: { line: 4, character: 0 } },
     newText: 'locals:\n  queue_events_size: 2\n',
   }]);
-  assert.equal(ws.applySuggestion(stackId, '["move",["dev"],["other"]]').problem, 'the suggestion no longer applies');
-  assert.equal(ws.applySuggestion('/nowhere', devMarks[0].suggestion.id).problem, 'the stack is no longer loaded');
+  const stale = await ws.applySuggestion(stackId, '["move",["dev"],["other"]]');
+  assert.equal(stale.problem, 'the suggestion no longer applies');
+  const nowhere = await ws.applySuggestion('/nowhere', devMarks[0].suggestion.id);
+  assert.equal(nowhere.problem, 'the stack is no longer in the workspace');
+  ws.cache.drop(stackId);
+  const reloaded = await ws.applySuggestion(stackId, devMarks[0].suggestion.id);
+  assert.ok(reloaded.edit);
+  assert.ok(ws.cache.get(stackId));
   assert.deepEqual(ws.suggestionMarks('/nowhere'), { stackId: '/nowhere', files: [] });
 });
 
@@ -139,7 +236,7 @@ test('a move the overlays\' schemas disagree on is a potential move, offered aga
     { overlays: ['dev', 'staging'], state: 'constrained' },
     { overlays: ['production'], state: 'not_allowed' },
   ]);
-  assert.equal(ws.applySuggestion(stackId, mark.suggestion.id).problem, 'a potential move has no edit to apply');
+  assert.equal((await ws.applySuggestion(stackId, mark.suggestion.id)).problem, 'a potential move has no edit to apply');
   files[`${root}/production/.schema/mock.schema.json`] = queueSchema;
   arrived = nextSuggestions(ws);
   await ws.schemasChanged([`${root}/production/.schema/mock.schema.json`]);
@@ -147,7 +244,7 @@ test('a move the overlays\' schemas disagree on is a potential move, offered aga
   await arrived;
   const [moveMark] = ws.suggestionMarks(stackId).files.find((file) => file.uri === `file://${dev}`).marks;
   assert.equal(moveMark.suggestion.kind, 'move');
-  assert.ok(ws.applySuggestion(stackId, moveMark.suggestion.id).edit);
+  assert.ok((await ws.applySuggestion(stackId, moveMark.suggestion.id)).edit);
 });
 
 test('one suggestion job waits per stack, a flat stack arms nothing, and an evicted stack is dropped', async () => {

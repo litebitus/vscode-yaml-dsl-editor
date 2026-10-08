@@ -14,13 +14,40 @@ The editor is a language server. It has to be. Activating any `sample.yml` puts 
 
 The server keeps the stack current as the files change, including the folded document of each overlay. Those folded documents are buffers in the editor view, so the author sees an overlay's full config instead of assembling it from the files. Hover and navigation run against the stack in scope, not against the active file alone.
 
-On each change the server parses the changed YAML, reads that file's schema, and resolves references, placeholders and calls across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem is red text with a red squiggle at its range, with its message on hover, and an empty range covers its whole line. Its line carries an error mark in the gutter.
+On each change the server parses the changed YAML, reads that file's schema, and resolves references, placeholders and calls across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem has a severity. An error is red text with a red squiggle at its range, in the red the DevOps tools print failures in, and its line carries an error mark in the gutter. An info problem, a schema the file names that cannot be loaded, is a wavy underline in the blue the DevOps tools print info in, with no change to the text, and its line carries an info mark in the gutter, the same shape and size as the error mark. Either shows its message on hover, and an empty range covers its whole line.
 
 The workspace holds many stacks. The server loads one when a file in it becomes active, and does not load the rest at startup. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each overlay. Switching files inside a resident stack is a hit.
 
-The file in the active editor is worked on right away, ahead of all other files. Work on its stack goes first, the stacks of other open files next, and loading in the background last. A request about a file is answered once that file's analysis is done.
+The file in the active editor is worked on right away, ahead of all other files. Work on its stack goes first, the stacks of other open files next, then the suggestions of the active and open stacks, and only then anything in the background: loading the rest of the workspace and the suggestions of stacks no editor has open. Open editors always come before background work. Work on the active file starts at once: a background job in progress waits at its next pause and resumes after it, and only work on the same stack waits for the job holding it. A request about a file is answered once that file's analysis is done.
 
-The cache is bounded, and the unit is the stack. The stack of the active editor is pinned, and so is any stack whose folded buffer is on screen. A pin is not an eviction candidate. Opening, editing, navigating into, or showing a stack marks it most recently used. Capacity beyond the pins is the setting `yaml-dsl-editor.cache.stackCapacity`. Loading one past that, or lowering the setting, evicts the least recently used unpinned stack: its analysis is dropped and its folded buffers close. The files on disk stay. The next activation loads that stack again. A change to a resident stack updates it in place.
+```mermaid
+flowchart LR
+  subgraph interactiveLane["Interactive lane: starts at once"]
+    activeAnalysis["Active stack's analysis"]
+  end
+  subgraph backgroundLane["Background lane: one job at a time, highest priority first"]
+    direction TB
+    openAnalysis["1. Open stacks' analysis"] --> openSuggestions["2. Active and open stacks' suggestions"]
+    openSuggestions --> backgroundLoad["3. Loading workspace stacks into free room"]
+    backgroundLoad --> backgroundSuggestions["4. Suggestions of stacks no editor has open"]
+  end
+  interactiveLane -- "a background job waits at its next pause;<br/>a job on the same stack waits for the other" --> backgroundLane
+  style interactiveLane fill:#FFB74D40
+  style backgroundLane fill:#6495ED33
+```
+
+The cache is bounded, and the unit is the stack. Every stack with a file in an open editor is pinned, and so is any stack whose folded buffer is on screen. A pin is never evicted. Opening, editing, navigating into, or showing a stack marks it most recently used. Background work is not use: loading the workspace's files in the background fills only free room and evicts nothing, a stack loaded that way is the first to go, and rebuilding stacks after a config change keeps their places. Capacity beyond the pins is the setting `yaml-dsl-editor.cache.stackCapacity`. Loading one past that, or lowering the setting, evicts the least recently used unpinned stack: its analysis is dropped and its folded buffers close. The files on disk stay. The next activation loads that stack again. A change to a resident stack updates it in place.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  Unloaded --> Pinned: a file in it opens,<br/>or its folded buffer is shown
+  Unloaded --> Resident: loaded in the background into free room,<br/>least recently used
+  Pinned --> Resident: its last editor and folded buffer close
+  Resident --> Pinned: a file in it opens
+  Resident --> Unloaded: least recently used unpinned stack<br/>past yaml-dsl-editor.cache.stackCapacity
+  Resident --> Resident: opened, edited, navigated into or shown:<br/>most recently used
+```
 
 A stack's schema is the `schema.json` of the grammar version that stack initialized. The same grammar version is the same schema, so every stack on that version shares one parsed copy. A different grammar version is a different schema, even when the difference is small, and hover for a stack uses the schema of its own version. The schema cache is bounded too, and its unit is the distinct schema, one entry per hash. A schema a resident stack uses is pinned. Capacity beyond the pins is the setting `yaml-dsl-editor.cache.schemaCapacity`, and past it the least recently used schema is dropped. Evicting a stack unpins the schemas only it used. What the extension works out from a schema, such as the node fingerprints and validators of the schema checks, belongs to that schema's entry and goes with it.
 
@@ -78,13 +105,13 @@ Hover on a local shows its value. A key holding a local placeholder is also know
 
 ## Navigating references
 
-Go to definition on a reference opens the declaration it names. Hover shows a local's value, a scalar declaration's value as authored, and any other declaration's scope, name and file with its section. A builtin has no declaration. When nothing visible matches, go to definition does not move.
+Go to definition on a reference opens the declaration it names. Hover shows a local's value, a scalar declaration's value as authored, and any other declaration's scope, name and file with its section. A builtin has no declaration. A reference nothing visible declares is an error, and its hover reads `Invalid reference: <scope>.<name>`. When nothing visible matches, go to definition does not move. Command-click opens the declaration. Resting on a reference shows its declaration after a second, in this language, and moving the pointer away first cancels it. The references peek is not opened.
 
 In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. Its scope is `<type>`, the mapping key enclosing the resource. A local is a key under `locals`, referenced as a whole scalar `local.<name>` or as `${local.<name>}` inside a scalar. A value shared by resources is a local in the common layer.
 
 The analysis classifies every reference: local when it resolves in the same file, external when it resolves in another file of the stack, error when nothing visible matches. The editor underlines each reference from the text as soon as the file opens, using the config's reference rules, and redraws it by its class once the analysis answers: a local reference keeps a straight underline and an external one is a squiggle, both in the text's own colors. An error turns red, text and squiggle, and its line carries an error mark in the gutter. The whole reference takes its class's underline, placeholders inside it included.
 
-The editor colors references, placeholders and calls from the config: a reference rule's leading literal, its target groups and its other literal text, a placeholder's delimiters and builtin body, and a call's marker, function and splat. The grammar colors plain YAML only. The extension takes the whole of a file's coloring, so the editor's bracket pair colorization does not apply: a bracket keeps the color of the text it stands in. A `#` starts a comment only at the start of a line or after whitespace.
+The editor colors references, placeholders and calls from the config: a reference rule's leading literal, its target groups and its other literal text, a placeholder's delimiters and builtin body, and a call's marker, function and splat. The grammar colors plain YAML only, as the HCL editor colors HCL: keys are identifiers, strings are strings, and numbers and `true` / `false` / `null` are constants. A matching file takes the extension's file icon. The extension takes the whole of a file's coloring, so the editor's bracket pair colorization does not apply: a bracket keeps the color of the text it stands in. A `#` starts a comment only at the start of a line or after whitespace.
 
 ## Completion
 
@@ -115,7 +142,7 @@ A requirement marker is the extension's standard for saying whether a key must b
 
 The schema for a file is the one the file names. A `# yaml-language-server: $schema=` modeline is honored. Its path is relative to that file and points at the schema shipped with the grammar version the stack has initialized. An overlay names `.schema/sample.schema.json`. A common layer names that file through the overlay directory that initialized the stack, such as `one/.schema/sample.schema.json`. That is the grammar the stack is actually on.
 
-The config sets `schema_search_paths`, a list, `[]` when empty. It is the fallback, used when the file has no modeline or the path it names is not on disk. Each entry is relative to the file, the same way a modeline path is, and the first one on disk is the schema. A URL in the path is fetched. The search does not override a modeline that resolves. The extension embeds no schema. When neither source resolves, the file's modeline line gets a problem, or its first line when it has no modeline, and field hovers stay empty.
+The config sets `schema_search_paths`, a list, `[]` when empty. It is the fallback, used when the file has no modeline or the path it names is not on disk. Each entry is relative to the file, the same way a modeline path is, and the first one on disk is the schema. A URL in the path is fetched. The search does not override a modeline that resolves. The extension embeds no schema. When neither source resolves, the file's modeline line gets a problem, or its first line when it has no modeline, and field hovers stay empty. Navigation, other problems and suggestions still run.
 
 DSL-level behavior is configured in `yaml-dsl.yml`: which files, the scopes, the syntax of declarations, references, placeholders and calls, how layers are grouped. The concepts are the editor's. The syntax is the DSL's, and each DSL may spell it differently. That syntax does not move into the schema.
 
@@ -129,9 +156,41 @@ The command opens the stack's overlays together. Each entry is that overlay's fo
 
 ## Suggestions
 
-The extension suggests an edit where it can see one. A suggestion is a light bulb in the gutter of the line it concerns and an inlay hint at the end of that line. Hovering the hint says what the edit does, and the link in its hover applies the edit in one click. The extension edits files only on that click, once per click: the hint itself takes no click, and a suggestion leaves no standing order behind it. An edit the extension offers passes the schema of every file it writes. The extension turns inlay hints on for its own files, whatever the editor's default, and sets the length past which the editor truncates a hint, `editor.inlayHints.maximumLength`, so a suggestion's label reads whole; a user's own setting for the language still wins. The `yaml-dsl-editor.features.suggestions` setting turns suggestions on or off. Extraction into the common layer is one such suggestion.
+The extension suggests an edit where it can see one. A suggestion is a light bulb in the gutter of the line it concerns and an inlay hint at the end of that line, and the file holding it shows its name in the light bulb's color with a light bulb at the end of its row in the Explorer and on its tab; every folder above it up to the workspace root takes the color. Hovering the hint says what the edit does, and the link in its hover applies the edit in one click. The extension edits files only on that click, once per click: the hint itself takes no click, and a suggestion leaves no standing order behind it. An edit the extension offers passes the schema of every file it writes. The extension turns inlay hints on for its own files, whatever the editor's default, and sets the length past which the editor truncates a hint, `editor.inlayHints.maximumLength`, so a suggestion's label reads whole; a user's own setting for the language still wins. The `yaml-dsl-editor.features.suggestions` setting turns suggestions on or off. Extraction into the common layer is one such suggestion.
 
-Suggestions are worked out in the background. Each edit to a stack restarts that stack's quiet period. Once the stack has had no edit for 500 ms, its suggestions are worked out at the work queue's lowest priority, behind every analysis, and sent apart from problems and underlines. Typing never waits for them.
+Suggestions are worked out in the background. Loading a stack starts its quiet period, and each edit to it restarts the period. Once the stack has had no edit for 500 ms, its suggestions are worked out behind the analysis of every open file, and sent apart from problems and underlines. Typing never waits for them. A file's suggestions outlive its stack leaving the cache and a restart of the editor: the editor keeps them in the extension's global storage, in a folder per workspace named by the hash of the workspace file or its lone folder, so uninstalling the extension deletes them with it, keyed by the file, with a hash of the text they were worked out from, and shows them until the stack is analyzed again. A file whose text on disk no longer matches its hash, at startup or when it changes on disk, loses its kept suggestions, and its stack is worked out again in the background without entering the cache. A click on a kept suggestion loads its stack and works it out afresh before writing anything.
+
+```mermaid
+sequenceDiagram
+  participant Storage as Global storage
+  participant Editor
+  participant Server as Language server
+  Note over Storage,Server: A stack is edited
+  Editor->>Server: edit
+  Editor->>Editor: clear the edited file's marks
+  Server->>Server: restart the stack's 500 ms quiet period
+  Server->>Server: once quiet, queue its suggestions
+  Server-->>Editor: suggestions, each file with its marks and text hash
+  Editor->>Editor: light bulbs, inlay hints, file colors
+  Editor->>Storage: save marks a second after the last report
+  Note over Storage,Server: The user clicks a suggestion's hover link
+  Editor->>Server: apply the suggestion
+  Server->>Server: load the stack, work it out afresh
+  Server-->>Editor: edits, each file saved
+  Note over Storage,Server: A stack leaves the cache
+  Server-->>Editor: stack evicted
+  Editor->>Editor: keep its marks until the stack is analyzed again
+  Note over Storage,Server: The editor starts
+  Editor->>Storage: read saved marks
+  Editor->>Editor: hash each file on disk, keep the marks whose hash matches
+  Editor->>Server: workspace config
+  Editor->>Server: refresh the stacks of files whose hash differs
+  Server->>Server: work each stack out without entering the cache
+  Server-->>Editor: suggestions, each file with its marks and text hash
+  Note over Storage,Server: A file changes outside the editor
+  Editor->>Editor: hash differs, drop its marks
+  Editor->>Server: refresh its stack
+```
 
 ## Extracting the common layer
 
@@ -149,13 +208,13 @@ Values are compared as written: a reference, a local and a placeholder are their
 
 One click:
 
-- writes the block into the common layer, copied from the first overlay holding it in `layers.overlay_folders` order, comments and key order included, with each difference replaced by a reference to its local;
+- writes the block into the common layer, copied from the first overlay holding it in `layers.overlay_folders` order, comments, key order and the blank lines around it included, with each difference replaced by a reference to its local;
 - declares each difference's local in the common layer with the value most of those overlays hold, the first in `layers.overlay_folders` order on a tie, and in each overlay holding another value with its own;
 - deletes the block from each overlay that holds it, and a parent map left empty by that, merging the blank lines around it into one;
 - writes `{}` at the block's path into each overlay with a file that does not hold it, so that overlay keeps none of it;
 - saves every file it changed.
 
-A new key goes where `key_sort_orders` says for the map it lands in. Each entry names a path and an `order`, and the first entry whose path selects the map applies, so specific paths come first. `alphabetical` places the key at its sorted place within the keys at the top of the map that are already in order, and where that order breaks when it sorts after them all; the keys after the break are not considered. `significance` reads the map as three groups: the keys `first_keys` lists, in its order; every other key; then the keys `last_keys` lists, in its order. Both lists are `[]` under `alphabetical`, and a key sits in at most one of them. A listed key goes before the first key of the map that ranks after it. Any other key goes where the overlays holding it place it among the other keys: before the next of its neighbors there that the map holds, else after the previous one, taking the overlays in `layers.overlay_folders` order, and at the end of the other keys when none of its neighbors is there. Keys already in the map keep their order. A map no entry covers takes no new key, and a suggestion that would write one is not made.
+A new key goes where `key_sort_orders` says for the map it lands in. Each entry names a path and an `order`, and the first entry whose path selects the map applies, so specific paths come first. `alphabetical` places the key at its sorted place within the keys at the top of the map that are already in order, and where that order breaks when it sorts after them all; the keys after the break are not considered. `significance` reads the map as three groups: the keys `first_keys` lists, in its order; every other key; then the keys `last_keys` lists, in its order. Both lists are `[]` under `alphabetical`, and a key sits in at most one of them. A listed key goes before the first key of the map that ranks after it. Any other key goes where the overlays holding it place it among the other keys: before the next of its neighbors there that the map holds, else after the previous one, taking the overlays in `layers.overlay_folders` order, and at the end of the other keys when none of its neighbors is there. Keys already in the map keep their order. A new key takes the blank lines above and below it in the first overlay holding it, in `layers.overlay_folders` order, counting the blank lines already beside where it lands, and adds none at the top or the end of the file. A map no entry covers takes no new key, and a suggestion that would write one is not made.
 
 A local is named by the block's key and the keys down to the leaf, joined with `_`, a list item by its index. A name the stack already declares takes the next ancestor's key in front. The reference is the local reference rule's own form: a whole scalar where the rule allows one, else a placeholder. A difference whose name the reference rule cannot read back, a difference spanning more than one line, and a map the edits must write into that is in flow style are not suggested.
 
@@ -477,7 +536,7 @@ A file matching two DSLs is reported and claimed by neither. Other YAML is untou
 
 ## Ownership
 
-The extension contributes the language `yaml-dsl`. When the workspace config loads, each DSL's files are associated with that language: those its `file_includes` globs match and its `file_excludes` globs do not. Such a file opens as `yaml-dsl`, and the language server's document selector is that language.
+The extension contributes the language `yaml-dsl`. It starts only when a workspace folder holds `yaml-dsl.yml`, and leaves a folder without one alone, even in a window where another folder has one. When the workspace config loads, each DSL's files are associated with that language: those its `file_includes` globs match and its `file_excludes` globs do not. Such a file opens as `yaml-dsl`, and the language server's document selector is that language.
 
 An extension that selects `yaml` does not own these files and does not activate on them. The Red Hat YAML extension is one of those. A file that matches no DSL pattern stays `yaml`.
 

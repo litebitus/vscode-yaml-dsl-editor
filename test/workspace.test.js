@@ -242,16 +242,47 @@ test('loading past the pin capacity evicts the oldest unpinned stack', async () 
   }));
   const ws = workspace({}, async () => null);
   await ws.setConfigs([{ text: plain, dir: '/repo' }]);
-  ws.setCacheCapacities({ stackCapacity: 8, schemaCapacity: 32 });
+  ws.setCacheCapacities({ stackCapacity: 7, schemaCapacity: 32 });
   for (let i = 0; i < 10; i += 1) {
     const file = `/repo/s${i}/mock.yml`;
     await ws.setActive(file);
     await ws.sync('file://' + file, file, 'name: a\n');
+    if (i !== 2) ws.close('file://' + file);
   }
   ws.setVisibleFolds(['/repo/s1/mock.yml']);
   assert.equal(ws.cache.get('/repo/s0/mock.yml'), null);
   assert.ok(ws.cache.get('/repo/s1/mock.yml'));
-  assert.ok(ws.takeEvicted().length >= 0);
+  assert.ok(ws.cache.get('/repo/s2/mock.yml'));
+  assert.ok(ws.takeEvicted().includes('/repo/s0/mock.yml'));
+});
+
+test('warming loads stacks only into free room and never evicts the stacks being worked on', async () => {
+  const plain = configText(dslEntry('resources', {
+    layers: {
+      overlay_folders: ['one'],
+      common_layer_discovery: 'parent',
+      duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
+    },
+  }));
+  const ws = workspace({}, async () => null);
+  await ws.setConfigs([{ text: plain, dir: '/repo' }]);
+  ws.setCacheCapacities({ stackCapacity: 2, schemaCapacity: 32 });
+  for (const name of ['worked', 'visited']) {
+    await ws.setActive(`/repo/${name}/mock.yml`);
+  }
+  await ws.setActive(null);
+  await ws.warm(['/repo/warm-a/mock.yml', '/repo/warm-b/mock.yml', '/repo/warm-c/mock.yml']);
+  assert.ok(ws.cache.get('/repo/worked/mock.yml'));
+  assert.ok(ws.cache.get('/repo/visited/mock.yml'));
+  assert.equal(ws.cache.get('/repo/warm-a/mock.yml'), null);
+  assert.deepEqual(ws.takeEvicted(), []);
+  ws.setCacheCapacities({ stackCapacity: 3, schemaCapacity: 32 });
+  await ws.warm(['/repo/warm-a/mock.yml']);
+  assert.ok(ws.cache.get('/repo/warm-a/mock.yml'));
+  await ws.setActive('/repo/fresh/mock.yml');
+  await ws.setActive(null);
+  assert.ok(ws.cache.get('/repo/worked/mock.yml'));
+  assert.equal(ws.cache.get('/repo/warm-a/mock.yml'), null);
 });
 
 test('a missing modeline walks the schema search path from the file', async () => {
@@ -706,7 +737,8 @@ test('a request for an open file waits for its analysis, and builds a stack nobo
   await opening;
   const stackId = ws.foldsFor(common).stackId;
   for (let index = 0; index < 9; index += 1) await ws.warm([`/repo/other-${index}/mock.yml`]);
-  assert.equal(ws.cache.get(stackId), null);
+  assert.ok(ws.cache.get(stackId));
+  ws.cache.drop(stackId);
   await ws.whenAnalyzed(`file://${common}`);
   assert.ok(ws.cache.get(stackId));
   await ws.whenAnalyzed(`yaml-dsl-fold:${encodeURIComponent(stackId)}/one`);

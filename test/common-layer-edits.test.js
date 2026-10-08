@@ -6,6 +6,8 @@ const {
   insertionUnder,
   localsInsertion,
   placementIn,
+  sourceSpacingOf,
+  NO_BLANK_LINES,
   blockLines,
   normalizedEdits,
   applyEdits,
@@ -23,7 +25,10 @@ const RESOURCE_SIGNIFICANCE = {
   firstKeys: ['schema_version', 'env', 'locals'],
   lastKeys: ['data_source', 'outputs'],
 };
-const alphabetical = (parentMap, parentPath, newKey) => placementIn(parentMap, newKey, ALPHABETICAL, []);
+const alphabetical = (parentMap, parentPath, newKey) => ({
+  ...placementIn(parentMap, newKey, ALPHABETICAL, []),
+  spacing: NO_BLANK_LINES,
+});
 const unordered = () => null;
 
 function mapOf(keys) {
@@ -60,6 +65,33 @@ test('significance keeps first_keys at the top and last_keys at the bottom, othe
   assert.equal(placementIn(resourcesOnly, 'iam_role', RESOURCE_SIGNIFICANCE, [devOrder]).before.key, 'connectivity');
   assert.equal(placementIn(mapOf(['outputs']), 'data_source', RESOURCE_SIGNIFICANCE, []).before.key, 'outputs');
   assert.equal(placementIn(mapOf(['airflow']), 'schema_version', RESOURCE_SIGNIFICANCE, []).before.key, 'airflow');
+});
+
+test('a key\'s spacing is the blank lines around it in the first source holding it', () => {
+  const spaced = docOf('schema_version: "3"\nenv: dev\n\n\ndata_source:\n  kms: x\n\noutputs:\n  a: 1\n');
+  const tight = docOf('env: staging\ndata_source:\n  kms: x\noutputs:\n  a: 1\n');
+  assert.deepEqual(sourceSpacingOf([spaced, tight], ['data_source']), { blankLinesAbove: 2, blankLinesBelow: 1 });
+  assert.deepEqual(sourceSpacingOf([tight, spaced], ['data_source']), { blankLinesAbove: 0, blankLinesBelow: 0 });
+  assert.deepEqual(sourceSpacingOf([spaced], ['outputs']), { blankLinesAbove: 1, blankLinesBelow: 0 });
+  assert.deepEqual(sourceSpacingOf([spaced], ['missing']), NO_BLANK_LINES);
+});
+
+test('an insertion takes its source spacing, counting the blank lines already beside it, and none at the file\'s ends', () => {
+  const spacing = { blankLinesAbove: 1, blankLinesBelow: 1 };
+  const placed = (placement) => () => ({ ...placement, spacing });
+  const block = (indent) => [`${' '.repeat(indent)}data_source: {}`];
+  const atEnd = docOf('schema_version: "3"\nrds:\n  a: 1\n');
+  const afterRds = placed({ after: atEnd.tree.entries[1] });
+  const appended = insertionUnder(atEnd, ['data_source'], ['data_source'], block, afterRds);
+  assert.equal(applyEdits(atEnd.text, [appended]), 'schema_version: "3"\nrds:\n  a: 1\n\ndata_source: {}\n');
+  const between = docOf('rds:\n  a: 1\n\noutputs: {}\n');
+  const beforeOutputs = placed({ before: between.tree.entries[1] });
+  const inserted = insertionUnder(between, ['data_source'], ['data_source'], block, beforeOutputs);
+  assert.equal(applyEdits(between.text, [inserted]), 'rds:\n  a: 1\n\ndata_source: {}\n\noutputs: {}\n');
+  const atTop = docOf('rds:\n  a: 1\n');
+  const first = insertionUnder(atTop, ['env'], ['env'], (indent) => [`${' '.repeat(indent)}env: dev`],
+    placed({ before: atTop.tree.entries[0] }));
+  assert.equal(applyEdits(atTop.text, [first]), 'env: dev\n\nrds:\n  a: 1\n');
 });
 
 test('an insertion under a path writes the missing keys at the file\'s own indentation, in the map\'s order', () => {
