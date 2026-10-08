@@ -16,9 +16,11 @@ The server keeps the stack current as the files change, including the folded doc
 
 On each change the server parses the changed YAML, reads that file's schema, and resolves references, placeholders and calls across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem has a severity. An error is red text with a red squiggle at its range, in the red the DevOps tools print failures in, and its line carries an error mark in the gutter. An info problem, a schema the file names that cannot be loaded, is a wavy underline in the blue the DevOps tools print info in, with no change to the text, and its line carries an info mark in the gutter, the same shape and size as the error mark. Either shows its message on hover, and an empty range covers its whole line.
 
-The workspace holds many stacks. The server loads one when a file in it becomes active, and does not load the rest at startup. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each overlay. Switching files inside a resident stack is a hit.
+The extension is an editor first, and nothing it does holds back the file. On startup it does no analysis: a file of a DSL opens as that DSL's language at once, colored by the grammar, with its references underlined from the text. The suggestions saved from earlier sessions are painted next, from the one file that keeps them. Only then does analysis start, in the background, and its classes, problems and suggestions paint as they land. A newly opened file follows the same order.
 
-The file in the active editor is worked on right away, ahead of all other files. Work on its stack goes first, the stacks of other open files next, then the suggestions of the active and open stacks, and only then anything in the background: loading the rest of the workspace and the suggestions of stacks no editor has open. Open editors always come before background work. Work on the active file starts at once: a background job in progress waits at its next pause and resumes after it, and only work on the same stack waits for the job holding it. A request about a file is answered once that file's analysis is done.
+The workspace holds many stacks. The server loads one when a file in it is first opened, and loads no other. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each overlay. Switching files inside a resident stack is a hit.
+
+The file in the active editor is worked on right away, ahead of all other files. Work on its stack goes first, the stacks of other open files next, then the suggestions of the active and open stacks, and only then anything in the background: the suggestions of stacks no editor has open. Open editors always come before background work. Work on the active file starts at once: a background job in progress waits at its next pause and resumes after it, and only work on the same stack waits for the job holding it. A request about a file is answered once that file's analysis is done.
 
 ```mermaid
 flowchart LR
@@ -28,21 +30,19 @@ flowchart LR
   subgraph backgroundLane["Background lane: one job at a time, highest priority first"]
     direction TB
     openAnalysis["1. Open stacks' analysis"] --> openSuggestions["2. Active and open stacks' suggestions"]
-    openSuggestions --> backgroundLoad["3. Loading workspace stacks into free room"]
-    backgroundLoad --> backgroundSuggestions["4. Suggestions of stacks no editor has open"]
+    openSuggestions --> backgroundSuggestions["3. Suggestions of stacks no editor has open"]
   end
   interactiveLane -- "a background job waits at its next pause;<br/>a job on the same stack waits for the other" --> backgroundLane
   style interactiveLane fill:#FFB74D40
   style backgroundLane fill:#6495ED33
 ```
 
-The cache is bounded, and the unit is the stack. Every stack with a file in an open editor is pinned, and so is any stack whose folded buffer is on screen. A pin is never evicted. Opening, editing, navigating into, or showing a stack marks it most recently used. Background work is not use: loading the workspace's files in the background fills only free room and evicts nothing, a stack loaded that way is the first to go, and rebuilding stacks after a config change keeps their places. Capacity beyond the pins is the setting `yaml-dsl-editor.cache.stackCapacity`. Loading one past that, or lowering the setting, evicts the least recently used unpinned stack: its analysis is dropped and its folded buffers close. The files on disk stay. The next activation loads that stack again. A change to a resident stack updates it in place.
+The cache is bounded, and the unit is the stack. Every stack with a file in an open editor is pinned, and so is any stack whose folded buffer is on screen. A pin is never evicted. Opening, editing, navigating into, or showing a stack marks it most recently used. Background work is not use: rebuilding stacks after a config change keeps their places. Capacity beyond the pins is the setting `yaml-dsl-editor.cache.stackCapacity`. Loading one past that, or lowering the setting, evicts the least recently used unpinned stack: its analysis is dropped and its folded buffers close. The files on disk stay. The next activation loads that stack again. A change to a resident stack updates it in place.
 
 ```mermaid
 stateDiagram-v2
   direction LR
   Unloaded --> Pinned: a file in it opens,<br/>or its folded buffer is shown
-  Unloaded --> Resident: loaded in the background into free room,<br/>least recently used
   Pinned --> Resident: its last editor and folded buffer close
   Resident --> Pinned: a file in it opens
   Resident --> Unloaded: least recently used unpinned stack<br/>past yaml-dsl-editor.cache.stackCapacity
@@ -158,7 +158,7 @@ The command opens the stack's overlays together. Each entry is that overlay's fo
 
 The extension suggests an edit where it can see one. A suggestion is a light bulb in the gutter of the line it concerns and an inlay hint at the end of that line, and the file holding it shows its name in the light bulb's color with a light bulb at the end of its row in the Explorer and on its tab; every folder above it up to the workspace root takes the color. Hovering the hint says what the edit does, and the link in its hover applies the edit in one click. The extension edits files only on that click, once per click: the hint itself takes no click, and a suggestion leaves no standing order behind it. An edit the extension offers passes the schema of every file it writes. The extension turns inlay hints on for its own files, whatever the editor's default, and sets the length past which the editor truncates a hint, `editor.inlayHints.maximumLength`, so a suggestion's label reads whole; a user's own setting for the language still wins. The `yaml-dsl-editor.features.suggestions` setting turns suggestions on or off. Extraction into the common layer is one such suggestion.
 
-Suggestions are worked out in the background. Loading a stack starts its quiet period, and each edit to it restarts the period. Once the stack has had no edit for 500 ms, its suggestions are worked out behind the analysis of every open file, and sent apart from problems and underlines. Typing never waits for them. A file's suggestions outlive its stack leaving the cache and a restart of the editor: the editor keeps them in the extension's global storage, in a folder per workspace named by the hash of the workspace file or its lone folder, so uninstalling the extension deletes them with it, keyed by the file, with a hash of the text they were worked out from, and shows them until the stack is analyzed again. A file whose text on disk no longer matches its hash, at startup or when it changes on disk, loses its kept suggestions, and its stack is worked out again in the background without entering the cache. A click on a kept suggestion loads its stack and works it out afresh before writing anything.
+Suggestions are worked out in the background. Loading a stack starts its quiet period, and each edit to it restarts the period. Once the stack has had no edit for 500 ms, its suggestions are worked out behind the analysis of every open file, and sent apart from problems and underlines. Typing never waits for them. A file's suggestions outlive its stack leaving the cache and a restart of the editor: the editor keeps them in the extension's global storage, in a folder per workspace named by the hash of the workspace file or its lone folder, so uninstalling the extension deletes them with it, keyed by the file, with a hash of the text they were worked out from, and shows them until the stack is analyzed again. On startup they are shown as soon as they are read, and their hashes are checked after, in the background. A file whose text on disk no longer matches its hash, then or when it changes on disk, loses its kept suggestions, and its stack is worked out again in the background without entering the cache. A click on a kept suggestion loads its stack and works it out afresh before writing anything. The kept file carries a format version. A breaking change to the format bumps it, and the extension migrates an older file to the current format when it loads. A file no migration reads is deleted, and its suggestions come back as their stacks are analyzed; the user never sees it. A field added to a suggestion reads as empty where an older file lacks it.
 
 ```mermaid
 sequenceDiagram
@@ -182,8 +182,9 @@ sequenceDiagram
   Editor->>Editor: keep its marks until the stack is analyzed again
   Note over Storage,Server: The editor starts
   Editor->>Storage: read saved marks
-  Editor->>Editor: hash each file on disk, keep the marks whose hash matches
+  Editor->>Editor: light bulbs, inlay hints, file colors
   Editor->>Server: workspace config
+  Editor->>Editor: hash each file on disk, drop the marks whose hash differs
   Editor->>Server: refresh the stacks of files whose hash differs
   Server->>Server: work each stack out without entering the cache
   Server-->>Editor: suggestions, each file with its marks and text hash
@@ -216,7 +217,7 @@ One click:
 
 The click is one undo step across those files. An undo or redo that brings one of them back to its text before or after a click saves it, so undoing a move leaves no file to save by hand.
 
-A new key goes where `key_sort_orders` says for the map it lands in. Each entry names a path and an `order`, and the first entry whose path selects the map applies, so specific paths come first. `alphabetical` places the key at its sorted place within the keys at the top of the map that are already in order, and where that order breaks when it sorts after them all; the keys after the break are not considered. `significance` reads the map as three groups: the keys `first_keys` lists, in its order; every other key; then the keys `last_keys` lists, in its order. Both lists are `[]` under `alphabetical`, and a key sits in at most one of them. A listed key goes before the first key of the map that ranks after it. Any other key goes where the overlays holding it place it among the other keys: before the next of its neighbors there that the map holds, else after the previous one, taking the overlays in `layers.overlay_folders` order, and at the end of the other keys when none of its neighbors is there. Keys already in the map keep their order. A new key takes the blank lines above and below it in the first overlay holding it, in `layers.overlay_folders` order, counting the blank lines already beside where it lands, and adds none at the top or the end of the file. A map no entry covers takes no new key, and a suggestion that would write one is not made.
+A new key goes where `key_sort_orders` says for the map it lands in. Each entry names a path and an `order`, and the first entry whose path selects the map applies, so specific paths come first. `alphabetical` places the key at its sorted place within the keys at the top of the map that are already in order, and where that order breaks when it sorts after them all; the keys after the break are not considered. `significance` reads the map as three groups: the keys `first_keys` lists, in its order; every other key; then the keys `last_keys` lists, in its order. Both lists are `[]` under `alphabetical`, and a key sits in at most one of them. A listed key goes before the first key of the map that ranks after it. Any other key goes where the overlays holding it place it among the other keys: before the next of its neighbors there that the map holds, else after the previous one, taking the overlays in `layers.overlay_folders` order, and at the end of the other keys when none of its neighbors is there. Keys already in the map keep their order. A new key takes the blank lines above and below it in the first overlay holding it, in `layers.overlay_folders` order. A key no overlay holds takes one blank line above and below when it spans more than one line, and none when it is one line. The count includes the blank lines already beside where the key lands once every edit of the click is made, and none are added at the top or the end of the file. A map no entry covers takes no new key, and a suggestion that would write one is not made.
 
 A local is named by the block's key and the keys down to the leaf, joined with `_`, a list item by its index. A name the stack already declares takes the next ancestor's key in front. The reference is the local reference rule's own form: a whole scalar where the rule allows one, else a placeholder. A difference whose name the reference rule cannot read back, a difference spanning more than one line, and a map the edits must write into that is in flow style are not suggested.
 
@@ -228,7 +229,20 @@ A block the walk finds then passes two schema checks before it is offered. First
 
 A field directly under the node marked `[~required]` is one the `{}` opt-out leaves out, and the extension does not read the condition. A block whose opt-out leaves one out is also a potential move, and its hover names the overlays and those fields and says the extension cannot tell whether the move is safe. The user may judge it safe, so its hover keeps the link, and the click applies the move as any other.
 
-What an overlay holds the same as the common layer at the same path is a duplicate, and the editor suggests deleting it from that overlay. `layers.duplicate_check` sets the check: it runs `depth` levels below the document root and no deeper, or the depth `key_depths` gives under a top-level key it lists, passes over the keys `skip_keys` lists at any depth, and suggests a duplicate at its topmost path. A key counts as one level: `a.b.c` is three levels deep. A key whose value is empty in the overlay or the common layer is not a duplicate, because an overlay's `null` deletes the key. One click deletes the duplicate, and a parent map left empty by that, and saves the file. That overlay's folded document reads the same after it.
+A value repeated across the overlays is a duplicate. `layers.duplicate_check` bounds where the editor looks for one: it runs `depth` levels below the document root and no deeper, or the depth `key_depths` gives under a top-level key it lists, passes over the keys `skip_keys` lists at any depth, and suggests a duplicate at its topmost path. A key counts as one level: `a.b.c` is three levels deep.
+
+An overlay's value at a path is what its fold holds there: its own value, else the common layer's. When more than half the overlays that have a file, and at least two, hold one value the common layer does not, the editor suggests moving it into the common layer; the common layer's own value casts no vote. It is a move, with the move's hint, link and schema checks, and one click:
+
+- writes the value into the common layer at the path, over what the common layer held there;
+- deletes it from each overlay holding it, and a parent map left empty by that;
+- writes the common layer's former value into each overlay whose fold held it;
+- leaves each overlay holding another value with its own;
+- writes `{}` into each overlay whose fold held nothing, for a map;
+- saves every file it changed.
+
+A scalar or a list that some overlay's fold lacks, a map where the common layer also holds a map, which merges and is compared key by key below it, a value outside the locals under a map the common layer does not hold, and a path inside a block suggested for extraction are not suggested this way. The hover also names the overlays that keep the common layer's former value and those that keep their own.
+
+What an overlay holds the same as the common layer at the same path is a duplicate too, and the editor suggests deleting it from that overlay. A key whose value is empty in the overlay or the common layer is not a duplicate, because an overlay's `null` deletes the key. One click deletes the duplicate, and a parent map left empty by that, and saves the file. That overlay's folded document reads the same after it.
 
 The parse gives every node an id from a table its stack shares: a scalar's from its type and value, a list's from its items' ids in order, a map's from its keys and their values' ids, keys sorted. A second id counts every scalar alike, so two blocks with the same keys at every depth share it. Equal ids are equal values, so comparing two blocks is comparing two numbers, and comments, quoting, flow or block style and key order do not count. Each id sits beside its node's source range, so a match leads back to the exact lines. The parse that answers every edit computes the ids, and an unchanged block keeps its id. One walk over the overlays' trees, path by path, finds the suggestions: where the overlays' ids agree the walk stops, and where they differ it descends only as far as the differences. The table belongs to the stack and goes with it when the stack is evicted.
 
@@ -554,4 +568,5 @@ The extension's own settings are VS Code settings under the extension's name, `y
 ## TODO
 
 - A move turns list and map differences into locals, and on a tie the common layer declares a list's local as `[]` and a map's as `{}`.
+- A local renamed in an overlay or the common layer, once the edit is done, gets a suggestion to rename it in every other file that declares or references it, as one multi-file edit.
 - `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.

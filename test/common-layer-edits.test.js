@@ -17,6 +17,10 @@ function docOf(text) {
   return { text, tree: parseYaml(text).tree, filePath: '/repo/mock.yml' };
 }
 
+function appliedEdits(text, edits) {
+  return applyEdits(text, normalizedEdits(text, edits));
+}
+
 const optOut = (indent) => [`${' '.repeat(indent)}events: {}`];
 const ALPHABETICAL = { order: 'alphabetical', firstKeys: [], lastKeys: [] };
 const SIGNIFICANCE = { order: 'significance', firstKeys: [], lastKeys: [] };
@@ -73,7 +77,33 @@ test('a key\'s spacing is the blank lines around it in the first source holding 
   assert.deepEqual(sourceSpacingOf([spaced, tight], ['data_source']), { blankLinesAbove: 2, blankLinesBelow: 1 });
   assert.deepEqual(sourceSpacingOf([tight, spaced], ['data_source']), { blankLinesAbove: 0, blankLinesBelow: 0 });
   assert.deepEqual(sourceSpacingOf([spaced], ['outputs']), { blankLinesAbove: 1, blankLinesBelow: 0 });
-  assert.deepEqual(sourceSpacingOf([spaced], ['missing']), NO_BLANK_LINES);
+  assert.equal(sourceSpacingOf([spaced], ['missing']), null);
+});
+
+test('a key no source holds takes a blank line above and below when it spans lines, and none when it is one line', () => {
+  const doc = docOf('schema_version: "3"\nrds:\n  capacity: mock\n');
+  const unsourced = (parentMap, parentPath, newKey) => ({
+    ...placementIn(parentMap, newKey, RESOURCE_SIGNIFICANCE, []),
+    spacing: null,
+  });
+  const block = insertionUnder(doc, ['locals'], ['locals'], (indent) => [
+    `${' '.repeat(indent)}locals:`,
+    `${' '.repeat(indent + 2)}cluster_name: ""`,
+  ], unsourced);
+  assert.equal(appliedEdits(doc.text, [block]), 'schema_version: "3"\n\nlocals:\n  cluster_name: ""\n\nrds:\n  capacity: mock\n');
+  const line = insertionUnder(doc, ['env'], ['env'], (indent) => [`${' '.repeat(indent)}env: mock`], unsourced);
+  assert.equal(appliedEdits(doc.text, [line]), 'schema_version: "3"\nenv: mock\nrds:\n  capacity: mock\n');
+});
+
+test('an insertion inside a deletion\'s merged blank lines lands where the deletion starts, spaced against the result', () => {
+  const doc = docOf('env: dev\n\ndata_source:\n  a: 1\n');
+  const deletion = deletionOf(doc, ['data_source']);
+  const placed = () => ({ before: doc.tree.entries[1], spacing: null });
+  const locals = insertionUnder(doc, ['locals'], ['locals'], (indent) => [
+    `${' '.repeat(indent)}locals:`,
+    `${' '.repeat(indent + 2)}cluster_name: mock`,
+  ], placed);
+  assert.equal(appliedEdits(doc.text, [deletion, locals]), 'env: dev\n\nlocals:\n  cluster_name: mock\n');
 });
 
 test('an insertion takes its source spacing, counting the blank lines already beside it, and none at the file\'s ends', () => {
@@ -83,26 +113,26 @@ test('an insertion takes its source spacing, counting the blank lines already be
   const atEnd = docOf('schema_version: "3"\nrds:\n  a: 1\n');
   const afterRds = placed({ after: atEnd.tree.entries[1] });
   const appended = insertionUnder(atEnd, ['data_source'], ['data_source'], block, afterRds);
-  assert.equal(applyEdits(atEnd.text, [appended]), 'schema_version: "3"\nrds:\n  a: 1\n\ndata_source: {}\n');
+  assert.equal(appliedEdits(atEnd.text, [appended]),'schema_version: "3"\nrds:\n  a: 1\n\ndata_source: {}\n');
   const between = docOf('rds:\n  a: 1\n\noutputs: {}\n');
   const beforeOutputs = placed({ before: between.tree.entries[1] });
   const inserted = insertionUnder(between, ['data_source'], ['data_source'], block, beforeOutputs);
-  assert.equal(applyEdits(between.text, [inserted]), 'rds:\n  a: 1\n\ndata_source: {}\n\noutputs: {}\n');
+  assert.equal(appliedEdits(between.text, [inserted]),'rds:\n  a: 1\n\ndata_source: {}\n\noutputs: {}\n');
   const atTop = docOf('rds:\n  a: 1\n');
   const first = insertionUnder(atTop, ['env'], ['env'], (indent) => [`${' '.repeat(indent)}env: dev`],
     placed({ before: atTop.tree.entries[0] }));
-  assert.equal(applyEdits(atTop.text, [first]), 'env: dev\n\nrds:\n  a: 1\n');
+  assert.equal(appliedEdits(atTop.text, [first]),'env: dev\n\nrds:\n  a: 1\n');
 });
 
 test('an insertion under a path writes the missing keys at the file\'s own indentation, in the map\'s order', () => {
   const nested = docOf('queue:\n    other: 1\n');
   const edit = insertionUnder(nested, ['queue', 'deep', 'events'], ['queue', 'deep', 'events'], optOut, alphabetical);
-  assert.equal(applyEdits(nested.text, [edit]), 'queue:\n    deep:\n        events: {}\n    other: 1\n');
+  assert.equal(appliedEdits(nested.text, [edit]),'queue:\n    deep:\n        events: {}\n    other: 1\n');
   const unterminated = docOf('a: 1');
   const appended = insertionUnder(unterminated, ['events'], ['events'], optOut, alphabetical);
-  assert.equal(applyEdits(unterminated.text, [appended]), 'a: 1\nevents: {}\n');
+  assert.equal(appliedEdits(unterminated.text, [appended]),'a: 1\nevents: {}\n');
   const blank = docOf('');
-  assert.equal(applyEdits('', [insertionUnder(blank, ['events'], ['events'], optOut, alphabetical)]), 'events: {}\n');
+  assert.equal(appliedEdits('', [insertionUnder(blank, ['events'], ['events'], optOut, alphabetical)]), 'events: {}\n');
   const refused = (text, keys) => insertionUnder(docOf(text), keys, keys, optOut, alphabetical);
   assert.equal(refused('queue: {other: 1}\n', ['queue', 'events']), null);
   assert.equal(refused('queue: 1\n', ['queue', 'events']), null);
@@ -131,10 +161,10 @@ test('a deletion takes the entry\'s lines and a parent it leaves empty, merging 
 test('locals join the existing locals map in its order, or open one', () => {
   const declared = [{ name: 'zeta', valueText: '2' }, { name: 'mock_size', valueText: '1' }];
   const existing = docOf('locals:\n  alpha: x\n  team: mock\nqueue: {}\n');
-  assert.equal(applyEdits(existing.text, localsInsertion(existing, ['locals'], ['locals'], declared, alphabetical)),
+  assert.equal(appliedEdits(existing.text, localsInsertion(existing, ['locals'], ['locals'], declared, alphabetical)),
     'locals:\n  alpha: x\n  mock_size: 1\n  team: mock\n  zeta: 2\nqueue: {}\n');
   const missing = docOf('queue: {}\n');
-  assert.equal(applyEdits(missing.text, localsInsertion(missing, ['locals'], ['locals'], declared, alphabetical)),
+  assert.equal(appliedEdits(missing.text, localsInsertion(missing, ['locals'], ['locals'], declared, alphabetical)),
     'locals:\n  mock_size: 1\n  zeta: 2\nqueue: {}\n');
   assert.deepEqual(localsInsertion(missing, ['locals'], ['locals'], [], alphabetical), []);
   assert.equal(localsInsertion(docOf('locals: {}\n'), ['locals'], ['locals'], declared, alphabetical), null);
@@ -157,14 +187,15 @@ test('a copied block keeps its own indentation below the new key and its replace
 });
 
 test('edits on one file merge where they touch and refuse to overlap', () => {
-  assert.deepEqual(normalizedEdits([
+  const text = 'mock-text-of-ten';
+  assert.deepEqual(normalizedEdits(text, [
     { start: 4, end: 8, text: '' },
     { start: 4, end: 4, text: 'a' },
     { start: 8, end: 8, text: 'b' },
     { start: 8, end: 8, text: 'c' },
   ]), [{ start: 4, end: 8, text: 'abc' }]);
-  assert.equal(normalizedEdits([{ start: 0, end: 5, text: '' }, { start: 3, end: 6, text: '' }]), null);
-  assert.deepEqual(normalizedEdits([{ start: 6, end: 9, text: '' }, { start: 0, end: 5, text: '' }]), [
+  assert.equal(normalizedEdits(text, [{ start: 0, end: 5, text: '' }, { start: 3, end: 6, text: '' }]), null);
+  assert.deepEqual(normalizedEdits(text, [{ start: 6, end: 9, text: '' }, { start: 0, end: 5, text: '' }]), [
     { start: 0, end: 5, text: '' },
     { start: 6, end: 9, text: '' },
   ]);

@@ -25,6 +25,11 @@ const schema = JSON.stringify({
 
 const inPlaceholders = ['whole_placeholder', 'placeholder_in_text'];
 
+async function visitStack(ws, filePath) {
+  await ws.setActive(filePath);
+  await ws.setActive(null);
+}
+
 function resourceReferences(refNamePattern = '[a-z0-9_]+') {
   return [
     reference(`^ref (?<type>[a-z0-9_]+)\\.(?<name>${refNamePattern})`, 'RESOURCE', {
@@ -256,35 +261,6 @@ test('loading past the pin capacity evicts the oldest unpinned stack', async () 
   assert.ok(ws.takeEvicted().includes('/repo/s0/mock.yml'));
 });
 
-test('warming loads stacks only into free room and never evicts the stacks being worked on', async () => {
-  const plain = configText(dslEntry('resources', {
-    layers: {
-      overlay_folders: ['one'],
-      common_layer_discovery: 'parent',
-      duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
-    },
-  }));
-  const ws = workspace({}, async () => null);
-  await ws.setConfigs([{ text: plain, dir: '/repo' }]);
-  ws.setCacheCapacities({ stackCapacity: 2, schemaCapacity: 32 });
-  for (const name of ['worked', 'visited']) {
-    await ws.setActive(`/repo/${name}/mock.yml`);
-  }
-  await ws.setActive(null);
-  await ws.warm(['/repo/warm-a/mock.yml', '/repo/warm-b/mock.yml', '/repo/warm-c/mock.yml']);
-  assert.ok(ws.cache.get('/repo/worked/mock.yml'));
-  assert.ok(ws.cache.get('/repo/visited/mock.yml'));
-  assert.equal(ws.cache.get('/repo/warm-a/mock.yml'), null);
-  assert.deepEqual(ws.takeEvicted(), []);
-  ws.setCacheCapacities({ stackCapacity: 3, schemaCapacity: 32 });
-  await ws.warm(['/repo/warm-a/mock.yml']);
-  assert.ok(ws.cache.get('/repo/warm-a/mock.yml'));
-  await ws.setActive('/repo/fresh/mock.yml');
-  await ws.setActive(null);
-  assert.ok(ws.cache.get('/repo/worked/mock.yml'));
-  assert.equal(ws.cache.get('/repo/warm-a/mock.yml'), null);
-});
-
 test('a missing modeline walks the schema search path from the file', async () => {
   const found = '/repo/mock-app/one/.schema/sample.schema.json';
   const files = {
@@ -340,12 +316,13 @@ test('a line edit re-parses that file and leaves the rest of the stack', async (
     })),
     dir: '/repo',
   }]);
-  await ws.warm([overlay, common, '/other/mock.yml']);
+  await visitStack(ws, overlay);
+  await visitStack(ws, '/other/mock.yml');
   assert.ok(ws.reads.includes(common));
   assert.ok(ws.reads.includes(overlay));
   assert.ok(ws.reads.includes(schema));
   const marked = ws.reads.length;
-  await ws.warm([common]);
+  await visitStack(ws, common);
   const edited = 'locals:\n  kept: overlay\n';
   await ws.sync('file://' + overlay, overlay, edited);
   assert.equal(ws.reads.length, marked);
@@ -684,7 +661,7 @@ test('opening a file whose stack is already analyzed still asks for a repaint', 
   const files = { [common]: 'name: plain\n' };
   const ws = workspace(files, async () => schema);
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
-  await ws.warm([common]);
+  await visitStack(ws, common);
   ws.takeReanalyzedUris();
   await ws.sync(`file://${common}`, common, files[common]);
   assert.deepEqual(ws.takeReanalyzedUris(), [`file://${common}`]);
@@ -694,36 +671,6 @@ test('opening a file whose stack is already analyzed still asks for a repaint', 
   await ws.sync(`file://${common}`, common, files[common]);
   ws.close(`file://${common}`);
   assert.deepEqual(ws.takeReanalyzedUris(), []);
-});
-
-test('the active file is analyzed before the warm-up builds anything further', async () => {
-  const flatConfig = configText(dslEntry('flat', { file_includes: ['**/flat-*.yml'] }));
-  const warmPaths = Array.from({ length: 8 }, (_, index) => `/repo/flat-${index}.yml`);
-  const activeFile = '/repo/flat-active.yml';
-  const reads = [];
-  let ws;
-  ws = createWorkspace({
-    readFile: async (filePath) => {
-      reads.push(filePath);
-      if (filePath === warmPaths[2]) {
-        ws.sync(`file://${activeFile}`, activeFile, 'name: active\n');
-        ws.setActive(activeFile);
-      }
-      return filePath.endsWith('.yml') ? 'name: plain\n' : null;
-    },
-    fetchText: async () => null,
-  });
-  await ws.setConfigs([{ text: flatConfig, dir: '/repo' }]);
-  const built = [];
-  const hold = ws.cache.hold;
-  ws.cache.hold = (id, data, flags) => {
-    built.push(id);
-    return hold(id, data, flags);
-  };
-  await ws.warm(warmPaths);
-  await ws.whenAnalyzed(`file://${activeFile}`);
-  assert.deepEqual(built.slice(0, 4), [warmPaths[0], warmPaths[1], warmPaths[2], activeFile]);
-  assert.deepEqual(reads.slice(0, 3), warmPaths.slice(0, 3));
 });
 
 test('a request for an open file waits for its analysis, and builds a stack nobody queued', async () => {
@@ -736,7 +683,7 @@ test('a request for an open file waits for its analysis, and builds a stack nobo
   assert.deepEqual(ws.references(`file://${common}`).map((reference) => reference.kind), ['local']);
   await opening;
   const stackId = ws.foldsFor(common).stackId;
-  for (let index = 0; index < 9; index += 1) await ws.warm([`/repo/other-${index}/mock.yml`]);
+  for (let index = 0; index < 9; index += 1) await visitStack(ws, `/repo/other-${index}/mock.yml`);
   assert.ok(ws.cache.get(stackId));
   ws.cache.drop(stackId);
   await ws.whenAnalyzed(`file://${common}`);
@@ -820,7 +767,7 @@ test('a changed config reaches every resident stack, and drops the stacks it no 
   const ws = workspace(files);
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   await ws.sync(`file://${one}`, one, files[one]);
-  await ws.warm([otherCommon]);
+  await visitStack(ws, otherCommon);
   ws.close(`file://${one}`);
   ws.takeEvicted();
   const narrowed = configText(resourcesEntry({ file_includes: ['**/mock-stack/**/mock.yml'] }));

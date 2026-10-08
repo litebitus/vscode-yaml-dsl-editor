@@ -23,6 +23,8 @@ const moveSuggestion = {
     name: 'events_size',
     values: [{ text: '1', overlays: ['dev', 'staging'] }, { text: '`2`', overlays: ['production'] }],
   }],
+  keepsCommonValue: [],
+  keepsOwnValue: [],
   schemaGroups: [],
   optOutFailures: [],
   optOutConditionalFields: [],
@@ -47,6 +49,16 @@ test('the hover names the block, its differences and the overlays that opt out, 
   const twoDifferences = { ...moveSuggestion, absent: [], differences: [difference, difference] };
   assert.match(hoverMarkdownText(twoDifferences), /^2 differences become locals:$/m);
   assert.doesNotMatch(hoverMarkdownText({ ...moveSuggestion, absent: [], differences: [] }), /difference|Opts out/);
+  const promoted = { ...moveSuggestion, absent: [], differences: [], keepsCommonValue: ['uat'], keepsOwnValue: ['qa'] };
+  assert.equal(hoverMarkdownText(promoted), [
+    '`queue.events` is common to 3 of 4 overlays. Move it to the common layer.',
+    '',
+    "Keeps the common layer's current value: uat",
+    '',
+    'Keeps its own value: qa',
+    '',
+    `[Move to common layer](${link})`,
+  ].join('\n'));
   assert.equal(hoverMarkdownText({ ...moveSuggestion, kind: 'delete', holders: ['dev'] }), [
     '`queue.events` in dev is the same as in the common layer. Delete it.',
     '',
@@ -321,7 +333,7 @@ test('activation paints the suggestions the server sends and registers the move'
     EventEmitter: class {
       constructor() { this.event = () => disposable; }
       fire(changed) {
-        if (arguments.length === 1 && changed === undefined) fileDecorationChanges += 1;
+        if (arguments.length === 1 && (changed === undefined || Array.isArray(changed))) fileDecorationChanges += 1;
         else inlayChanges += 1;
       }
       dispose() {}
@@ -392,7 +404,7 @@ test('activation paints the suggestions the server sends and registers the move'
     async sendRequest() { return null; },
   };
   vscode.window.showWarningMessage = (message) => { warnings.push(message); };
-  await activateWith(vscode, { subscriptions: [], extensionUri: 'mock-extension' }, () => client);
+  await (await activateWith(vscode, { subscriptions: [], extensionUri: 'mock-extension' }, () => client)).startup;
   const capacityNotes = () => sent.filter(([method]) => method === 'yaml-dsl/cacheCapacities');
   assert.deepEqual(capacityNotes(), [['yaml-dsl/cacheCapacities', { schemaCapacity: 32, stackCapacity: 32 }]]);
   const position = { line: 0, character: 6 };
@@ -436,9 +448,9 @@ test('activation paints the suggestions the server sends and registers the move'
   vscode.documentChanged({ document: edited });
   assert.deepEqual(painted.filter(isLightbulb).at(-1).ranges, []);
   assert.deepEqual(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])), []);
-  assert.equal(inlayChanges, changesBefore + 2);
+  assert.equal(inlayChanges, changesBefore + 1);
   vscode.documentChanged({ document: edited });
-  assert.equal(inlayChanges, changesBefore + 3);
+  assert.equal(inlayChanges, changesBefore + 1);
   vscode.documentChanged({ document: { languageId: 'yaml', uri: { scheme: 'file', toString: () => 'file:///x.yml' } } });
   notes['yaml-dsl/suggestions']({});
   const cacheChanged = { affectsConfiguration: (setting) => setting === 'yaml-dsl-editor.cache' };

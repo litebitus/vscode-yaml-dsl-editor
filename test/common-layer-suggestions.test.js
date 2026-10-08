@@ -160,9 +160,11 @@ test('a tied string or boolean takes "" or false in the common layer, and tied v
   const edited = editedTexts(stack, suggestion);
   assert.equal(edited.get(common), [
     'schema_version: "3"',
+    '',
     'locals:',
     '  queue_events_enabled: false',
     '  queue_events_name: ""',
+    '',
     'queue:',
     '  events:',
     '    name: local.queue_events_name',
@@ -188,6 +190,78 @@ test('a tied string or boolean takes "" or false in the common layer, and tied v
     uat: holder('mock-uat', true),
   }));
   assert.equal(commonLayerSuggestions(mixed, noSchemaChecks).filter((found) => found.kind === 'move').length, 0);
+});
+
+test('a local every overlay repeats moves over the common layer\'s value, and an emptied locals map goes with it', () => {
+  const holder = (env) => `schema_version: "3"\nenv: ${env}\n\nlocals:\n  cluster_name: \${env}-mock-sg\ndata_source: {}\n`;
+  const stack = stackOf(layeredDsl(), texts('schema_version: "3"\nlocals:\n  cluster_name: ""\nrds: {}\n', {
+    dev: holder('dev'),
+    staging: holder('staging'),
+  }));
+  const moves = commonLayerSuggestions(stack, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.deepEqual(moves.map((found) => [found.path, found.holders]), [[['locals', 'cluster_name'], ['dev', 'staging']]]);
+  const edited = editedTexts(stack, moves[0]);
+  assert.equal(edited.get(common), 'schema_version: "3"\nlocals:\n  cluster_name: ${env}-mock-sg\nrds: {}\n');
+  assert.equal(edited.get(overlayPath('dev')), 'schema_version: "3"\nenv: dev\n\ndata_source: {}\n');
+  assert.equal(foldsAgreeAfter(stack, moves[0], edited), true);
+});
+
+test('the value most overlays\' folds hold moves, an overlay holding another keeps it, and one without inherits the old', () => {
+  const commonText = 'rds:\n  defaults:\n    capacity: provisioned\n';
+  const serverless = 'rds:\n  defaults:\n    capacity: serverless\n';
+  const missing = stackOf(layeredDsl(), texts(commonText, {
+    dev: serverless,
+    staging: serverless,
+    uat: serverless,
+    production: 'other: 1\n',
+  }));
+  const [inherited] = commonLayerSuggestions(missing, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.deepEqual(inherited.path, ['rds', 'defaults', 'capacity']);
+  assert.deepEqual([inherited.holders, inherited.keepsCommonValue], [['dev', 'staging', 'uat'], ['production']]);
+  const edited = editedTexts(missing, inherited);
+  assert.equal(edited.get(common), serverless);
+  assert.equal(edited.get(overlayPath('dev')), '');
+  assert.equal(edited.get(overlayPath('production')), `other: 1\n${commonText}`);
+  assert.equal(foldsAgreeAfter(missing, inherited, edited), true);
+  const outvoted = stackOf(layeredDsl(), texts(commonText, {
+    dev: serverless,
+    staging: serverless,
+    uat: 'rds:\n  defaults:\n    capacity: mock-other\n',
+  }));
+  const [kept] = commonLayerSuggestions(outvoted, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.deepEqual([kept.holders, kept.keepsOwnValue], [['dev', 'staging'], ['uat']]);
+  const keptEdited = editedTexts(outvoted, kept);
+  assert.equal(keptEdited.has(overlayPath('uat')), false);
+  assert.equal(foldsAgreeAfter(outvoted, kept, keptEdited), true);
+});
+
+test('a map local most overlays repeat moves, and an overlay without it opts out with {}', () => {
+  const holder = 'locals:\n  tags:\n    team: mock-team\n';
+  const stack = stackOf(layeredDsl(), texts('locals:\n  owner: mock-owner\n', {
+    dev: holder,
+    staging: holder,
+    uat: holder,
+    production: 'locals:\n  zone: mock-zone\n',
+  }));
+  const [move] = commonLayerSuggestions(stack, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.deepEqual([move.path, move.absent], [['locals', 'tags'], ['production']]);
+  const edited = editedTexts(stack, move);
+  assert.equal(edited.get(common), 'locals:\n  owner: mock-owner\n  tags:\n    team: mock-team\n');
+  assert.equal(edited.get(overlayPath('production')), 'locals:\n  tags: {}\n  zone: mock-zone\n');
+  assert.equal(foldsAgreeAfter(stack, move, edited), true);
+});
+
+test('a repeated value past the duplicate check\'s depth, or under a map the common layer lacks, does not move', () => {
+  const deep = stackOf(layeredDsl(), texts('data_source:\n  kms:\n    type: mock-old\n', {
+    dev: 'data_source:\n  kms:\n    type: mock-new\n',
+    staging: 'data_source:\n  kms:\n    type: mock-new\n',
+  }));
+  assert.deepEqual(commonLayerSuggestions(deep, noSchemaChecks).filter((found) => found.kind === 'move'), []);
+  const unheldParent = stackOf(layeredDsl(), texts('rds: {}\n', {
+    dev: 'queue:\n  events:\n    size: 1\n    name: mock-dev\n',
+    staging: 'queue:\n  events:\n    size: 1\n    name: 7\n',
+  }));
+  assert.deepEqual(commonLayerSuggestions(unheldParent, noSchemaChecks).filter((found) => found.kind === 'move'), []);
 });
 
 test('a moved block keeps the blank lines the first overlay holding it puts around it', () => {

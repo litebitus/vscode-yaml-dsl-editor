@@ -20,6 +20,12 @@ const {
 
 const sampleConfig = configText(dslEntry('sample'));
 
+async function activatedFully(vscode, context, startClient) {
+  const handle = await activateWith(vscode, context, startClient);
+  await handle.startup;
+  return handle;
+}
+
 function disposable() {
   return { dispose() {} };
 }
@@ -153,39 +159,46 @@ test('fold paths round-trip and reject a path that is not a fold', () => {
   assert.equal(parsed.overlayName, 'one');
 });
 
-test('a search that fails does not block activation', async () => {
-  const vscode = fakeVscode({
-    readFile: async () => Buffer.from('dsls: [\n'),
-  });
-  vscode.RelativePattern = class { constructor() {} };
-  vscode.workspace.findFiles = async () => [];
+test('activation finishes without waiting on analysis and searches no workspace files', async () => {
+  const editor = {
+    document: {
+      uri: { scheme: 'file', fsPath: '/repo/mock.yml', toString: () => 'file:///repo/mock.yml' },
+      languageId: 'yaml-dsl',
+      getText: () => 'name: mock\n',
+    },
+    setDecorations() {},
+  };
+  const vscode = fakeVscode({ editor, visible: [editor], readFile: async () => Buffer.from(sampleConfig) });
+  let searched = false;
+  vscode.workspace.findFiles = async () => { searched = true; return []; };
   const client = fakeClient();
-  await activateWith(vscode, { subscriptions: [] }, () => client);
-  vscode.workspace.fs.readFile = async () => Buffer.from(sampleConfig);
-  vscode.workspace.findFiles = async () => { throw new Error('down'); };
-  await vscode.watcher.change();
+  let answerDecorations = null;
+  client.sendRequest = (method, params) => {
+    client.sent.push({ method, params });
+    return new Promise((resolve) => { answerDecorations = resolve; });
+  };
+  const handle = await activateWith(vscode, { subscriptions: [] }, () => client);
+  assert.equal(typeof vscode.listeners.open[0], 'function');
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/warm'), false);
+  assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/decorations'), true);
+  answerDecorations(null);
+  await handle.startup;
+  assert.equal(searched, false);
 });
 
-test('activation asks the server to read matching files', async () => {
+test('owned files are watched by each DSL\'s include patterns under its config folder', async () => {
   const vscode = fakeVscode({
-    readFile: async () => Buffer.from(configText(dslEntry('sample', { file_includes: ['**/mock.yml', '**/mock.yml'] }))),
+    readFile: async () => Buffer.from(configText(dslEntry('sample', { file_includes: ['**/mock.yml', '**/other.yml'] }))),
   });
-  vscode.RelativePattern = class {
-    constructor(folder, pattern) { this.folder = folder; this.pattern = pattern; }
+  vscode.RelativePattern = class { constructor(base, pattern) { this.base = base; this.pattern = pattern; } };
+  const watched = [];
+  const createWatcher = vscode.workspace.createFileSystemWatcher;
+  vscode.workspace.createFileSystemWatcher = (pattern) => {
+    watched.push(typeof pattern === 'string' ? pattern : `${pattern.base}:${pattern.pattern}`);
+    return createWatcher(pattern);
   };
-  const seen = [];
-  vscode.workspace.findFiles = async (include) => {
-    seen.push(include.pattern);
-    return [{ fsPath: '/repo/mock.yml' }, { fsPath: '/repo/mock.yml' }, {}, null];
-  };
-  const client = fakeClient();
-  await activateWith(vscode, { subscriptions: [] }, () => client);
-  await new Promise((resolve) => setImmediate(resolve));
-  const warm = client.sent.find((item) => item.method === 'yaml-dsl/warm');
-  assert.deepEqual(warm.params.paths, ['/repo/mock.yml']);
-  assert.deepEqual(seen, ['**/mock.yml', '**/mock.yml']);
+  await activatedFully(vscode, { subscriptions: [] }, () => fakeClient());
+  assert.deepEqual(watched, ['/repo:**/mock.yml', '/repo:**/other.yml', '**/yaml-dsl.yml']);
 });
 
 test('a workspace folder added or removed reloads the configs', async () => {
@@ -196,7 +209,7 @@ test('a workspace folder added or removed reloads the configs', async () => {
     return disposable();
   };
   const client = fakeClient();
-  await activateWith(vscode, { subscriptions: [] }, () => client);
+  await activatedFully(vscode, { subscriptions: [] }, () => client);
   const configsSent = () => client.sent.filter((item) => item.method === 'yaml-dsl/config').length;
   const before = configsSent();
   vscode.workspace.workspaceFolders = [{ uri: { fsPath: '/repo' } }, { uri: { fsPath: '/second' } }];
@@ -226,7 +239,7 @@ test('activation associates matching files and reveals the fold', async () => {
   const client = fakeClient({ foldsFor: { stackId: '/repo/mock/mock.yml', overlayNames: ['one'] }, throwRequest: false });
   const context = { subscriptions: [] };
   let started = null;
-  const handle = await activateWith(vscode, context, (ctx) => { started = ctx; return client; });
+  const handle = await activatedFully(vscode, context, (ctx) => { started = ctx; return client; });
   assert.equal(started, context);
   assert.equal(doc.languageId, 'yaml-dsl');
   assert.equal(outside.languageId, 'yaml');
@@ -243,6 +256,9 @@ test('activation associates matching files and reveals the fold', async () => {
   assert.equal(await vscode.provider.value.provideTextDocumentContent({ path: `/${encodeURIComponent('/repo/mock/mock.yml')}/one` }), 'folded');
 
   vscode.window.activeTextEditor = { document: { uri: { scheme: 'file', fsPath: '/x' }, languageId: 'markdown' } };
+  await vscode.listeners.active[0]();
+  assert.equal(client.sent.at(-2).params.path, '/x');
+  vscode.window.activeTextEditor = { document: { uri: { scheme: 'yaml-dsl-fold', fsPath: '/x' }, languageId: 'yaml-dsl' } };
   await vscode.listeners.active[0]();
   assert.equal(client.sent.at(-2).params.path, null);
 
@@ -272,9 +288,9 @@ test('activation associates matching files and reveals the fold', async () => {
 
   const throwing = fakeClient({ throwOn: 'yaml-dsl/active' });
   const quiet = fakeVscode({ editor, documents: [] });
-  await activateWith(quiet, { subscriptions: [] }, () => throwing);
+  await activatedFully(quiet, { subscriptions: [] }, () => throwing);
   const configThrow = fakeClient({ throwOn: 'yaml-dsl/config' });
-  await activateWith(fakeVscode({ documents: [] }), { subscriptions: [] }, () => configThrow);
+  await activatedFully(fakeVscode({ documents: [] }), { subscriptions: [] }, () => configThrow);
 
 
   vscode.listeners.change[0]({ document: { languageId: 'yaml-dsl', uri: { scheme: 'file' } } });
@@ -287,9 +303,20 @@ test('activation associates matching files and reveals the fold', async () => {
   await vscode.watcher.change();
   await vscode.watcher.create();
   await vscode.watcher.delete();
-  context.subscriptions[0].dispose();
+  for (const subscription of context.subscriptions) subscription.dispose();
   assert.equal(client.stopped, true);
   await handle.reloadConfig();
+});
+
+test('a reanalyzed fold refreshes its folded buffer, and a file uri refreshes none', async () => {
+  const vscode = fakeVscode();
+  const client = fakeClient();
+  await activatedFully(vscode, { subscriptions: [] }, () => client);
+  const refreshed = [];
+  vscode.provider.value.onDidChange((uri) => refreshed.push(uri.toString()));
+  const foldUri = `yaml-dsl-fold:${encodeURIComponent('/repo/mock.yml')}/one`;
+  client.notes['yaml-dsl/reanalyzed']({ uris: [foldUri, 'file:///repo/one/mock.yml'] });
+  assert.deepEqual(refreshed, [foldUri]);
 });
 
 test('evicted folds close and a workspace without config still starts', async () => {
@@ -313,7 +340,7 @@ test('evicted folds close and a workspace without config still starts', async ()
     readFile: async () => { throw new Error('missing'); },
   });
   const client = fakeClient();
-  await activateWith(vscode, { subscriptions: [] }, () => client);
+  await activatedFully(vscode, { subscriptions: [] }, () => client);
   await client.notes['yaml-dsl/evicted']({ stackIds: ['/repo/mock.yml'] });
   assert.equal(closed.length, 1);
   await client.notes['yaml-dsl/evicted']({ stackIds: ['/other'] });
@@ -324,7 +351,7 @@ test('evicted folds close and a workspace without config still starts', async ()
     documents: [sample],
     associations: {},
   });
-  await activateWith(changed, { subscriptions: [] }, () => fakeClient());
+  await activatedFully(changed, { subscriptions: [] }, () => fakeClient());
   assert.equal(sample.languageId, 'yaml-dsl');
   assert.equal(changed.updated, undefined);
   assert.equal(ownedFile('/other/mock.yml', [{ dir: '/repo', text: sampleConfig }]), false);
@@ -608,7 +635,7 @@ test('a reanalyzed notification repaints only the documents it names, and an edi
   second.setDecorations = () => { painted.push('two.yml'); };
   const vscode = fakeVscode({ visible: [first, second] });
   const client = fakeClient({ decorations: { references: [{ range: rangeOf(0, 0, 4), kind: 'local' }], problems: [] } });
-  await activateWith(vscode, { subscriptions: [] }, () => client);
+  await activatedFully(vscode, { subscriptions: [] }, () => client);
   await new Promise((resolve) => setImmediate(resolve));
   painted.length = 0;
   vscode.listeners.change[0]({ document: first.document });
@@ -754,22 +781,6 @@ test('the text pass underlines placeholder references and within matches from th
     [{ text: referenceConfig, dir: '/other' }],
   );
   assert.deepEqual(lastPaint(unowned, 'unclassified').ranges, []);
-});
-
-test('activation leaves excluded files out of the warm-up', async () => {
-  const vscode = fakeVscode({
-    readFile: async () => Buffer.from(configText(dslEntry('suites', {
-      file_includes: ['**/*.yml'],
-      file_excludes: ['**/protocols/**'],
-    }))),
-  });
-  vscode.RelativePattern = class { constructor(folder, pattern) { this.pattern = pattern; } };
-  vscode.workspace.findFiles = async () => [{ fsPath: '/repo/games/slot.yml' }, { fsPath: '/repo/protocols/mock/protocol.yml' }];
-  const client = fakeClient();
-  await activateWith(vscode, { subscriptions: [] }, () => client);
-  await new Promise((resolve) => setImmediate(resolve));
-  const warm = client.sent.find((item) => item.method === 'yaml-dsl/warm');
-  assert.deepEqual(warm.params.paths, ['/repo/games/slot.yml']);
 });
 
 test('the repaint notice is handled from the moment the client starts, before activation finishes', async () => {

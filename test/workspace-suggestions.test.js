@@ -99,7 +99,7 @@ test('a stack evicted and built again without an edit works its suggestions out 
   ws.takeEvicted();
   arrivals.length = 0;
   ws.setCacheCapacities({ stackCapacity: 3, schemaCapacity: 32 });
-  await ws.warm([secondDev]);
+  await ws.setActive(secondDev);
   await settle();
   assert.ok(arrivals.includes('/repo/second/mock.yml'));
 });
@@ -323,4 +323,70 @@ test('a layer file that changes on disk is read again, and a closed one that is 
   assert.equal(data.files.has(production), false);
   assert.equal(data.schemas.has(production), false);
   assert.equal(timers.pending.size, 1);
+});
+
+test('a file opened while a background refresh runs is analyzed at once, before that refresh finishes', async () => {
+  const timers = fakeTimers();
+  const roots = Array.from({ length: 4 }, (_, index) => `/repo/background-${index}`);
+  const files = Object.assign({}, ...roots.map(stackFiles), stackFiles('/repo/opened'));
+  const openedDev = '/repo/opened/dev/mock.yml';
+  const reads = [];
+  let releaseRunningRefresh = null;
+  const runningRefreshHeld = new Promise((resolve) => { releaseRunningRefresh = resolve; });
+  let opened = null;
+  let ws = null;
+  ws = createWorkspace({
+    readFile: async (filePath) => {
+      reads.push(filePath);
+      if (filePath === `${roots[0]}/mock.yml`) {
+        ws.sync(`file://${openedDev}`, openedDev, files[openedDev]);
+        ws.setActive(openedDev);
+        opened = ws.whenAnalyzed(`file://${openedDev}`).then(() => 'analyzed');
+      }
+      if (filePath === `${roots[0]}/production/mock.yml`) await runningRefreshHeld;
+      return Object.prototype.hasOwnProperty.call(files, filePath) ? files[filePath] : null;
+    },
+    fetchText: async () => null,
+    timerFunctions: timers,
+  });
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  const refreshing = ws.refreshSuggestions(roots.map((root) => `${root}/dev/mock.yml`));
+  let blocked = null;
+  const stillBlocked = new Promise((resolve) => { blocked = resolve; });
+  const blockedTimer = setTimeout(() => blocked('blocked behind the running refresh'), 200);
+  while (!opened) await new Promise((resolve) => { setImmediate(resolve); });
+  const outcome = await Promise.race([opened, stillBlocked]);
+  clearTimeout(blockedTimer);
+  assert.equal(outcome, 'analyzed');
+  assert.equal(reads.includes(`${roots[1]}/mock.yml`), false);
+  releaseRunningRefresh();
+  await refreshing;
+});
+
+test('with nothing changing the server does nothing: an unchanged reopen schedules no work and sets no timer', async () => {
+  const timers = fakeTimers();
+  const root = '/repo/idle-stack';
+  const files = stackFiles(root);
+  const dev = `${root}/dev/mock.yml`;
+  const reads = [];
+  const ws = createWorkspace({
+    readFile: async (filePath) => {
+      reads.push(filePath);
+      return Object.prototype.hasOwnProperty.call(files, filePath) ? files[filePath] : null;
+    },
+    fetchText: async () => null,
+    timerFunctions: timers,
+  });
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${dev}`, dev, files[dev]);
+  const arrived = nextSuggestions(ws);
+  timers.fireAll();
+  await arrived;
+  assert.equal(timers.pending.size, 0);
+  const readsBefore = reads.length;
+  ws.close(`file://${dev}`);
+  await ws.sync(`file://${dev}`, dev, files[dev]);
+  await ws.setActive(dev);
+  assert.equal(timers.pending.size, 0);
+  assert.equal(reads.length, readsBefore);
 });

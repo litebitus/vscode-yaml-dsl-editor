@@ -11,7 +11,11 @@ test('reading a missing file and a failed fetch yield null', async () => {
   assert.equal(await readFileOrNull(file), 'hello');
   assert.equal(await readFileOrNull(file + '.missing'), null);
   await fs.promises.unlink(file);
-  assert.equal(await fetchTextOrNull('https://example.test/a', async () => ({ ok: true, text: async () => 'body' })), 'body');
+  const answering = async (url, options) => {
+    assert.ok(options.signal instanceof AbortSignal);
+    return { ok: true, text: async () => 'body' };
+  };
+  assert.equal(await fetchTextOrNull('https://example.test/a', answering), 'body');
   assert.equal(await fetchTextOrNull('https://example.test/b', async () => ({ ok: false, text: async () => '' })), null);
   assert.equal(await fetchTextOrNull('https://example.test/c', async () => { throw new Error('down'); }), null);
 });

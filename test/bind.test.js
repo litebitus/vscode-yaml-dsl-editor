@@ -57,12 +57,17 @@ function rangeOf(text, needle) {
 }
 
 function fakeDocuments() {
-  const handlers = {};
+  const listeners = {};
+  const fire = (name, event) => (listeners[name] ? listeners[name](event) : undefined);
   return {
-    handlers,
-    onDidOpen(fn) { handlers.open = fn; },
-    onDidChangeContent(fn) { handlers.change = fn; },
-    onDidClose(fn) { handlers.close = fn; },
+    handlers: {
+      open: (event) => Promise.all([fire('open', event), fire('change', event)]),
+      change: (event) => fire('change', event),
+      close: (event) => fire('close', event),
+    },
+    onDidOpen(fn) { listeners.open = fn; },
+    onDidChangeContent(fn) { listeners.change = fn; },
+    onDidClose(fn) { listeners.close = fn; },
   };
 }
 
@@ -131,7 +136,6 @@ test('document events analyze and custom requests answer', async () => {
   }]);
   const folds = await connection.handlers['yaml-dsl/foldsFor']({ path: '/repo/app/mock.yml' });
   assert.equal(folds.stackId, null);
-  connection.handlers['yaml-dsl/warm']({ paths: ['/repo/note.yml'] });
   await workspace.whenIdle();
   documents.handlers.close({ document: { uri: 'file:///repo/app/mock.yml' } });
   assert.deepEqual((await connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/app/mock.yml' })).problems, []);
@@ -158,32 +162,33 @@ test('the server watches each schema path it reads and reloads a schema that cha
   const unavailable = async () => (await connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/app/mock.yml' }))
     .problems.some((item) => item.message === 'schema is unavailable');
   assert.equal(await unavailable(), true);
-  assert.equal(connection.registrations.length, 1);
-  assert.equal(connection.registrations[0].method, 'workspace/didChangeWatchedFiles');
-  assert.deepEqual(connection.registrations[0].options.watchers, [
-    { globPattern: { baseUri: 'file:///repo/app', pattern: '.schema' } },
-    { globPattern: { baseUri: 'file:///repo/app', pattern: '.schema/mock.schema.json' } },
+  const watchedPatterns = (registrations) => registrations
+    .flatMap((registration) => registration.options.watchers)
+    .map((watcher) => `${watcher.globPattern.baseUri} ${watcher.globPattern.pattern}`);
+  assert.ok(connection.registrations.every((registration) => registration.method === 'workspace/didChangeWatchedFiles'));
+  assert.deepEqual(watchedPatterns(connection.registrations).filter((watched) => watched.includes('.schema')), [
+    'file:///repo/app .schema',
+    'file:///repo/app .schema/mock.schema.json',
   ]);
 
   files['/repo/app/.schema/mock.schema.json'] = '{"properties":{"name":{"description":"the name"}}}';
   connection.handlers.watchedFiles({ changes: [{ uri: 'file:///repo/app/.schema/mock.schema.json', type: 1 }] });
   await workspace.whenIdle();
   assert.equal(await unavailable(), false);
+  const registeredBefore = connection.registrations.length;
   connection.handlers['yaml-dsl/visibleFolds']({ stackIds: [] });
   connection.handlers.watchedFiles({});
   await workspace.whenIdle();
-  assert.equal(connection.registrations.length, 1);
+  assert.equal(connection.registrations.length, registeredBefore);
 
   const moved = '# yaml-language-server: $schema=../schema.json\nname: plain\n';
   documents.handlers.change({ document: { uri: 'file:///repo/app/mock.yml', getText: () => moved } });
   await workspace.whenIdle();
-  assert.equal(connection.registrations.length, 2);
-  assert.deepEqual(connection.registrations[1].options.watchers, [
-    { globPattern: { baseUri: 'file:///repo', pattern: 'schema.json' } },
-  ]);
+  assert.deepEqual(watchedPatterns(connection.registrations.slice(registeredBefore)), ['file:///repo schema.json']);
   await new Promise((resolve) => { setImmediate(resolve); });
-  assert.equal(connection.registrations[0].disposed, true);
-  assert.equal(connection.registrations[1].disposed, false);
+  const live = connection.registrations.filter((registration) => !registration.disposed);
+  assert.ok(watchedPatterns(live).includes('file:///repo schema.json'));
+  assert.equal(watchedPatterns(live).some((watched) => watched.includes('.schema')), false);
 });
 
 test('a client without relative-pattern watching gets no registration', async () => {
@@ -353,8 +358,64 @@ test('a layer file that changes on disk is watched and read again', async () => 
   connection.handlers.watchedFiles({ changes: [{ uri: 'file:///repo/dev/mock.yml' }] });
   await workspace.whenIdle();
   assert.deepEqual(changed, [['schemas', ['/repo/dev/mock.yml']], ['layers', ['/repo/dev/mock.yml']]]);
-  assert.deepEqual(connection.registrations.at(-1).options.watchers.map((watcher) => watcher.globPattern.pattern), [
-    'mock.json',
-    'mock.yml',
-  ]);
+  const patterns = connection.registrations.flatMap((registration) => registration.options.watchers)
+    .map((watcher) => watcher.globPattern.pattern);
+  assert.deepEqual(patterns, ['mock.json', 'mock.yml']);
+});
+
+test('a file the editor opens is analyzed once, though the library reports the open as a change too', async () => {
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const synced = [];
+  const workspace = {
+    onVocabularyLoaded() {},
+    onSuggestions() {},
+    sync: async (uri) => { synced.push(uri); },
+    takeEvicted: () => [],
+    takeReanalyzedUris: () => [],
+    schemaWatchTargets: () => [],
+    layerWatchTargets: () => [],
+  };
+  bind(connection, documents, { workspace });
+  await documents.handlers.open({ document: { uri: 'file:///repo/mock.yml', getText: () => 'name: mock\n' } });
+  assert.deepEqual(synced, ['file:///repo/mock.yml']);
+});
+
+test('a layer no editor has open is watched while its stack is loaded, and a change to it is analyzed again', async () => {
+  const layeredConfig = configText(dslEntry('resources', {
+    layers: {
+      overlay_folders: ['dev', 'staging'],
+      common_layer_discovery: 'parent',
+      duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
+    },
+  }));
+  const files = {
+    '/repo/app/mock.yml': 'shared: 1\n',
+    '/repo/app/dev/mock.yml': 'size: 1\n',
+    '/repo/app/staging/mock.yml': 'size: 2\n',
+  };
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const workspace = bind(connection, documents, {
+    readFile: async (filePath) => files[filePath] ?? null,
+    fetchText: async () => null,
+  });
+  connection.handlers.initialize({
+    capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true } } },
+  });
+  await connection.handlers['yaml-dsl/config']({ entries: [{ text: layeredConfig, dir: '/repo' }] });
+  await documents.handlers.open({ document: { uri: 'file:///repo/app/dev/mock.yml', getText: () => files['/repo/app/dev/mock.yml'] } });
+  await workspace.whenIdle();
+  const live = () => connection.registrations.filter((registration) => !registration.disposed)
+    .flatMap((registration) => registration.options.watchers)
+    .map((watcher) => `${watcher.globPattern.baseUri} ${watcher.globPattern.pattern}`);
+  assert.ok(live().includes('file:///repo/app/staging mock.yml'), JSON.stringify(live()));
+  const foldOfStaging = () => connection.handlers['yaml-dsl/fold']({ stackId: '/repo/app/mock.yml', overlayName: 'staging' });
+  assert.match(await foldOfStaging(), /size: 2/);
+  files['/repo/app/staging/mock.yml'] = 'size: 3\n';
+  connection.notifications.length = 0;
+  connection.handlers.watchedFiles({ changes: [{ uri: 'file:///repo/app/staging/mock.yml', type: 2 }] });
+  await workspace.whenIdle();
+  assert.match(await foldOfStaging(), /size: 3/);
+  assert.ok(connection.notifications.some((notification) => notification.method === 'yaml-dsl/reanalyzed'));
 });

@@ -6,12 +6,14 @@
 - Suggestions: a block most overlays hold gets a gutter light bulb and an inlay hint that moves it into the common layer, each difference written as a local.
 - Suggestions: a move is offered only when the overlays' schemas agree at the block and each opt-out passes them; otherwise the hint is a potential move with the schema's messages.
 - Suggestions: a key an overlay holds the same as the common layer, within `layers.duplicate_check`, gets a suggestion to delete it.
+- Suggestions: a value most overlays repeat, within `layers.duplicate_check` and locals included, moves into the common layer over the value it held there.
 - Suggestions: applying one saves every file it changed.
 - Suggestions: undoing or redoing an applied suggestion saves every file it brings back.
 - Suggestions: a stack loaded again after leaving the cache works its suggestions out without waiting for an edit, and a failure to work them out is logged instead of stopping the server.
 - Suggestions: kept in the extension's global storage per workspace and file, with the hash of the text they came from, so they survive a stack leaving the cache and an editor restart; a file changed outside the editor has its stack worked out again.
 - Work queue: the active file's work starts at once, ahead of a background job in progress.
-- Cache: a stack with a file in an open editor is never evicted; loading in the background fills only free room; open editors' work, suggestions included, runs before any background work.
+- Cache: a stack with a file in an open editor is never evicted; open editors' work, suggestions included, runs before any background work.
+- Startup: a file shows at once, colored and underlined from its text, then the saved suggestions, then analysis in the background; a stack is analyzed only once a file of it is opened.
 - Suggestions: a file holding one shows its name in the light bulb's color with a 💡 badge in the Explorer and on its tab, and every folder above it takes the color.
 - Requirement markers: a field's marker decides requiredness over its parent's `required` array, and an opt-out leaving out a `[~required]` field is a potential move the user may still apply.
 - Key sort orders: `key_sort_orders` sets where a suggestion places a new key, `alphabetical` or `significance`, per map.
