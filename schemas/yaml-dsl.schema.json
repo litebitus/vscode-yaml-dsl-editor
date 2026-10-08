@@ -25,7 +25,7 @@
         "file_includes",
         "file_excludes",
         "schema_search_paths",
-        "key_orders",
+        "key_sort_orders",
         "scopes",
         "declarations",
         "references"
@@ -54,9 +54,9 @@
         "placeholder": { "$ref": "#/definitions/placeholder" },
         "function": { "$ref": "#/definitions/function" },
         "locals": { "$ref": "#/definitions/locals" },
-        "key_orders": {
+        "key_sort_orders": {
           "type": "array",
-          "items": { "$ref": "#/definitions/key_order" },
+          "items": { "$ref": "#/definitions/key_sort_order" },
           "description": "Where an edit places a new key in each map. The first entry whose path covers the map applies."
         },
         "scopes": { "$ref": "#/definitions/scopes" },
@@ -253,7 +253,7 @@
         "skip_keys": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Keys a .* step does not descend into."
+          "description": "Keys a .*, [*] or ..* step does not descend into."
         },
         "exclude_candidates": {
           "type": "array",
@@ -345,48 +345,57 @@
       "items": { "enum": ["whole_scalar", "whole_placeholder", "placeholder_in_text", "anywhere_in_scalar"] },
       "uniqueItems": true
     },
-    "key_order": {
+    "key_sort_order": {
       "type": "object",
-      "required": ["path", "skip_keys", "includes_subtree", "order"],
+      "required": ["path", "skip_keys", "order", "first_keys", "last_keys"],
       "additionalProperties": false,
       "properties": {
         "path": { "$ref": "#/definitions/path" },
         "skip_keys": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Keys a .* step does not descend into."
-        },
-        "includes_subtree": {
-          "type": "boolean",
-          "description": "Whether the maps below the path are covered too."
+          "description": "Keys a .*, [*] or ..* step does not select or descend into."
         },
         "order": {
           "enum": ["alphabetical", "significance"],
           "description": "Where a new key goes among the map's keys."
+        },
+        "first_keys": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Under significance, keys at the top of the map, in this order. [] under alphabetical."
+        },
+        "last_keys": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Under significance, keys at the bottom of the map, in this order. [] under alphabetical."
         }
       }
     },
     "path_entry": {
       "type": "object",
-      "required": ["path", "skip_keys", "includes_subtree"],
+      "required": ["path", "skip_keys"],
       "additionalProperties": false,
       "properties": {
         "path": { "$ref": "#/definitions/path" },
         "skip_keys": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Keys a .* step does not descend into."
+          "description": "Keys a .*, [*] or ..* step does not select or descend into."
         },
         "includes_subtree": {
           "type": "boolean",
-          "description": "Whether everything below the path is covered too."
+          "description": "Deprecated: list the path ending in ..* as its own entry instead.",
+          "deprecationMessage": "Deprecated: list the path ending in ..* as its own entry instead."
         }
       }
     },
     "path": {
       "type": "string",
-      "pattern": "^\\$(\\.(\\*|[^.\\[*][^.\\[]*)|\\[\\*\\])*$",
-      "description": "A document path from $, with .key, .* and [*] steps."
+      "pattern": "^\\$(\\.(\\*|[^.\\[*][^.\\[]*)|\\[\\*\\])*(\\.\\.\\*)?$",
+      "description": "A JSONPath (RFC 9535) from $, with .name, .* and [*] steps and an optional final ..*."
     },
     "globs": {
       "type": "array",

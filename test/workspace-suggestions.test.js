@@ -19,7 +19,10 @@ const config = configText(dslEntry('resource', {
     common_layer_discovery: 'ancestor',
     duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
   },
-  key_orders: [{ path: '$', skip_keys: [], includes_subtree: true, order: 'alphabetical' }],
+  key_sort_orders: [
+    { path: '$', skip_keys: [], order: 'alphabetical', first_keys: [], last_keys: [] },
+    { path: '$..*', skip_keys: [], order: 'alphabetical', first_keys: [], last_keys: [] },
+  ],
   placeholder: placeholder(),
   locals: { scope_name: 'local' },
   scopes: { local: scope() },

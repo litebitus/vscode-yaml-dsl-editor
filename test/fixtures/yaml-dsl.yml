@@ -11,8 +11,17 @@ dsls:
         depth: 3
         key_depths: {}
         skip_keys: []
-    key_orders:
-      - { path: "$", skip_keys: [], includes_subtree: true, order: alphabetical }
+    key_sort_orders:
+      - path: "$"
+        skip_keys: []
+        order: alphabetical
+        first_keys: []
+        last_keys: []
+      - path: "$..*"
+        skip_keys: []
+        order: alphabetical
+        first_keys: []
+        last_keys: []
     scopes:
       local:
         regions: ["$"]

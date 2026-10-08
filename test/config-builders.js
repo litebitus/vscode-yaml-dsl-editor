@@ -60,7 +60,7 @@ function dslEntry(id, fields = {}) {
     file_includes: ['**/mock.yml'],
     file_excludes: [],
     schema_search_paths: [],
-    key_orders: [],
+    key_sort_orders: [],
     scopes: {},
     declarations: [],
     references: [],

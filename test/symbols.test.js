@@ -108,6 +108,19 @@ test('path steps that do not match a node produce no symbol', () => {
   assert.deepEqual(analyzed.symbols.map((symbol) => symbol.name), ['primary', 'other']);
 });
 
+test('a wildcard declares the children of a map or a list alike, and ..* declares at every depth below its path', () => {
+  const fromValue = { name_source: 'value', key_token: null };
+  const analyzed = doc('packages: [mock-a, mock-b]\nhosts:\n  api: x\n  web: y\ntree:\n  a:\n    b: 1\n  skip:\n    c: 1\n  d: 1\n', {
+    scopes: { thing: scope() },
+    declarations: [
+      declaration('$.packages.*', 'thing', fromValue),
+      declaration('$.hosts[*]', 'thing'),
+      declaration('$.tree..*', 'thing', { skip_keys: ['skip'], exclude_candidates: ['d'] }),
+    ],
+  });
+  assert.deepEqual(analyzed.symbols.map((symbol) => symbol.name), ['mock-a', 'mock-b', 'api', 'web', 'a', 'b', 'skip']);
+});
+
 test('references are found in each position their rule allows, and refused in the rest', () => {
   const text = [
     'source: ref mocktype.primary.label',
@@ -189,8 +202,9 @@ test('placeholders under an unscanned path are another language\'s text and are 
   const analyzed = doc(text, {
     placeholder: placeholder({
       unscanned_paths: [
-        { path: '$.build', skip_keys: [], includes_subtree: true },
-        { path: '$.dockerfile', skip_keys: [], includes_subtree: false },
+        { path: '$.build', skip_keys: [] },
+        { path: '$.build..*', skip_keys: [] },
+        { path: '$.dockerfile', skip_keys: [] },
       ],
     }),
   });

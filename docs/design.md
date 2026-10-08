@@ -54,11 +54,15 @@ While any file in the stack is active, refs and locals resolve in that file's fo
 
 Claimed files have a document formatter. It changes indentation and whitespace. Comments, key order, and the spelling of scalars stay, so a format pass does not rewrite a `ref`, a `local`, or a `${...}` placeholder into a different string.
 
+## Paths
+
+Every path in the config is a JSONPath query (RFC 9535) in the subset `$`, `.name`, `.*`, `[*]` and a final `..*`. `$` is the document root, the map that holds the top-level keys. `.*` and `[*]` select every child of a map or a list. `..*` selects every node below the path before it, not that node itself, so a node and everything below it are two entries, `P` and `P..*`. An entry's `skip_keys` lists keys a `.*`, `[*]` or `..*` step does not select or descend into. In a list of path entries, the path names the entry and appears once.
+
 ## Scopes
 
-A DSL is a language, and its names live in scopes. A scope's `regions` lists where its names may be referenced: a path is the subtree at that path in any file of the fold, `$` being all of it. `later_items_of_declaring_list` also makes a name visible in the later items of the list that declares it, at any depth inside them. `named_by_parent_key` makes the mapping key enclosing a declaration the scope its name is in. A scope named in capitals is logical: the config lists its `builtin_names`, and the word never appears in a document. Any other scope is literal: its name is the DSL's own word, and the document declares its names. Builtins valid only in some regions are a logical scope of their own, apart from the true globals. Every scope a rule names is declared under `scopes`.
+A DSL is a language, and its names live in scopes. A scope's `regions` lists where its names may be referenced: each path's region is the subtree under every node it selects, in any file of the fold, `$` being all of it. `later_items_of_declaring_list` also makes a name visible in the later items of the list that declares it, at any depth inside them. `named_by_parent_key` makes the mapping key enclosing a declaration the scope its name is in. A scope named in capitals is logical: the config lists its `builtin_names`, and the word never appears in a document. Any other scope is literal: its name is the DSL's own word, and the document declares its names. Builtins valid only in some regions are a logical scope of their own, apart from the true globals. Every scope a rule names is declared under `scopes`.
 
-A declaration rule says where names are declared. `path` is `$`, `.key`, `.*` and `[*]`. `skip_keys` lists keys a `.*` step does not descend into, and `exclude_candidates` lists keys at the last step that are not declarations. `name_source` reads the name from the `key`, from the scalar `value`, or from the `meta_argument` named by `meta_argument_name` of a key such as `http(id=config)`, one name per listed id. `declares_every_name` declares every name of the scope at that key: a scope whose names are defined in a document the editor does not read, such as one whose path holds a placeholder, resolves each name to the key that names the document. A key name takes the `key_token` `all_words`, `first_word` or `last_word`, and `null` for a name not read from the key, in the `name_spelling` `as_written` or `dashes_as_underscores`. `scope_name` is the scope declared under `scopes`.
+A declaration rule says where names are declared: each node its `path` selects is a declaration. `skip_keys` lists keys a step does not descend into, and `exclude_candidates` lists keys at the last step that are not declarations. `name_source` reads the name from the `key`, from the scalar `value`, or from the `meta_argument` named by `meta_argument_name` of a key such as `http(id=config)`, one name per listed id. `declares_every_name` declares every name of the scope at that key: a scope whose names are defined in a document the editor does not read, such as one whose path holds a placeholder, resolves each name to the key that names the document. A key name takes the `key_token` `all_words`, `first_word` or `last_word`, and `null` for a name not read from the key, in the `name_spelling` `as_written` or `dashes_as_underscores`. `scope_name` is the scope declared under `scopes`.
 
 A reference rule says how names are used. `pattern` is a regular expression with named groups. `positions` lists where a reference may stand: `whole_scalar`, the scalar; `whole_placeholder`, a placeholder that is the whole scalar; `placeholder_in_text`, a placeholder inside longer text; `anywhere_in_scalar`, each match inside a scalar. `text_after_name_allowed` says whether text such as a field path may follow the name. `scope_name` is the scope it resolves in. `scope_group` is the pattern group holding the scope of a `named_by_parent_key` scope, and `null` otherwise. `name_group` is the group holding the name.
 
@@ -151,7 +155,7 @@ One click:
 - writes `{}` at the block's path into each overlay with a file that does not hold it, so that overlay keeps none of it;
 - saves every file it changed.
 
-A new key goes where `key_orders` says for the map it lands in. Each entry names a path, in the shape of `calls_not_allowed_at`, and an `order`, and the first entry whose path covers the map applies. `alphabetical` places the key at its sorted place within the keys at the top of the map that are already in order, and where that order breaks when it sorts after them all; the keys after the break are not considered. `significance` places it where the overlays holding it place it: before the next of its neighbors there that the map holds, else after the previous one, taking the overlays in `layers.overlay_folders` order, and first in the map when none of its neighbors is there. A map no entry covers takes no new key, and a suggestion that would write one is not made.
+A new key goes where `key_sort_orders` says for the map it lands in. Each entry names a path and an `order`, and the first entry whose path selects the map applies, so specific paths come first. `alphabetical` places the key at its sorted place within the keys at the top of the map that are already in order, and where that order breaks when it sorts after them all; the keys after the break are not considered. `significance` reads the map as three groups: the keys `first_keys` lists, in its order; every other key; then the keys `last_keys` lists, in its order. Both lists are `[]` under `alphabetical`, and a key sits in at most one of them. A listed key goes before the first key of the map that ranks after it. Any other key goes where the overlays holding it place it among the other keys: before the next of its neighbors there that the map holds, else after the previous one, taking the overlays in `layers.overlay_folders` order, and at the end of the other keys when none of its neighbors is there. Keys already in the map keep their order. A map no entry covers takes no new key, and a suggestion that would write one is not made.
 
 A local is named by the block's key and the keys down to the leaf, joined with `_`, a list item by its index. A name the stack already declares takes the next ancestor's key in front. The reference is the local reference rule's own form: a whole scalar where the rule allows one, else a placeholder. A difference whose name the reference rule cannot read back, a difference spanning more than one line, and a map the edits must write into that is in flow style are not suggested.
 
@@ -169,13 +173,13 @@ The parse gives every node an id from a table its stack shares: a scalar's from 
 
 ## Placeholders
 
-A placeholder splices a value into a scalar or a key, whole or as part of a longer string. `placeholder` is a `pattern` whose `body` group is what the placeholder holds, and `unscanned_paths`, the paths whose text belongs to another language, such as shell commands or a Dockerfile, where `${…}` is not the DSL's and is not read. Each entry has `path`, `skip_keys` and `includes_subtree`. A body is read by the reference rules whose `positions` list a placeholder position, so `${local.name}` holds `local.name`, read by a `local` rule, and `${env}` holds `env`, read by a rule in a logical scope such as `GLOBAL`.
+A placeholder splices a value into a scalar or a key, whole or as part of a longer string. `placeholder` is a `pattern` whose `body` group is what the placeholder holds, and `unscanned_paths`, the paths whose text belongs to another language, such as shell commands or a Dockerfile, where `${…}` is not the DSL's and is not read. Each entry has `path` and `skip_keys`. A body is read by the reference rules whose `positions` list a placeholder position, so `${local.name}` holds `local.name`, read by a `local` rule, and `${env}` holds `env`, read by a rule in a logical scope such as `GLOBAL`.
 
 Every placeholder is validated. A body no rule reads, text after the name where the rule's `text_after_name_allowed` is `false`, and a position the rule does not list are problems. A valid body is classified like any other reference.
 
 ## Functions
 
-`function` holds what is generic to calls. `call_result_reference_positions` lists the positions from which a name a call declares may be referenced. `calls_not_allowed_at` lists the paths where a call is a problem, each with `path`, `skip_keys`, and `includes_subtree`, whether everything below the path is covered too.
+`function` holds what is generic to calls. `call_result_reference_positions` lists the positions from which a name a call declares may be referenced. `calls_not_allowed_at` lists the paths where a call is a problem, each with `path` and `skip_keys`.
 
 `marker_function` is the one call shape modeled: a call written in a key, `<name> <call_marker><function>`, with the `splat_operator` after the function when the value below is a list of arguments rather than the one argument. `calls_without_name_allowed` says whether a key that is the marker alone is a call with no name, the only key of its map.
 
@@ -227,19 +231,31 @@ dsls:
       definitions: [terraform]
       call_result_reference_positions: [whole_scalar]
       calls_not_allowed_at:
-        - { path: "$.*", skip_keys: [], includes_subtree: false }
-        - { path: "$.cloud", skip_keys: [], includes_subtree: true }
+        - { path: "$.*", skip_keys: [] }
+        - { path: "$.cloud", skip_keys: [] }
+        - { path: "$.cloud..*", skip_keys: [] }
       marker_function:
         call_marker: fn.
         splat_operator: "*"
         calls_without_name_allowed: true
     locals:
       scope_name: local
-    key_orders:
-      - { path: "$.locals", skip_keys: [], includes_subtree: false, order: alphabetical }
-      - { path: "$", skip_keys: [], includes_subtree: false, order: significance }
-      - { path: "$.*", skip_keys: [locals], includes_subtree: false, order: significance }
-      - { path: "$", skip_keys: [], includes_subtree: true, order: alphabetical }
+    key_sort_orders:
+      - path: "$.locals"
+        skip_keys: []
+        order: alphabetical
+        first_keys: []
+        last_keys: []
+      - path: "$..*"
+        skip_keys: [locals]
+        order: significance
+        first_keys: []
+        last_keys: []
+      - path: "$"
+        skip_keys: []
+        order: significance
+        first_keys: [schema_version, env, locals]
+        last_keys: [data_source, outputs]
     scopes:
       GLOBAL:
         regions: ["$"]
@@ -302,8 +318,9 @@ dsls:
     placeholder:
       pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
       unscanned_paths:
-        - { path: "$.build", skip_keys: [], includes_subtree: true }
-    key_orders: []
+        - { path: "$.build", skip_keys: [] }
+        - { path: "$.build..*", skip_keys: [] }
+    key_sort_orders: []
     scopes:
       BRANCH:
         regions: ["$.branches.deployment_target_env"]
@@ -357,7 +374,7 @@ dsls:
         calls_without_name_allowed: false
     locals:
       scope_name: local
-    key_orders: []
+    key_sort_orders: []
     scopes:
       GLOBAL:
         regions: ["$"]

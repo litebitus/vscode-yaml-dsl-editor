@@ -4,7 +4,7 @@ const {
   COMMON_LAYER_DISCOVERIES,
   CONFIG_VERSIONS,
   FUNCTION_DEFINITIONS,
-  KEY_ORDERS,
+  KEY_SORT_ORDERS,
   KEY_TOKENS,
   LOGICAL_SCOPE_NAME,
   NAME_SOURCES,
@@ -39,12 +39,13 @@ dsls:
     placeholder:
       pattern: '\\$\\{(?<body>[^}]*)\\}'
       unscanned_paths:
-        - { path: "$.build", skip_keys: [], includes_subtree: true }
+        - { path: "$.build", skip_keys: [] }
+        - { path: "$.build..*", skip_keys: [] }
     function:
       definitions: [terraform, schema]
       call_result_reference_positions: [whole_scalar]
       calls_not_allowed_at:
-        - { path: "$.*", skip_keys: [], includes_subtree: false }
+        - { path: "$.*", skip_keys: [] }
         - { path: "$.cloud", skip_keys: [], includes_subtree: true }
       marker_function:
         call_marker: fn.
@@ -52,10 +53,22 @@ dsls:
         calls_without_name_allowed: true
     locals:
       scope_name: local
-    key_orders:
-      - { path: "$.locals", skip_keys: [], includes_subtree: false, order: alphabetical }
-      - { path: "$.*", skip_keys: [locals], includes_subtree: false, order: significance }
-      - { path: "$", skip_keys: [], includes_subtree: true, order: alphabetical }
+    key_sort_orders:
+      - path: "$.locals"
+        skip_keys: []
+        order: alphabetical
+        first_keys: []
+        last_keys: []
+      - path: "$..*"
+        skip_keys: [locals]
+        order: significance
+        first_keys: []
+        last_keys: []
+      - path: "$"
+        skip_keys: []
+        order: significance
+        first_keys: [schema_version, locals]
+        last_keys: [outputs]
     scopes:
       GLOBAL:
         regions: ["$"]
@@ -125,11 +138,11 @@ test('a complete config states every field and keeps them', () => {
   assert.equal(parsed.error, null);
   const [resources] = parsed.dsls;
   assert.deepEqual(resources.fileIncludes, ['**/mock.yml']);
-  const keyOrderFields = (entry) => [entry.path, entry.skipKeys, entry.includesSubtree, entry.order];
-  assert.deepEqual(resources.keyOrders.map(keyOrderFields), [
-    ['$.locals', [], false, 'alphabetical'],
-    ['$.*', ['locals'], false, 'significance'],
-    ['$', [], true, 'alphabetical'],
+  const keySortOrderFields = (entry) => [entry.path, entry.skipKeys, entry.order, entry.firstKeys, entry.lastKeys];
+  assert.deepEqual(resources.keySortOrders.map(keySortOrderFields), [
+    ['$.locals', [], 'alphabetical', [], []],
+    ['$..*', ['locals'], 'significance', [], []],
+    ['$', [], 'significance', ['schema_version', 'locals'], ['outputs']],
   ]);
   assert.deepEqual(resources.fileExcludes, ['**/skip/**']);
   assert.deepEqual(resources.schemaSearchPaths, ['https://example.test/schema.json']);
@@ -140,7 +153,13 @@ test('a complete config states every field and keeps them', () => {
   });
   assert.equal(resources.placeholder.pattern, '\\$\\{(?<body>[^}]*)\\}');
   assert.deepEqual(resources.placeholder.unscannedPaths, [
-    { path: '$.build', tokens: [{ kind: 'key', key: 'build' }], skipKeys: [], includesSubtree: true },
+    { path: '$.build', tokens: [{ kind: 'name', key: 'build' }], skipKeys: [], includesSubtree: false },
+    {
+      path: '$.build..*',
+      tokens: [{ kind: 'name', key: 'build' }, { kind: 'descendants' }],
+      skipKeys: [],
+      includesSubtree: false,
+    },
   ]);
   assert.deepEqual(resources.function.definitions, ['terraform', 'schema']);
   assert.deepEqual(resources.function.callResultReferencePositions, ['whole_scalar']);
@@ -186,7 +205,7 @@ test('a block the config leaves out is a feature the DSL does not have', () => {
     '    file_includes: ["**/flat.yml"]',
     '    file_excludes: []',
     '    schema_search_paths: []',
-    '    key_orders: []',
+    '    key_sort_orders: []',
     '    scopes: {}',
     '    declarations: []',
     '    references: []',
@@ -228,6 +247,64 @@ test('the duplicate check states its depth and the keys it passes over', () => {
   ]) assert.ok(parsed.error.includes(message), message);
 });
 
+test('a path is a JSONPath listed once per list; ..* ends it, and includes_subtree is read only where it shipped', () => {
+  const pathEntries = (id, unscannedPaths, keySortOrders) => dslEntry(id, {
+    placeholder: { pattern: '\\$\\{(?<body>[^}]*)\\}', unscanned_paths: unscannedPaths },
+    key_sort_orders: keySortOrders,
+  });
+  const sortEntry = (fields) => ({ path: '$', skip_keys: [], order: 'alphabetical', first_keys: [], last_keys: [], ...fields });
+  const parsed = parseConfig(configText(
+    pathEntries('listed', [
+      { path: '$.build', skip_keys: [] },
+      { path: '$.build..*', skip_keys: [] },
+      { path: '$.cloud', skip_keys: [], includes_subtree: true },
+    ], [sortEntry({})]),
+    pathEntries('twice', [{ path: '$.build', skip_keys: [] }, { path: '$.build', skip_keys: [] }], []),
+    pathEntries('inner', [{ path: '$..*.name', skip_keys: [] }], []),
+    pathEntries('retired', [], [sortEntry({ includes_subtree: true })]),
+  ));
+  const [listed] = parsed.dsls;
+  assert.deepEqual(listed.placeholder.unscannedPaths.map((entry) => [entry.path, entry.includesSubtree]), [
+    ['$.build', false],
+    ['$.build..*', false],
+    ['$.cloud', true],
+  ]);
+  for (const message of [
+    'twice.placeholder.unscanned_paths[1].path $.build is listed more than once in unscanned_paths',
+    'inner.placeholder.unscanned_paths[0].path is required: a JSONPath such as $.build or $.build..*',
+    'retired.key_sort_orders[0].includes_subtree is not read here: list the path ending in ..* as its own entry',
+  ]) assert.ok(parsed.error.includes(message), message);
+});
+
+test('first_keys and last_keys are distinct keys, apart from each other, and [] under alphabetical', () => {
+  const ordered = (id, order, firstKeys, lastKeys) => dslEntry(id, {
+    key_sort_orders: [{
+      path: '$',
+      skip_keys: [],
+      order,
+      first_keys: firstKeys,
+      last_keys: lastKeys,
+    }],
+  });
+  const parsed = parseConfig(configText(
+    ordered('ranked', 'significance', ['env'], ['outputs']),
+    ordered('sorted', 'alphabetical', ['env'], []),
+    ordered('both', 'significance', ['env', 'outputs'], ['outputs']),
+    ordered('repeated', 'significance', ['env', 'env'], []),
+    ordered('unnamed', 'significance', ['env', ''], [1]),
+  ));
+  const firstAndLastKeys = (entry) => [entry.firstKeys, entry.lastKeys];
+  assert.deepEqual(parsed.dsls[0].keySortOrders.map(firstAndLastKeys), [[['env'], ['outputs']]]);
+  for (const dsl of parsed.dsls.slice(1)) assert.deepEqual(dsl.keySortOrders, []);
+  for (const message of [
+    'sorted.key_sort_orders[0] lists first_keys or last_keys under alphabetical order; both are [] there',
+    'both.key_sort_orders[0] lists outputs in both first_keys and last_keys',
+    'repeated.key_sort_orders[0].first_keys lists a key more than once',
+    'unnamed.key_sort_orders[0].first_keys is required: a list of keys, [] when empty',
+    'unnamed.key_sort_orders[0].last_keys is required: a list of keys, [] when empty',
+  ]) assert.ok(parsed.error.includes(message), message);
+});
+
 test('locals name a declared scope that a key declaration and a reference rule read', () => {
   const localsDsl = (id, fields) => dslEntry(id, {
     scopes: { local: scope(), step: scope() },
@@ -257,7 +334,7 @@ test('a config that leaves a field out is a problem, and the editor fills nothin
 version: "1"
 dsls:
   - id: bare
-    key_orders: [{ path: "$", skip_keys: [], includes_subtree: true, order: sideways }]
+    key_sort_orders: [{ path: "$", skip_keys: [], order: sideways }]
     layers: { overlay_folders: 1 }
     placeholder: { pattern: '(', unscanned_paths: [1, { path: bad }] }
     function:
@@ -328,7 +405,7 @@ dsls:
     file_includes: 1
     file_excludes: 1
     schema_search_paths: 1
-    key_orders: 1
+    key_sort_orders: 1
     layers: 1
     placeholder: 1
     function: 1
@@ -349,7 +426,6 @@ dsls:
     'bare.placeholder.unscanned_paths[0] must be a mapping',
     'bare.placeholder.unscanned_paths[1].path is required',
     'bare.placeholder.unscanned_paths[1].skip_keys is required',
-    'bare.placeholder.unscanned_paths[1].includes_subtree is required',
     'bare.function.definitions is required: a list from terraform, schema',
     'bare.function.call_result_reference_positions is required',
     'bare.function.calls_not_allowed_at is required',
@@ -382,8 +458,10 @@ dsls:
     'lists.scopes is required',
     'lists.declarations is required',
     'lists.references is required',
-    'lists.key_orders is required',
-    'bare.key_orders[0].order is required: one of alphabetical, significance',
+    'lists.key_sort_orders is required',
+    'bare.key_sort_orders[0].order is required: one of alphabetical, significance',
+    'bare.key_sort_orders[0].first_keys is required: a list, [] when empty',
+    'bare.key_sort_orders[0].last_keys is required: a list, [] when empty',
   ];
   for (const message of expected) assert.ok(parsed.error.includes(message), message);
   const [bare, lists] = parsed.dsls;
@@ -439,6 +517,6 @@ test('the shipped schema of the config states the values the reader accepts', ()
   assert.deepEqual(definitions.declaration.properties.key_token.enum, [...KEY_TOKENS, null]);
   assert.deepEqual(definitions.declaration.properties.name_spelling.enum, NAME_SPELLINGS);
   assert.deepEqual(definitions.positions.items.enum, REFERENCE_POSITIONS);
-  assert.deepEqual(definitions.key_order.properties.order.enum, KEY_ORDERS);
+  assert.deepEqual(definitions.key_sort_order.properties.order.enum, KEY_SORT_ORDERS);
   assert.deepEqual(Object.keys(definitions.scopes.patternProperties), [LOGICAL_SCOPE_NAME.source]);
 });

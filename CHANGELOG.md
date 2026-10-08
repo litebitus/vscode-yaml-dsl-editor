@@ -5,18 +5,24 @@
 - Locals: `locals.scope_name` names the scope whose declarations are a DSL's locals, resolved recursively in each fold, with hover showing a local's value and a cycle reported as a problem.
 - Suggestions: a block most overlays hold gets a gutter light bulb and an inlay hint that moves it into the common layer, each difference written as a local.
 - Suggestions: a move is offered only when the overlays' schemas agree at the block and each opt-out passes them; otherwise the hint is a potential move with the schema's messages.
-- Requirement markers decide requiredness over a parent's `required` array, and an opt-out leaving out a `[~required]` field is a potential move the user may still apply.
 - Suggestions: a key an overlay holds the same as the common layer, within `layers.duplicate_check`, gets a suggestion to delete it.
-- `key_orders` sets where a suggestion places a new key, `alphabetical` or `significance`, per map.
-- Applying a suggestion saves every file it changed.
-- A layer file that changes on disk is read again.
-- A config change reaches every loaded stack, and a workspace folder added or removed reloads the configs.
-- Setting `yaml-dsl-editor.features.suggestions` turns suggestions on or off.
-- Settings `yaml-dsl-editor.cache.stackCapacity` and `yaml-dsl-editor.cache.schemaCapacity` bound the stack and schema caches, least recently used first.
-- A line with an error carries a gutter mark.
-- Inlay hints are on in DSL files, where an editor such as Antigravity defaults them to off.
-- DSL files set `editor.inlayHints.maximumLength`, so a suggestion's label is not truncated at the editor's default.
-- An overlay's empty map replaces the common layer's entry in a folded document, at any depth.
+- Suggestions: applying one saves every file it changed.
+- Requirement markers: a field's marker decides requiredness over its parent's `required` array, and an opt-out leaving out a `[~required]` field is a potential move the user may still apply.
+- Key sort orders: `key_sort_orders` sets where a suggestion places a new key, `alphabetical` or `significance`, per map.
+- Key sort orders: an entry states `first_keys` and `last_keys`, the keys a `significance` map keeps at its top and bottom.
+- Paths: every config path is a JSONPath (RFC 9535) with `$`, `.name`, `.*`, `[*]` and a final `..*`; `.*` and `[*]` select the children of a map or a list alike, and a path appears once per list.
+- Layers: a layer file that changes on disk is read again.
+- Folding: an overlay's empty map replaces the common layer's entry in a folded document, at any depth.
+- Config: a config change reaches every loaded stack, and a workspace folder added or removed reloads the configs.
+- Settings: `yaml-dsl-editor.features.suggestions` turns suggestions on or off.
+- Settings: `yaml-dsl-editor.cache.stackCapacity` and `yaml-dsl-editor.cache.schemaCapacity` bound the stack and schema caches, least recently used first.
+- Problems: a line with an error carries a gutter mark.
+- Inlay hints: on in DSL files, where an editor such as Antigravity defaults them to off.
+- Inlay hints: DSL files set `editor.inlayHints.maximumLength`, so a suggestion's label is not truncated at the editor's default.
+
+### Deprecated
+
+- `yaml-dsl.yml`: `includes_subtree` on `unscanned_paths` and `calls_not_allowed_at`; list the path ending in `..*` as its own entry.
 
 ## 0.1.0
 

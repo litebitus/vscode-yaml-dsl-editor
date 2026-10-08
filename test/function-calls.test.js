@@ -18,7 +18,8 @@ const functionConfig = {
   callResultReferencePositions: ['whole_scalar'],
   callsNotAllowedAt: [
     { path: '$.*', tokens: parseAt('$.*'), skipKeys: [], includesSubtree: false },
-    { path: '$.cloud', tokens: parseAt('$.cloud'), skipKeys: [], includesSubtree: true },
+    { path: '$.cloud', tokens: parseAt('$.cloud'), skipKeys: [], includesSubtree: false },
+    { path: '$.cloud..*', tokens: parseAt('$.cloud..*'), skipKeys: [], includesSubtree: false },
   ],
   markerFunction,
 };

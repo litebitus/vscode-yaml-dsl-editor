@@ -23,11 +23,16 @@ const common = '/repo/mock.yml';
 const overlayPath = (name) => `/repo/${name}/mock.yml`;
 const noSchemaChecks = createSchemaChecks(() => null);
 
-const resourceKeyOrders = [
-  { path: '$.locals', skip_keys: [], includes_subtree: false, order: 'alphabetical' },
-  { path: '$', skip_keys: [], includes_subtree: false, order: 'significance' },
-  { path: '$.*', skip_keys: ['locals'], includes_subtree: false, order: 'significance' },
-  { path: '$', skip_keys: [], includes_subtree: true, order: 'alphabetical' },
+const resourceKeySortOrders = [
+  { path: '$.locals', skip_keys: [], order: 'alphabetical', first_keys: [], last_keys: [] },
+  { path: '$..*', skip_keys: ['locals'], order: 'significance', first_keys: [], last_keys: [] },
+  {
+    path: '$',
+    skip_keys: [],
+    order: 'significance',
+    first_keys: ['schema_version', 'env', 'locals'],
+    last_keys: ['data_source', 'outputs'],
+  },
 ];
 
 function layeredDsl(fields = {}, localPositions = ['whole_scalar', 'whole_placeholder', 'placeholder_in_text']) {
@@ -37,7 +42,7 @@ function layeredDsl(fields = {}, localPositions = ['whole_scalar', 'whole_placeh
       common_layer_discovery: 'ancestor',
       duplicate_check: { depth: 3, key_depths: { data_source: 2 }, skip_keys: ['schema_version'] },
     },
-    key_orders: resourceKeyOrders,
+    key_sort_orders: resourceKeySortOrders,
     placeholder: placeholder(),
     locals: { scope_name: 'local' },
     scopes: { local: scope(), RESOURCE: scope({ named_by_parent_key: true }) },
@@ -106,7 +111,7 @@ test('a block most overlays hold moves to the common layer, each difference a lo
     '',
   ].join('\n'));
   assert.equal(edited.get(overlayPath('dev')), '');
-  assert.equal(edited.get(overlayPath('uat')), 'queue: {}\nother: {}\n');
+  assert.equal(edited.get(overlayPath('uat')), 'other: {}\nqueue: {}\n');
   assert.equal(
     edited.get(overlayPath('production')),
     'locals:\n  queue_events_retention_seconds: 1209600\n  zone: mock-zone\n',
@@ -327,7 +332,7 @@ test('a block whose opt-out passes the shared schema node is a move', () => {
   assert.equal(suggestion.kind, 'move');
   assert.deepEqual(suggestion.optOutConditionalFields, []);
   assert.deepEqual(suggestion.absent, ['production']);
-  assert.equal(editedTexts(stack, suggestion).get(overlayPath('production')), 'queue: {}\nother: 1\n');
+  assert.equal(editedTexts(stack, suggestion).get(overlayPath('production')), 'other: 1\nqueue: {}\n');
 });
 
 test('a block whose opt-out leaves out a conditionally required field stays a move, naming the field', () => {

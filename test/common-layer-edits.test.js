@@ -16,7 +16,14 @@ function docOf(text) {
 }
 
 const optOut = (indent) => [`${' '.repeat(indent)}events: {}`];
-const alphabetical = (parentMap, parentPath, newKey) => placementIn(parentMap, newKey, 'alphabetical', []);
+const ALPHABETICAL = { order: 'alphabetical', firstKeys: [], lastKeys: [] };
+const SIGNIFICANCE = { order: 'significance', firstKeys: [], lastKeys: [] };
+const RESOURCE_SIGNIFICANCE = {
+  order: 'significance',
+  firstKeys: ['schema_version', 'env', 'locals'],
+  lastKeys: ['data_source', 'outputs'],
+};
+const alphabetical = (parentMap, parentPath, newKey) => placementIn(parentMap, newKey, ALPHABETICAL, []);
 const unordered = () => null;
 
 function mapOf(keys) {
@@ -25,22 +32,34 @@ function mapOf(keys) {
 
 test('alphabetical places a key in the sorted run at the top of the map, never past where the order breaks', () => {
   const broken = mapOf(['alpha', 'delta', 'zulu', 'bravo', 'echo']);
-  assert.equal(placementIn(broken, 'charlie', 'alphabetical', []).before.key, 'delta');
-  assert.equal(placementIn(broken, 'zz', 'alphabetical', []).after.key, 'zulu');
-  assert.equal(placementIn(mapOf(['name', 'execution_role_arn']), 'log_types', 'alphabetical', []).before.key, 'name');
-  assert.equal(placementIn(mapOf(['a', 'b']), 'c', 'alphabetical', []).after.key, 'b');
-  assert.equal(placementIn(mapOf(['b', null, 'a']), 'c', 'alphabetical', []).after.key, 'b');
+  assert.equal(placementIn(broken, 'charlie', ALPHABETICAL, []).before.key, 'delta');
+  assert.equal(placementIn(broken, 'zz', ALPHABETICAL, []).after.key, 'zulu');
+  assert.equal(placementIn(mapOf(['name', 'execution_role_arn']), 'log_types', ALPHABETICAL, []).before.key, 'name');
+  assert.equal(placementIn(mapOf(['a', 'b']), 'c', ALPHABETICAL, []).after.key, 'b');
+  assert.equal(placementIn(mapOf(['b', null, 'a']), 'c', ALPHABETICAL, []).after.key, 'b');
 });
 
 test('significance places a key where the overlays holding it place it, the first one that shares a neighbor', () => {
   const common = mapOf(['kms_key', 'data_source', 'outputs']);
   const source = ['kms_key', 'queue', 'data_source', 'outputs'];
-  assert.equal(placementIn(common, 'queue', 'significance', [source]).before.key, 'data_source');
-  assert.equal(placementIn(mapOf(['kms_key']), 'queue', 'significance', [source]).after.key, 'kms_key');
+  assert.equal(placementIn(common, 'queue', SIGNIFICANCE, [source]).before.key, 'data_source');
+  assert.equal(placementIn(mapOf(['kms_key']), 'queue', SIGNIFICANCE, [source]).after.key, 'kms_key');
   const holderOrders = [['queue'], ['locals', 'queue']];
-  assert.equal(placementIn(mapOf(['locals']), 'queue', 'significance', holderOrders).after.key, 'locals');
-  assert.equal(placementIn(mapOf(['other']), 'queue', 'significance', [source]).before.key, 'other');
-  assert.equal(placementIn(mapOf(['other']), 'locals', 'significance', [source]).before.key, 'other');
+  assert.equal(placementIn(mapOf(['locals']), 'queue', SIGNIFICANCE, holderOrders).after.key, 'locals');
+  assert.equal(placementIn(mapOf(['other']), 'queue', SIGNIFICANCE, [source]).after.key, 'other');
+});
+
+test('significance keeps first_keys at the top and last_keys at the bottom, other keys between them', () => {
+  const common = mapOf(['schema_version', 'locals', 'airflow', 'data_source']);
+  assert.equal(placementIn(common, 'env', RESOURCE_SIGNIFICANCE, []).before.key, 'locals');
+  assert.equal(placementIn(common, 'outputs', RESOURCE_SIGNIFICANCE, []).after.key, 'data_source');
+  assert.equal(placementIn(common, 'iam_role', RESOURCE_SIGNIFICANCE, []).before.key, 'data_source');
+  const devOrder = ['schema_version', 'env', 'locals', 'airflow', 'iam_role', 'connectivity', 'data_source'];
+  assert.equal(placementIn(common, 'iam_role', RESOURCE_SIGNIFICANCE, [devOrder]).after.key, 'airflow');
+  const resourcesOnly = mapOf(['schema_version', 'airflow', 'connectivity']);
+  assert.equal(placementIn(resourcesOnly, 'iam_role', RESOURCE_SIGNIFICANCE, [devOrder]).before.key, 'connectivity');
+  assert.equal(placementIn(mapOf(['outputs']), 'data_source', RESOURCE_SIGNIFICANCE, []).before.key, 'outputs');
+  assert.equal(placementIn(mapOf(['airflow']), 'schema_version', RESOURCE_SIGNIFICANCE, []).before.key, 'airflow');
 });
 
 test('an insertion under a path writes the missing keys at the file\'s own indentation, in the map\'s order', () => {

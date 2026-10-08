@@ -32,18 +32,29 @@ dsls:
       definitions: [terraform]
       call_result_reference_positions: [whole_scalar]
       calls_not_allowed_at:
-        - { path: "$.*", skip_keys: [], includes_subtree: false }
+        - { path: "$.*", skip_keys: [] }
       marker_function:
         call_marker: fn.
         splat_operator: "*"
         calls_without_name_allowed: true
     locals:
       scope_name: local
-    key_orders:
-      - { path: "$.locals", skip_keys: [], includes_subtree: false, order: alphabetical }
-      - { path: "$", skip_keys: [], includes_subtree: false, order: significance }
-      - { path: "$.*", skip_keys: [locals], includes_subtree: false, order: significance }
-      - { path: "$", skip_keys: [], includes_subtree: true, order: alphabetical }
+    key_sort_orders:
+      - path: "$.locals"
+        skip_keys: []
+        order: alphabetical
+        first_keys: []
+        last_keys: []
+      - path: "$..*"
+        skip_keys: [locals]
+        order: significance
+        first_keys: []
+        last_keys: []
+      - path: "$"
+        skip_keys: []
+        order: significance
+        first_keys: [schema_version, env, locals]
+        last_keys: [data_source, outputs]
     scopes:
       GLOBAL:
         regions: ["$"]
@@ -127,13 +138,15 @@ Open a file the config matches. When the DSL has layers, that file is one layer 
 | `file_excludes` | Globs of files that do not, even when `file_includes` matches them |
 | `schema_search_paths` | Search path used when a file does not name a schema, or the path it names is not on disk. Each entry is relative to that file. The first one on disk wins. A URL is fetched. |
 | `layers` | `overlay_folders`, the folder names of the overlays, `common_layer_discovery`, how the common layer is found (`parent` or `ancestor`), and `duplicate_check`, the check of an overlay for what the common layer already holds: its `depth` below the root, the `key_depths` under given top-level keys, and the `skip_keys` it passes over |
-| `key_orders` | Where a suggestion places a new key, per map: a `path` entry with an `order`, `alphabetical` or `significance`; the first entry covering a map applies |
+| `key_sort_orders` | Where a suggestion places a new key, per map: a `path` entry with an `order`, `alphabetical` or `significance`, and the `first_keys` and `last_keys` a `significance` map keeps at its top and bottom; the first entry selecting a map applies |
 | `placeholder` | The placeholder's `pattern` with a `body` group, and `unscanned_paths`, the paths whose text is another language's |
 | `function` | Where the function definitions come from (`definitions`), the positions a call result may be referenced from (`call_result_reference_positions`), the paths where a call is a problem (`calls_not_allowed_at`), and the call grammar of a marker function (`marker_function`) |
 | `locals` | `scope_name`, the scope whose declarations are the DSL's locals: named values, resolved recursively in each fold |
 | `scopes` | Each scope's `regions`, a list of paths (`$` is the whole fold); `later_items_of_declaring_list`; `named_by_parent_key`; and `builtin_names`. A logical scope is named in capitals. |
 | `declarations` | Where a name is declared (`path`, `skip_keys`, `exclude_candidates`), how it is read (`name_source` `key`, `value` or `meta_argument`, with `key_token`, `name_spelling` and `meta_argument_name`), `declares_every_name`, and its `scope_name` |
 | `references` | A `pattern` with named groups, the `positions` it may stand in, `text_after_name_allowed`, the `scope_name`, and the groups holding a parent-key scope (`scope_group`) and the name (`name_group`) |
+
+Every path is a JSONPath (RFC 9535) in the subset `$`, `.name`, `.*`, `[*]` and a final `..*`, which selects everything below a node but not the node itself. A path appears once in a list of path entries, and `includes_subtree` is deprecated: a path ending in `..*` is its own entry.
 
 `positions` lists `whole_scalar`, the scalar; `whole_placeholder`, a placeholder that is the whole scalar; `placeholder_in_text`, a placeholder inside longer text; and `anywhere_in_scalar`, each match inside a scalar.
 
@@ -183,7 +196,7 @@ The server loads a stack when a file in it becomes active. It does not load the 
 
 ## Suggestions
 
-A block most overlays hold gets a light bulb in the gutter of its key line and an inlay hint, `💡 move to common layer`, at the end of that line, in each overlay that holds it. Hovering the hint shows how many overlays hold the block, each value that differs between them, and the overlays that do not hold it. The link in its hover moves the block into the common layer in one click: each difference becomes a local, declared in the common layer with the value most overlays hold and in each overlay holding another value. An overlay without the block gets `{}` at its path. New keys land where `key_orders` says. Every file the click changes is saved. Every other folded document reads the same at the block's path after the click, and the click writes nothing when the editor finds otherwise.
+A block most overlays hold gets a light bulb in the gutter of its key line and an inlay hint, `💡 move to common layer`, at the end of that line, in each overlay that holds it. Hovering the hint shows how many overlays hold the block, each value that differs between them, and the overlays that do not hold it. The link in its hover moves the block into the common layer in one click: each difference becomes a local, declared in the common layer with the value most overlays hold and in each overlay holding another value. An overlay without the block gets `{}` at its path. New keys land where `key_sort_orders` says. Every file the click changes is saved. Every other folded document reads the same at the block's path after the click, and the click writes nothing when the editor finds otherwise.
 
 A move is offered only when every overlay's schema has the same node at the block's path and `{}` passes it for each overlay that opts out. Otherwise the hint is `💡 potential move: overlay schemas differ` or `💡 potential move: overlay (<overlays>) opt-out would fail the schema`, and its hover lists the overlays and the schema's messages. It has no link.
 
