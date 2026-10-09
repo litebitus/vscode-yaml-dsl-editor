@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 - 2026-10-09
 
 - Suggestions: a stack with no common layer file gets the moves that create it.
 - Suggestions: a local is named by the block's key and the nearest named key above the value, leaving out declared names, calls and list items.

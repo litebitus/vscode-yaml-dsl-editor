@@ -2,7 +2,7 @@
   "name": "yaml-dsl-editor",
   "displayName": "YAML DSL Editor",
   "description": "The editor that makes a YAML DSL authorable.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "lite2073",
   "license": "MIT",
   "repository": {
