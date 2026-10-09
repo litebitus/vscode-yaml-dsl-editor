@@ -16,6 +16,7 @@ const {
   placeholder,
   dslEntry,
   parsedDsl,
+  markerFunction,
 } = require('./config-builders');
 
 const OVERLAYS = ['dev', 'staging', 'uat', 'production'];
@@ -90,8 +91,8 @@ test('a block most overlays hold moves to the common layer, each difference a lo
   assert.deepEqual(suggestion.holders, ['dev', 'staging', 'production']);
   assert.deepEqual(suggestion.absent, ['uat']);
   assert.deepEqual(suggestion.differences, [{
-    name: 'queue_events_retention_seconds',
-    referenceText: 'local.queue_events_retention_seconds',
+    name: 'queue_retention_seconds',
+    referenceText: 'local.queue_retention_seconds',
     values: [{ text: '86400', overlays: ['dev', 'staging'] }, { text: '1209600', overlays: ['production'] }],
   }]);
   assert.deepEqual(suggestion.marks.map((mark) => [mark.file, mark.range.start]), [
@@ -102,11 +103,11 @@ test('a block most overlays hold moves to the common layer, each difference a lo
   const edited = editedTexts(stack, suggestion);
   assert.equal(edited.get(common), [
     'locals:',
-    '  queue_events_retention_seconds: 86400',
+    '  queue_retention_seconds: 86400',
     '  team: mock-team',
     'queue:',
     '  events:',
-    '    retention_seconds: local.queue_events_retention_seconds',
+    '    retention_seconds: local.queue_retention_seconds',
     '    max_receive_count: 5',
     '',
   ].join('\n'));
@@ -114,7 +115,7 @@ test('a block most overlays hold moves to the common layer, each difference a lo
   assert.equal(edited.get(overlayPath('uat')), 'other: {}\nqueue: {}\n');
   assert.equal(
     edited.get(overlayPath('production')),
-    'locals:\n  queue_events_retention_seconds: 1209600\n  zone: mock-zone\n',
+    'locals:\n  queue_retention_seconds: 1209600\n  zone: mock-zone\n',
   );
   assert.equal(foldsAgreeAfter(stack, suggestion, edited), true);
   const changedCount = edited.get(common).replace('max_receive_count: 5', 'max_receive_count: 6');
@@ -135,16 +136,16 @@ test('a difference whose values tie is declared in each overlay, the common laye
   const edited = editedTexts(stack, suggestion);
   assert.equal(edited.get(common), [
     'locals:',
-    '  queue_events_retention_seconds: 0',
+    '  queue_retention_seconds: 0',
     '  team: mock-team',
     'queue:',
     '  events:',
-    '    retention_seconds: local.queue_events_retention_seconds',
+    '    retention_seconds: local.queue_retention_seconds',
     '    max_receive_count: 5',
     '',
   ].join('\n'));
-  assert.equal(edited.get(overlayPath('dev')), 'locals:\n  queue_events_retention_seconds: 86400\n');
-  assert.equal(edited.get(overlayPath('production')), 'locals:\n  queue_events_retention_seconds: 1209600\n');
+  assert.equal(edited.get(overlayPath('dev')), 'locals:\n  queue_retention_seconds: 86400\n');
+  assert.equal(edited.get(overlayPath('production')), 'locals:\n  queue_retention_seconds: 1209600\n');
   assert.equal(foldsAgreeAfter(stack, suggestion, edited), true);
 });
 
@@ -162,13 +163,13 @@ test('a tied string or boolean takes "" or false in the common layer, and tied v
     'schema_version: "3"',
     '',
     'locals:',
-    '  queue_events_enabled: false',
-    '  queue_events_name: ""',
+    '  queue_enabled: false',
+    '  queue_name: ""',
     '',
     'queue:',
     '  events:',
-    '    name: local.queue_events_name',
-    '    enabled: local.queue_events_enabled',
+    '    name: local.queue_name',
+    '    enabled: local.queue_enabled',
     '    size: 1',
     '',
   ].join('\n'));
@@ -181,7 +182,7 @@ test('a tied string or boolean takes "" or false in the common layer, and tied v
   }));
   const [optOutSuggestion] = commonLayerSuggestions(optingOut, noSchemaChecks);
   const optOutEdited = editedTexts(optingOut, optOutSuggestion);
-  assert.match(optOutEdited.get(common), /^locals:\n {2}queue_events_name: ""\n/m);
+  assert.match(optOutEdited.get(common), /^locals:\n {2}queue_name: ""\n/m);
   assert.equal(optOutEdited.get(overlayPath('production')), 'other: {}\nqueue: {}\n');
   assert.equal(foldsAgreeAfter(optingOut, optOutSuggestion, optOutEdited), true);
   const mixed = stackOf(layeredDsl(), texts('schema_version: "3"\n', {
@@ -351,15 +352,34 @@ test('a block whose every leaf differs, or whose keys differ, moves nothing', ()
   assert.deepEqual(commonLayerSuggestions(stack, noSchemaChecks), []);
 });
 
-test('a local name the stack declares takes its ancestors\' keys in front', () => {
-  const stack = stackOf(layeredDsl(), texts('locals:\n  events_size: taken\n', {
-    dev: 'queue:\n  events:\n    size: 1\n    kept: x\n',
-    staging: 'queue:\n  events:\n    size: 2\n    kept: x\n',
-    uat: 'queue:\n  events:\n    size: 2\n    kept: x\n',
+test('a local is named by the block\'s key and the nearest named key, leaving out declared names, calls and list items', () => {
+  const withCalls = layeredDsl({ function: markerFunction() });
+  const named = (value) => `queue:\n  events:\n    tags fn.merge*:\n      - team: mock\n      - env: ${value}\n    kept: x\n`;
+  const namedCall = stackOf(withCalls, texts('', {
+    dev: named('mock-dev'),
+    staging: named('mock-dev'),
+    uat: named('mock-uat'),
   }));
-  const [suggestion] = commonLayerSuggestions(stack, noSchemaChecks);
+  assert.equal(commonLayerSuggestions(namedCall, noSchemaChecks)[0].differences[0].name, 'queue_env');
+  const nameless = (value) => `queue:\n  events:\n    fn.concat*:\n      - [mock-a]\n      - [${value}]\n    kept: x\n`;
+  const namelessCall = stackOf(withCalls, texts('', {
+    dev: nameless('mock-dev'),
+    staging: nameless('mock-dev'),
+    uat: nameless('mock-uat'),
+  }));
+  assert.equal(commonLayerSuggestions(namelessCall, noSchemaChecks)[0].differences[0].name, 'queue');
+});
+
+test('a local name the stack already declares takes the next named key up, then the block\'s ancestors', () => {
+  const holder = (size) => `queue:\n  events:\n    limits:\n      size: ${size}\n    kept: x\n`;
+  const nextKeyUp = stackOf(layeredDsl(), texts('locals:\n  queue_size: taken\n', {
+    dev: holder(1),
+    staging: holder(2),
+    uat: holder(2),
+  }));
+  const [suggestion] = commonLayerSuggestions(nextKeyUp, noSchemaChecks);
   assert.deepEqual(suggestion.path, ['queue']);
-  assert.equal(suggestion.differences[0].name, 'queue_events_size');
+  assert.equal(suggestion.differences[0].name, 'queue_limits_size');
 });
 
 test('a placeholder-only local reference wraps the name in the placeholder', () => {
@@ -400,11 +420,11 @@ test('a stack with no common layer file gets the moves that create it, starting 
     'schema_version: "3"',
     '',
     'locals:',
-    '  queue_events_size: 1',
+    '  queue_size: 1',
     '',
     'queue:',
     '  events:',
-    '    size: local.queue_events_size',
+    '    size: local.queue_size',
     '    kept: x',
     '',
   ].join('\n'));

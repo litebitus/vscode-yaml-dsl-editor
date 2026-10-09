@@ -200,7 +200,7 @@ test('suggestions wait for a quiet stack, then mark the block and move it in one
     textDocument: { uri: `file://${root}/production/mock.yml`, version: null },
     edits: [{
       range: { start: { line: 0, character: 0 }, end: { line: 4, character: 0 } },
-      newText: 'locals:\n  queue_events_size: 2\n',
+      newText: 'locals:\n  queue_size: 2\n',
     }],
   });
   assert.deepEqual(moved.files.map((file) => file.uri), editedUris);
@@ -422,5 +422,5 @@ test('a stack without a common layer file is offered moves, and applying one cre
     options: { ignoreIfExists: true },
   });
   assert.ok(creation < commonEdit);
-  assert.match(moved.edit.documentChanges[commonEdit].edits[0].newText, /^locals:\n {2}queue_events_size: 1\n/);
+  assert.match(moved.edit.documentChanges[commonEdit].edits[0].newText, /^locals:\n {2}queue_size: 1\n/);
 });

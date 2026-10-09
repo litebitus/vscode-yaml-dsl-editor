@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Suggestions: a stack with no common layer file gets the moves that create it.
+- Suggestions: a local is named by the block's key and the nearest named key above the value, leaving out declared names, calls and list items.
 - Output: the YAML DSL channel logs each startup step, the first analysis of each opened file and every failure; a failed startup step no longer keeps the language server from starting.
 
 ## 0.2.0 - 2026-10-08
