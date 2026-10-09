@@ -280,6 +280,13 @@ test('applying a suggestion records and saves every file it changed, and nothing
     },
   });
   const saved = [];
+  const commandsRun = [];
+  vscode.commands = {
+    executeCommand: async (command) => {
+      commandsRun.push(command);
+      if (commandsRun.length === 2) throw new Error('mock command missing');
+    },
+  };
   vscode.Uri = { parse: (uri) => ({ parsed: uri }) };
   vscode.workspace = {
     openTextDocument: async (uri) => ({
@@ -301,6 +308,7 @@ test('applying a suggestion records and saves every file it changed, and nothing
   await apply({ applied: true, message: null });
   await apply(null, { stackId: '/repo/mock.yml' });
   assert.deepEqual(asked.map((item) => item.method), Array(5).fill('yaml-dsl/applySuggestion'));
+  assert.deepEqual(commandsRun, Array(5).fill('editor.action.hideHover'));
   assert.deepEqual(saved, ['file:///repo/mock.yml', 'file:///repo/locked.yml']);
   assert.deepEqual(recorded.map((file) => file.uri), ['file:///repo/mock.yml', 'file:///repo/locked.yml']);
   assert.deepEqual(vscode.window.warnings, [
@@ -318,6 +326,7 @@ test('activation paints the suggestions the server sends and registers the move'
   let inlayChanges = 0;
   let fileDecorationChanges = 0;
   let inlayProvider = null;
+  let inlayRegistrations = 0;
   let fileDecorationProvider = null;
   let suggestionsSetting = 'on';
   let stackCapacitySetting = 32;
@@ -381,6 +390,7 @@ test('activation paints the suggestions the server sends and registers the move'
       setTextDocumentLanguage: async () => {},
       registerInlayHintsProvider(selector, provider) {
         inlayProvider = { selector, provider };
+        inlayRegistrations += 1;
         return disposable;
       },
     },
@@ -465,10 +475,14 @@ test('activation paints the suggestions the server sends and registers the move'
   await Promise.resolve();
   assert.equal(capacityNotes().length, sentBefore);
   assert.deepEqual(warnings, ['yaml-dsl-editor.cache.stackCapacity must be a whole number, 1 or more']);
+  const registrationsBeforeMarks = inlayRegistrations;
+  const changesBeforeMarks = inlayChanges;
   notes['yaml-dsl/suggestions']({
     stackId: '/repo/mock.yml',
     files: [{ uri: 'file:///repo/dev/mock.yml', marks: [mark] }],
   });
+  assert.equal(inlayRegistrations, registrationsBeforeMarks + 1);
+  assert.equal(inlayChanges, changesBeforeMarks);
   assert.equal(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])).length, 1);
   notes['yaml-dsl/evicted']({ stackIds: ['/repo/mock.yml'] });
   assert.equal(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])).length, 1);
