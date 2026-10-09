@@ -150,7 +150,7 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.match(twoFold, /the two overlay/);
 
   const foldUri = `yaml-dsl-fold:${encodeURIComponent(common)}/one`;
-  assert.ok(ws.links(foldUri).some((link) => link.path === common));
+  assert.deepEqual(ws.links(foldUri), []);
   assert.deepEqual(ws.links('file://missing'), []);
   const foldHover = ws.hover(foldUri, at(folded, 'label'));
   assert.equal(foldHover.contents.value, '[optional] Mock label.');
@@ -580,6 +580,82 @@ test('an overlay\'s own declaration wins over the common layer\'s', async () => 
   assert.equal(ws.definition(`file://${one}`, at(files[one], 'local.db')).path, one);
   assert.match(ws.hover(`file://${one}`, at(files[one], 'local.db')).contents.value, /overlay-value/);
   assert.deepEqual(ws.references(`file://${one}`).map((reference) => reference.kind), ['local']);
+});
+
+test('a common layer ref resolves in each overlay whose merge keeps it, and leads to each declaration', async () => {
+  const files = {
+    [common]: [
+      'locals:',
+      '  decrypter: ref mockdata.kms_key',
+      '  invokers: ref mockdata.execution_role',
+      '  partial: ref mockdata.three_only',
+      '  replaced: ref mockdata.common_only',
+      'mockdata:',
+      '  common_only:',
+      '    label: mock-label',
+      '',
+    ].join('\n'),
+    [one]: [
+      'locals:',
+      '  decrypter: ref mockdata.one_key',
+      '  replaced: mock-one',
+      'mockdata:',
+      '  one_key: {}',
+      '  execution_role: {}',
+      '',
+    ].join('\n'),
+    [two]: [
+      'locals:',
+      '  invokers: ref mockdata.two_role',
+      '  replaced: mock-two',
+      'mockdata:',
+      '  kms_key: {}',
+      '  two_role: {}',
+      '',
+    ].join('\n'),
+    [three]: [
+      'locals:',
+      '  replaced: mock-three',
+      'mockdata:',
+      '  kms_key: {}',
+      '  execution_role: {}',
+      '  three_only: {}',
+      '',
+    ].join('\n'),
+    [four]: [
+      'locals:',
+      '  replaced: mock-four',
+      'mockdata:',
+      '  kms_key: {}',
+      '  execution_role: {}',
+      '',
+    ].join('\n'),
+  };
+  const ws = workspace(files, async () => schema);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  const commonUri = `file://${common}`;
+  await ws.sync(commonUri, common, files[common]);
+  const linkTargets = ws.links(commonUri).map((link) => link.targets.map((target) => target.path));
+  assert.deepEqual(linkTargets, [
+    [two, three, four],
+    [one, three, four],
+  ]);
+  const sectionTitles = (needle) => [...ws.hover(commonUri, at(files[common], needle)).contents.value
+    .matchAll(/^\[([^\]]+)\]\(file:\/\/[^)]+#L(\d+)\)$/gm)].map((found) => `${found[1]}:${found[2]}`);
+  assert.deepEqual(sectionTitles('ref mockdata.kms_key'), ['two:5', 'three:4', 'four:4']);
+  assert.deepEqual(sectionTitles('ref mockdata.execution_role'), ['one:6', 'three:5', 'four:5']);
+  assert.match(ws.hover(commonUri, at(files[common], 'ref mockdata.common_only')).contents.value, /^\[mock-stack\/mock\.yml:7\]/);
+  assert.equal(ws.definition(commonUri, at(files[common], 'ref mockdata.kms_key')), null);
+  assert.equal(ws.definition(commonUri, at(files[common], 'ref mockdata.three_only')), null);
+  assert.equal(ws.definition(commonUri, at(files[common], 'ref mockdata.common_only')).path, common);
+  assert.deepEqual(ws.references(commonUri).map((reference) => reference.kind), [
+    'external',
+    'external',
+    'error',
+    'local',
+  ]);
+  const hover = ws.hover(commonUri, at(files[common], 'ref mockdata.kms_key'));
+  assert.doesNotMatch(hover.contents.value, /Invalid reference/);
 });
 
 test('a file below an overlay directory takes the common layer above it, shared with the adjacent stack', async () => {

@@ -71,6 +71,29 @@ function fakeDocuments() {
   };
 }
 
+test('a link carries its target count', async () => {
+  const connection = fakeConnection();
+  const linkRange = { start: { line: 1, character: 2 }, end: { line: 1, character: 9 } };
+  const targetRange = { start: { line: 4, character: 2 }, end: { line: 4, character: 8 } };
+  const workspace = {
+    whenAnalyzed: async () => {},
+    onSuggestions() {},
+    onVocabularyLoaded() {},
+    links: () => [
+      {
+        range: linkRange,
+        targets: [
+          { path: '/repo/two/mock.yml', targetRange },
+          { path: '/repo/three/mock.yml', targetRange },
+        ],
+      },
+    ],
+  };
+  bind(connection, fakeDocuments(), { workspace });
+  const links = await connection.handlers.links({ textDocument: { uri: 'file:///repo/mock.yml' } });
+  assert.deepEqual(links, [{ range: linkRange, data: { targetCount: 2 } }]);
+});
+
 test('the default workspace still answers initialize', () => {
   const connection = fakeConnection();
   bind(connection, fakeDocuments());
@@ -118,10 +141,7 @@ test('document events analyze and custom requests answer', async () => {
   assert.equal(hit.targetUri, 'file:///repo/note.yml');
   const whole = rangeOf(note, 'local.db');
   assert.deepEqual(hit.originSelectionRange, whole);
-  const links = await connection.handlers.links({ textDocument: { uri: 'file:///repo/note.yml' } });
-  assert.equal(links.length, 1);
-  assert.deepEqual(links[0].range, whole);
-  assert.match(links[0].target, /^file:\/\/\/repo\/note\.yml#/);
+  assert.deepEqual(await connection.handlers.links({ textDocument: { uri: 'file:///repo/note.yml' } }), []);
   await connection.handlers['yaml-dsl/active']({ path: '/repo/app/mock.yml' });
   connection.handlers['yaml-dsl/visibleFolds']({ stackIds: ['/repo/app/mock.yml'] });
   connection.handlers['yaml-dsl/cacheCapacities']({ stackCapacity: 4, schemaCapacity: 4 });

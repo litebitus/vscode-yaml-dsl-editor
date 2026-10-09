@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { analyzeDocument, hoverAt, definitionAt, linksFor, linkTarget, pathToUri, uriToPath } = require('../lib/analyze');
+const { analyzeDocument, hoverAt, definitionAt, linksFor, pathToUri, uriToPath } = require('../lib/analyze');
 
 function rangeOf(text, needle) {
   const index = text.indexOf(needle);
@@ -97,9 +97,7 @@ test('the active file wins, then the common layer, then the first other declarat
   assert.equal(definitionAt(doc, { line: 0, character: 8 }, stackOf(symbols)).path, '/repo/mock.yml');
   const withActive = [...symbols, typed('primary', '/repo/two/mock.yml')];
   assert.equal(definitionAt(doc, { line: 0, character: 8 }, stackOf(withActive)).path, '/repo/two/mock.yml');
-  const links = linksFor(doc, stackOf(symbols));
-  assert.equal(links.length, 1);
-  assert.match(linkTarget(links[0].path, links[0].targetRange), /^file:\/\/\/repo\/mock\.yml#1,/);
+  assert.deepEqual(linksFor(doc, stackOf(symbols)), []);
   const hover = hoverAt(doc, { line: 0, character: 8 }, stackOf(symbols), null);
   assert.match(hover.contents.value, /mocktype\.primary — \/repo\/mock\.yml/);
   const files = (text) => new Map([['/repo/mock.yml', { text }]]);
@@ -119,7 +117,7 @@ test('the active file wins, then the common layer, then the first other declarat
   assert.deepEqual(linksFor(missing, stackOf([])), []);
   const fieldPath = 'item: ref mocktype.primary.tail\n';
   const fieldDoc = analyzeDocument(fieldPath, '/repo/two/mock.yml', { references: [refRule] });
-  assert.deepEqual(linksFor(fieldDoc, stackOf(symbols))[0].range, rangeOf(fieldPath, 'ref mocktype.primary.tail'));
+  assert.deepEqual(definitionAt(fieldDoc, { line: 0, character: 8 }, stackOf(symbols)).origin, rangeOf(fieldPath, 'ref mocktype.primary.tail'));
   const localTyped = analyzeDocument('item: ref local.primary\n', '/repo/two/mock.yml', { references: [refRule] });
   assert.equal(definitionAt(localTyped, { line: 0, character: 8 }, stackOf(symbols)), null);
 });

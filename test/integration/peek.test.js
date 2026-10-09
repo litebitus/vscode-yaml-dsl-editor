@@ -37,7 +37,7 @@ async function openOwned(relativePath) {
 }
 
 suite('references peek regression', () => {
-  test('an out-of-file ref shows the section and does not open the references peek', async () => {
+  test('an out-of-file ref shows no declaration on hover and does not open the references peek', async () => {
     const doc = await openOwned(['stack', 'one', 'mock.yml']);
     const before = referencesPeekCount();
     const hovers = await vscode.commands.executeCommand(
@@ -46,18 +46,12 @@ suite('references peek regression', () => {
       place(doc.getText(), 'ref mocktype.primary'),
     );
     assert.equal(referencesPeekCount(), before);
-    assert.ok(hovers && hovers.length > 0);
     const text = hoverText(hovers);
-    assert.match(text, /primary/);
-    assert.match(text, /label/);
-    assert.match(text, /<br>/);
-    assert.equal(text.includes('```'), false);
-    assert.equal(text.includes('\n'), false);
-    assert.match(text, /command:yaml-dsl-editor\.peek\?/);
-    assert.match(decodeURIComponent(text), /"startLine":/);
+    assert.doesNotMatch(text, /command:yaml-dsl-editor\.peek\?/);
+    assert.doesNotMatch(text, /label/);
   });
 
-  test('an in-file local shows the section and does not open the references peek', async () => {
+  test('an in-file local shows no declaration on hover and does not open the references peek', async () => {
     const doc = await openOwned(['stack', 'mock.yml']);
     const before = referencesPeekCount();
     const hovers = await vscode.commands.executeCommand(
@@ -66,10 +60,8 @@ suite('references peek regression', () => {
       place(doc.getText(), 'local.db'),
     );
     assert.equal(referencesPeekCount(), before);
-    assert.ok(hovers && hovers.length > 0);
     const text = hoverText(hovers);
-    assert.match(text, /db/);
-    assert.match(text, /mock-value/);
-    assert.equal(text.includes('```'), false);
+    assert.doesNotMatch(text, /command:yaml-dsl-editor\.peek\?/);
+    assert.doesNotMatch(text, /mock-value/);
   });
 });

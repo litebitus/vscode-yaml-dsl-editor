@@ -30,7 +30,7 @@ Hover reads the schema as authored, so a field shows the description written bes
 
 ### Navigation and completion
 
-References, locals, placeholders and calls go to their declaration, preview it on hover, and complete from what the file's fold sees.
+References, locals, placeholders and calls go to their declaration and complete from what the file's fold sees. A common layer reference reaching a declaration in several overlays opens them all, one section per overlay, on Command-click.
 
 ### Problems
 

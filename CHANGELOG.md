@@ -6,6 +6,8 @@
 - Suggestions: a local is named by the block's key and the nearest named key above the value, leaving out declared names, calls and list items.
 - Suggestions: clicking the link in a suggestion's hover dismisses the hover.
 - Suggestions: inlay hints come back after an edit or a move, where the editor stopped asking once a file had none.
+- References: a common layer reference resolves in each overlay whose merge keeps it, and Command-click on one reaching several declarations shows each, headed by its overlay.
+- References: resting the pointer on a reference that names a declaration opens no popup.
 - Output: the YAML DSL channel logs each startup step, the first analysis of each opened file and every failure; a failed startup step no longer keeps the language server from starting.
 
 ## 0.2.0 - 2026-10-08

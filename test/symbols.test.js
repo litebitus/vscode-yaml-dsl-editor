@@ -190,6 +190,24 @@ test('a placeholder reference spans its whole body, the path after the name incl
   assert.equal(text.slice(range.start.character, range.end.character), 'setup.login.body.token');
 });
 
+test('a reference records the document path it sits at and whether it sits in a key', () => {
+  const text = 'mocktype:\n  name_${local.suffix}: local.db\n';
+  const analyzed = doc(text, {
+    placeholder: placeholder(),
+    scopes: { local: scope() },
+    references: [
+      reference('^local\\.(?<name>[a-z]+)$', 'local', {
+        positions: ['whole_scalar', 'placeholder_in_text'],
+      }),
+    ],
+  });
+  const located = analyzed.references.map((found) => [found.groups.name, found.documentPath, found.inKey]);
+  assert.deepEqual(located, [
+    ['suffix', ['mocktype', 'name_${local.suffix}'], true],
+    ['db', ['mocktype', 'name_${local.suffix}'], false],
+  ]);
+});
+
 test('placeholders under an unscanned path are another language\'s text and are not read', () => {
   const text = [
     'build:',

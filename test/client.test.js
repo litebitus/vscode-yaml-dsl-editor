@@ -17,6 +17,11 @@ const {
   dslEntry,
   configText,
 } = require('./config-builders');
+const { createDeclarationsPopup } = require('../lib/declarations-popup');
+
+function clickOpenedPopup(vscode) {
+  return { ...createDeclarationsPopup(vscode), opensHoverAt: () => true };
+}
 
 const sampleConfig = configText(dslEntry('sample'));
 
@@ -286,6 +291,16 @@ test('activation associates matching files and reveals the fold', async () => {
   assert.equal(vscode.peeked.at(-1)[0], 'editor.action.closeReferenceSearch');
   assert.equal(vscode.shown.at(-1).opts.preview, true);
 
+  vscode.Selection = class {
+    constructor(anchor, active) { this.anchor = anchor; this.active = active; }
+  };
+  const referenceEditor = { document: { uri: { toString: () => 'file:///repo/mock.yml' } }, selection: null };
+  vscode.window.activeTextEditor = referenceEditor;
+  await vscode.commandsByName['yaml-dsl-editor.showDeclarations']({ uri: 'file:///repo/mock.yml', line: 4, character: 2 });
+  const cursor = referenceEditor.selection.active;
+  assert.deepEqual([cursor.line, cursor.character], [4, 2]);
+  assert.deepEqual(vscode.peeked.at(-1), ['editor.action.showHover']);
+
   client.sendRequest = async () => { throw new Error('down'); };
   vscode.window.activeTextEditor = editor;
   await vscode.listeners.active[0]();
@@ -394,7 +409,7 @@ test('a cross-file target peeks that section and leaves this file', async () => 
     },
     commands: { executeCommand: async (...args) => { peeked.push(args); } },
   };
-  const mid = editorMiddleware(vscode);
+  const mid = editorMiddleware(vscode, () => [], clickOpenedPopup(vscode));
   const here = { scheme: 'file', toString() { return 'file:///repo/one/mock.yml'; } };
   const links = await mid.provideDocumentLinks({ uri: here }, null, async () => [
     { target: 'file:///repo/mock.yml#3,2,3,9' },
@@ -403,15 +418,15 @@ test('a cross-file target peeks that section and leaves this file', async () => 
   ]);
   assert.equal(links[0].target, 'file:///repo/mock.yml#3,2,3,9');
   assert.equal(links[1].target, 'file:///repo/one/mock.yml#1,1,1,2');
+  const [declarations] = await mid.provideDocumentLinks({ uri: here }, null, async () => [
+    { range: { start: { line: 2, character: 4 } }, data: { targetCount: 2 } },
+  ]);
+  assert.match(declarations.target.toString(), /^command:yaml-dsl-editor\.showDeclarations\?/);
   assert.equal(await mid.provideDocumentLinks({ uri: here }, null, async () => null), null);
   assert.equal(peeked.length, 0);
 
   let calls = 0;
-  let cancel = null;
-  const token = {
-    isCancellationRequested: false,
-    onCancellationRequested(fn) { cancel = fn; return { dispose() {} }; },
-  };
+  const token = { isCancellationRequested: false };
   const hover = await mid.provideHover({ uri: here }, { line: 4, character: 2 }, token, async () => {
     calls += 1;
     return { contents: 'tip' };
@@ -449,22 +464,26 @@ test('a cross-file target peeks that section and leaves this file', async () => 
   }));
   assert.match(bare.contents.value, /<code><u>mock\.yml:3<\/u><\/code>/);
   assert.equal(bare.contents.value.includes('```'), false);
-
-  peeked.length = 0;
-  const moved = {
-    isCancellationRequested: false,
-    onCancellationRequested(fn) { cancel = fn; return { dispose() {} }; },
-  };
-  const pending = mid.provideHover({ uri: here }, { line: 1, character: 1 }, moved, async () => {
-    calls += 1;
-    return { contents: 'late' };
-  });
-  await new Promise((resolve) => { setTimeout(resolve, 20); });
-  cancel();
-  moved.isCancellationRequested = true;
-  assert.equal(await pending, null);
-  assert.equal(calls, 1);
-  assert.equal(peeked.some((item) => item[0] === 'editor.action.peekLocations'), false);
+  const layered = await mid.provideHover({ uri: here }, { line: 0, character: 0 }, null, async () => ({
+    contents: {
+      value: [
+        '[two](file:///repo/two/mock.yml#L5)',
+        '',
+        '```yaml-dsl\nshared_key:\n  label: mock-two\n```',
+        '',
+        '[three](file:///repo/three/mock.yml#L7)',
+        '',
+        '```yaml-dsl\nshared_key:\n  label: mock-three\n```',
+      ].join('\n'),
+    },
+  }));
+  const headings = [...layered.contents.value.matchAll(/<code><u>([^<]+)<\/u><\/code>/g)].map((found) => found[1]);
+  assert.deepEqual(headings, ['two', 'three']);
+  const [twoSection, threeSection] = layered.contents.value.split('<div><a ').slice(1);
+  assert.ok(twoSection.includes('mock-two') && !twoSection.includes('mock-three'));
+  assert.ok(threeSection.includes('mock-three'));
+  assert.match(decodeURIComponent(twoSection), /"uri":"file:\/\/\/repo\/two\/mock\.yml","startLine":4/);
+  assert.match(decodeURIComponent(threeSection), /"uri":"file:\/\/\/repo\/three\/mock\.yml","startLine":6/);
 });
 
 function placeAt(text, offset) {
@@ -739,7 +758,7 @@ test('a hover colors the declaration by the declaring file\'s DSL, with no DSL s
       constructor(contents, range) { this.contents = contents; this.range = range; }
     },
   };
-  const hover = (configText) => editorMiddleware(vscode, () => [{ text: configText, dir: '/repo' }])
+  const hover = (configText) => editorMiddleware(vscode, () => [{ text: configText, dir: '/repo' }], clickOpenedPopup(vscode))
     .provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
       contents: {
         value: '[mock.yml:1](file:///repo/mock.yml#L1)\n\n```yaml-dsl\n'
@@ -761,7 +780,7 @@ test('a hover colors the declaration by the declaring file\'s DSL, with no DSL s
   assert.doesNotMatch(otherDsl, /color:#efb080;">ref/);
   assert.doesNotMatch(otherDsl, /color:#82D2CE;">\$\{env\}/);
   assert.match(otherDsl, /<span style="color:#82D2CE;">@\{y\}<\/span>/);
-  const unowned = (await editorMiddleware(vscode).provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
+  const unowned = (await editorMiddleware(vscode, () => [], clickOpenedPopup(vscode)).provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
     contents: { value: '[mock.yml:1](file:///repo/mock.yml#L1)\n\n```yaml-dsl\n  source: ref thing.one\n```' },
   }))).contents.value;
   assert.doesNotMatch(unowned, /color:#efb080/);
@@ -812,6 +831,41 @@ test('the repaint notice is handled from the moment the client starts, before ac
   assert.ok(painted.some((count) => count === 1));
 });
 
+test('a reference\'s declarations show only when a click opened them, other hovers always', async () => {
+  const vscode = {
+    MarkdownString: class {
+      constructor() { this.value = ''; }
+      appendMarkdown(text) { this.value += text; }
+    },
+    Hover: class {
+      constructor(contents, range) { this.contents = contents; this.range = range; }
+    },
+    Uri: { parse: (text) => ({ text }) },
+    Position: class {
+      constructor(line, character) { this.line = line; this.character = character; }
+    },
+    Selection: class {
+      constructor(anchor, active) { this.anchor = anchor; this.active = active; }
+    },
+    commands: { executeCommand: async () => {} },
+  };
+  const document = { uri: { toString: () => 'file:///repo/mock.yml' } };
+  vscode.window = { activeTextEditor: { document, selection: null } };
+  const popup = createDeclarationsPopup(vscode);
+  const mid = editorMiddleware(vscode, () => [], popup);
+  const declarations = async () => ({
+    contents: { value: '[two](file:///repo/two/mock.yml#L5)\n\n```yaml-dsl\nshared_key: {}\n```' },
+  });
+  const at = { line: 4, character: 2 };
+  assert.equal(await mid.provideHover(document, at, null, declarations), null);
+  const field = await mid.provideHover(document, at, null, async () => ({ contents: 'mock field description' }));
+  assert.equal(field.contents, 'mock field description');
+  await popup.show({ uri: 'file:///repo/mock.yml', line: 4, character: 2 });
+  const opened = await mid.provideHover(document, at, null, declarations);
+  assert.match(opened.contents.value, /<code><u>two<\/u><\/code>/);
+  assert.equal(await mid.provideHover(document, at, null, declarations), null);
+});
+
 test('a hover reads # as a comment only at a line start or after whitespace', async () => {
   const vscode = {
     MarkdownString: class {
@@ -822,7 +876,7 @@ test('a hover reads # as a comment only at a line start or after whitespace', as
       constructor(contents, range) { this.contents = contents; this.range = range; }
     },
   };
-  const hover = await editorMiddleware(vscode).provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
+  const hover = await editorMiddleware(vscode, () => [], clickOpenedPopup(vscode)).provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
     contents: {
       value: '[mock.yml:1](file:///repo/mock.yml#L1)\n\n```yaml-dsl\n'
         + '# whole line\n  messages: ../mock/protocol.yml#mock  # trailing\n```',
