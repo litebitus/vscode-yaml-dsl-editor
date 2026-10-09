@@ -852,3 +852,152 @@ test('a changed config reaches every resident stack, and drops the stacks it no 
   assert.equal(ws.cache.get(otherCommon), null);
   assert.deepEqual(ws.takeEvicted(), [otherCommon]);
 });
+
+const renameFiles = {
+  [common]: [
+    'locals:',
+    '  db: mock-value',
+    'mocktype:',
+    '  name mock-thing:',
+    '    label: local.db',
+    '  other-thing:',
+    '    label: "${local.db}-${env}"',
+    '',
+  ].join('\n'),
+  [one]: [
+    'locals:',
+    '  db: mock-one',
+    'mocktype:',
+    '  replica:',
+    '    source: ref mocktype.mock_thing.label',
+    '',
+  ].join('\n'),
+};
+
+function place(text, needle, shift) {
+  const start = at(text, needle);
+  return { line: start.line, character: start.character + shift };
+}
+
+function rangeOf(text, needle) {
+  const start = at(text, needle);
+  return { start, end: { line: start.line, character: start.character + needle.length } };
+}
+
+function offsetAt(text, position) {
+  const lines = text.split('\n');
+  return lines.slice(0, position.line).reduce((sum, line) => sum + line.length + 1, 0) + position.character;
+}
+
+function textsAfter(files, edit) {
+  const texts = { ...files };
+  for (const change of edit.documentChanges) {
+    const filePath = change.textDocument.uri.replace(/^file:\/\//, '');
+    const text = texts[filePath];
+    const edits = change.edits
+      .map((item) => ({ start: offsetAt(text, item.range.start), end: offsetAt(text, item.range.end), text: item.newText }))
+      .sort((left, right) => right.start - left.start);
+    texts[filePath] = edits.reduce((result, item) => result.slice(0, item.start) + item.text + result.slice(item.end), text);
+  }
+  return texts;
+}
+
+async function renameWorkspace() {
+  const ws = workspace(renameFiles);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, renameFiles[common]);
+  await ws.sync(`file://${one}`, one, renameFiles[one]);
+  return ws;
+}
+
+test('renaming a local renames its declaration in every layer and every reference, placeholders included', async () => {
+  const ws = await renameWorkspace();
+  const at = (needle) => place(renameFiles[common], needle, 2);
+  assert.deepEqual(ws.prepareRename(`file://${common}`, at('db: mock-value')).placeholder, 'db');
+  const renamed = ws.rename(`file://${common}`, at('db: mock-value'), 'store');
+  const texts = textsAfter(renameFiles, renamed.edit);
+  assert.match(texts[common], /^ {2}store: mock-value$/m);
+  assert.match(texts[common], /label: local\.store$/m);
+  assert.match(texts[common], /label: "\$\{local\.store\}-\$\{env\}"/);
+  assert.match(texts[one], /^ {2}store: mock-one$/m);
+});
+
+test('renaming from a reference shows the name as declared and respells it in every reference', async () => {
+  const ws = await renameWorkspace();
+  const atRef = place(renameFiles[one], 'mock_thing', 2);
+  const prepared = ws.prepareRename(`file://${one}`, atRef);
+  assert.equal(prepared.placeholder, 'mock-thing');
+  assert.deepEqual(prepared.range, rangeOf(renameFiles[one], 'mock_thing'));
+  const texts = textsAfter(renameFiles, ws.rename(`file://${one}`, atRef, 'mock-item').edit);
+  assert.match(texts[common], /^ {2}name mock-item:$/m);
+  assert.match(texts[one], /source: ref mocktype\.mock_item\.label$/m);
+});
+
+test('a rename is refused for a builtin, a name already declared, and a name that does not read back', async () => {
+  const ws = await renameWorkspace();
+  const commonUri = `file://${common}`;
+  const atEnv = place(renameFiles[common], 'env}', 0);
+  assert.match(ws.prepareRename(commonUri, atEnv).problem, /builtin/);
+  const atThing = place(renameFiles[common], 'mock-thing', 2);
+  assert.match(ws.rename(commonUri, atThing, 'other-thing').problem, /mocktype\.other_thing is already declared/);
+  assert.match(ws.rename(commonUri, atThing, 'mock item').problem, /does not read back/);
+  assert.match(ws.rename(commonUri, atThing, ' ').problem, /empty/);
+  assert.equal(ws.prepareRename(commonUri, place(renameFiles[common], 'mock-value', 2)), null);
+});
+
+test('a name edited by hand gets a hint renaming it everywhere until it is changed back', async () => {
+  const ws = await renameWorkspace();
+  const typed = (name) => renameFiles[one].replace('  db: mock-one', `  ${name}: mock-one`);
+  await ws.sync(`file://${one}`, one, typed('dbx'));
+  await ws.sync(`file://${one}`, one, typed('store'));
+  await ws.queueSuggestions(common);
+  const renameMarks = () => ws.suggestionMarks(common).files
+    .flatMap((file) => file.marks.map((mark) => ({ uri: file.uri, ...mark })))
+    .filter((mark) => mark.suggestion.kind === 'rename');
+  const [hint] = renameMarks();
+  assert.equal(hint.uri, `file://${one}`);
+  assert.equal(hint.range.start.line, 1);
+  assert.deepEqual(hint.suggestion.rename, {
+    oldName: 'db',
+    newName: 'store',
+    files: [{ label: 'common layer', count: 3 }],
+  });
+  const applied = await ws.applySuggestion(common, hint.suggestion.id);
+  const texts = textsAfter({ ...renameFiles, [one]: typed('store') }, applied.edit);
+  assert.match(texts[common], /^ {2}store: mock-value$/m);
+  assert.match(texts[common], /\$\{local\.store\}/);
+  await ws.sync(`file://${one}`, one, typed('db'));
+  await ws.queueSuggestions(common);
+  assert.deepEqual(renameMarks(), []);
+});
+
+test('copies renamed by hand in two overlays are not a clash, and each offers the rest of the rename', async () => {
+  const twoText = 'locals:\n  db: mock-two\n';
+  const files = { ...renameFiles, [two]: twoText };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  await ws.sync(`file://${one}`, one, files[one].replace('  db: mock-one', '  store: mock-one'));
+  await ws.sync(`file://${two}`, two, twoText.replace('  db: mock-two', '  store: mock-two'));
+  await ws.queueSuggestions(common);
+  const hints = ws.suggestionMarks(common).files
+    .flatMap((file) => file.marks.map((mark) => [file.uri, mark.suggestion]))
+    .filter(([, suggestion]) => suggestion.kind === 'rename');
+  assert.deepEqual(hints.map(([uri, suggestion]) => [uri, suggestion.rename.files]), [
+    [`file://${one}`, [{ label: 'common layer', count: 3 }]],
+    [`file://${two}`, [{ label: 'common layer', count: 3 }]],
+  ]);
+});
+
+test('a name renamed everywhere is the name a later hand edit is measured from', async () => {
+  const ws = await renameWorkspace();
+  const atDb = place(renameFiles[common], 'db: mock-value', 2);
+  const renamedTexts = textsAfter(renameFiles, ws.rename(`file://${common}`, atDb, 'store').edit);
+  for (const filePath of [common, one]) await ws.sync(`file://${filePath}`, filePath, renamedTexts[filePath]);
+  await ws.queueSuggestions(common);
+  await ws.sync(`file://${one}`, one, renamedTexts[one].replace('  store: mock-one', '  db: mock-one'));
+  await ws.queueSuggestions(common);
+  const hints = ws.suggestionMarks(common).files.flatMap((file) => file.marks)
+    .filter((mark) => mark.suggestion.kind === 'rename');
+  assert.deepEqual(hints.map((mark) => [mark.suggestion.rename.oldName, mark.suggestion.rename.newName]), [['store', 'db']]);
+});

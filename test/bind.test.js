@@ -20,6 +20,8 @@ function fakeConnection() {
     onInitialize(fn) { handlers.initialize = fn; },
     onHover(fn) { handlers.hover = fn; },
     onDefinition(fn) { handlers.definition = fn; },
+    onPrepareRename(fn) { handlers.prepareRename = fn; },
+    onRenameRequest(fn) { handlers.rename = fn; },
     onDocumentLinks(fn) { handlers.links = fn; },
     onCompletion(fn) { handlers.completion = fn; },
     tokenRefreshes: 0,
@@ -92,6 +94,33 @@ test('a link carries its target count', async () => {
   bind(connection, fakeDocuments(), { workspace });
   const links = await connection.handlers.links({ textDocument: { uri: 'file:///repo/mock.yml' } });
   assert.deepEqual(links, [{ range: linkRange, data: { targetCount: 2 } }]);
+});
+
+test('rename answers the name to edit and the edit, and a refusal is an error the editor shows', async () => {
+  const connection = fakeConnection();
+  const range = { start: { line: 1, character: 2 }, end: { line: 1, character: 4 } };
+  const edit = { documentChanges: [] };
+  let refusing = false;
+  const workspace = {
+    whenAnalyzed: async () => {},
+    onSuggestions() {},
+    onVocabularyLoaded() {},
+    prepareRename: (uri) => {
+      if (uri.endsWith('none.yml')) return null;
+      return refusing ? { problem: 'mock refusal' } : { range, placeholder: 'mock-name' };
+    },
+    rename: () => (refusing ? { problem: 'mock refusal' } : { edit }),
+  };
+  bind(connection, fakeDocuments(), { workspace });
+  assert.equal(connection.handlers.initialize().capabilities.renameProvider.prepareProvider, true);
+  const params = (uri) => ({ textDocument: { uri }, position: range.start, newName: 'mock-new' });
+  assert.deepEqual(await connection.handlers.prepareRename(params('file:///repo/mock.yml')), { range, placeholder: 'mock-name' });
+  assert.equal(await connection.handlers.prepareRename(params('file:///repo/none.yml')), null);
+  assert.equal(await connection.handlers.rename(params('file:///repo/mock.yml')), edit);
+  refusing = true;
+  const refused = await connection.handlers.prepareRename(params('file:///repo/mock.yml'));
+  assert.equal(refused.message, 'mock refusal');
+  assert.equal((await connection.handlers.rename(params('file:///repo/mock.yml'))).message, 'mock refusal');
 });
 
 test('the default workspace still answers initialize', () => {

@@ -32,6 +32,10 @@ Hover reads the schema as authored, so a field shows the description written bes
 
 References, locals, placeholders and calls go to their declaration and complete from what the file's fold sees. A common layer reference reaching a declaration in several overlays opens them all, one section per overlay, on Command-click.
 
+### Renaming
+
+Rename Symbol renames a name across the whole stack, every layer's declaration and every reference, from its shortcut or the context menu. A name edited by hand offers to rename the rest of the stack in one click.
+
 ### Problems
 
 A reference nothing declares, an unknown placeholder and a call the DSL's function table rejects are marked as you type.

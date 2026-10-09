@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Renaming: Rename Symbol renames a name in every layer's declaration and every reference of the stack.
+- Suggestions: a name edited by hand, while the stack still uses the old one, gets a hint renaming it everywhere.
+
 ## 0.3.0 - 2026-10-09
 
 - Suggestions: a stack with no common layer file gets the moves that create it.

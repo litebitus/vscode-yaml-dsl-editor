@@ -269,6 +269,37 @@ test('a potential move\'s inlay hint names the check that failed', () => {
   ]);
 });
 
+test('a rename hint names the old and new name, and its hover counts the places each file changes', () => {
+  const renameSuggestion = {
+    stackId: '/repo/mock.yml',
+    id: 'mock-rename',
+    kind: 'rename',
+    path: ['locals', 'store'],
+    rename: {
+      oldName: 'db',
+      newName: 'store',
+      files: [{ label: 'common layer', count: 3 }, { label: 'two', count: 1 }],
+    },
+  };
+  const renameLink = `command:${APPLY_COMMAND}?${encodeURIComponent(JSON.stringify({
+    stackId: '/repo/mock.yml',
+    id: 'mock-rename',
+  }))}`;
+  assert.equal(hoverMarkdownText(renameSuggestion), [
+    '`db` is renamed `store` here. Renaming it everywhere changes:',
+    '',
+    '- common layer: 3 places',
+    '- two: 1 place',
+    '',
+    `[Rename everywhere](${renameLink})`,
+  ].join('\n'));
+  const vscode = inlayVscode();
+  const at = { start: { line: 0, character: 2 }, end: { line: 0, character: 7 } };
+  const marksByUri = new Map([['file:///repo/one/mock.yml', [{ range: at, suggestion: renameSuggestion }]]]);
+  const [hint] = suggestionInlayHints(vscode, marksByUri, documentOf('file:///repo/one/mock.yml', ['  store: x']));
+  assert.equal(hint.label[0].value, '💡 rename everywhere: db → store');
+});
+
 test('applying a suggestion records and saves every file it changed, and nothing written is a warning', async () => {
   const vscode = fakeVscode([]);
   const asked = [];

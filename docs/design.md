@@ -115,6 +115,12 @@ The analysis classifies every reference: local when it resolves in the same file
 
 The editor colors references, placeholders and calls from the config: a reference rule's leading literal, its target groups and its other literal text, a placeholder's delimiters and builtin body, and a call's marker, function and splat. The grammar colors plain YAML only, as the HCL editor colors HCL: keys are identifiers, strings are strings, and numbers and `true` / `false` / `null` are constants. A matching file takes the extension's file icon. The extension takes the whole of a file's coloring, so the editor's bracket pair colorization does not apply: a bracket keeps the color of the text it stands in. A `#` starts a comment only at the start of a line or after whitespace.
 
+## Renaming
+
+Rename Symbol, from its shortcut or the context menu, renames a name of a scope across the stack: every declaration of it in the common layer and every overlay, since an overlay overrides a declaration by repeating its name, and every reference that reads it, in every file of the stack. The rename box shows the name as declared, and each reference takes the new name in the spelling of the declaration rule. A rename is refused, with the reason, for a builtin, for a name declared for every name at once, for a name made of a local's value, for a name the scope already declares, and for a new name that the edited files do not read back as that name.
+
+A declaration whose name is edited by hand, while other declarations or references in the stack still use the name it had, gets a suggestion to rename it everywhere: the same edit as Rename Symbol, applied and saved like a move. The name it had is the one the rest of the stack last used, so a rename that leaves nothing using that name forgets it. Declarations renamed by hand from one name to the same new name are copies of one rename, not a clash.
+
 ## Completion
 
 Typing the start of a reference opens the list of what it can name. Each config reference rule is a literal with named groups, and the editor turns it into a template: `^ref (?<type>…)\.(?<name>…)` writes `ref <type>.<name>`. A symbol fills the template, and the result is kept only when the rule's own pattern reads it back as that symbol. A rule whose pattern is not a literal with named groups offers nothing.
