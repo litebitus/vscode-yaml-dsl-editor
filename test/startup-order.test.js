@@ -137,6 +137,10 @@ function startupHarness({ editors = [], answerDecorations = () => new Promise(()
       onDidChangeWorkspaceFolders: on('folders'),
     },
     window: {
+      createOutputChannel: () => ({
+        appendLine: (line) => { events.push(`log ${line.replace(/^\[[^\]]+\] /, '')}`); },
+        dispose() {},
+      }),
       activeTextEditor: editors[0] || null,
       visibleTextEditors: editors,
       createTextEditorDecorationType(options) {

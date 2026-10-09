@@ -55,6 +55,8 @@ A schema on disk changes when its stack is initialized again. The server watches
 
 Every input takes effect without reloading the window. A `yaml-dsl.yml` saved, created or deleted, and a workspace folder added or removed, reload the configs: every resident stack is analyzed again under them, and a stack they no longer claim is dropped. A change to an extension setting applies at once. Schemas and layer files are watched as above. Terraform's function metadata is read once per session. Bytes identical to a schema the server holds are that schema and are not parsed again.
 
+The extension writes what it does to the YAML DSL output channel, which exists from activation: each startup step, the first analysis of each opened file with its time, and every failure. A startup step that fails is logged and skipped, so the language server always starts and the file always shows.
+
 The server does not run the engine. The continuous compile is the editor's analysis. Plan and admission stay with the engine.
 
 The extension process is the client. The analysis is a plain module with no editor API in it, so it is tested on its own with `node --test`. Editor features stay in the language server from the start.
@@ -204,6 +206,8 @@ A block is a map at a path below the document root, outside the locals. The edit
 - the common layer holds nothing at its path, and a map at each path above it.
 
 The suggestion is made at the topmost block that qualifies, never at a block inside it.
+
+A stack whose common layer file does not exist yet is the starting point extraction is for: its moves read the common layer as empty, and the click creates the file. A new common layer starts with the keys `layers.duplicate_check.skip_keys` names that every overlay holds the same, since those are the keys each layer states for itself.
 
 Values are compared as written: a reference, a local and a placeholder are their text, whatever they resolve to. A leaf is a difference when the overlays that hold the block do not all hold the same value there. A block with differences is suggested only in a DSL with locals, and only when at least one leaf is the same in every overlay that holds it.
 

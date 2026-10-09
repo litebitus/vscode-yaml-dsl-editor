@@ -187,17 +187,23 @@ test('suggestions wait for a quiet stack, then mark the block and move it in one
   ]);
   assert.equal(marks.files.find((file) => file.uri === `file://${root}/mock.yml`).marks.length, 0);
   const moved = await ws.applySuggestion(stackId, devMarks[0].suggestion.id);
-  assert.deepEqual(Object.keys(moved.edit.changes).sort(), [
+  const editedUris = moved.edit.documentChanges.map((change) => change.textDocument.uri);
+  assert.deepEqual([...editedUris].sort(), [
     `file://${root}/dev/mock.yml`,
     `file://${root}/mock.yml`,
     `file://${root}/production/mock.yml`,
     `file://${root}/staging/mock.yml`,
   ]);
-  assert.deepEqual(moved.edit.changes[`file://${root}/production/mock.yml`], [{
-    range: { start: { line: 0, character: 0 }, end: { line: 4, character: 0 } },
-    newText: 'locals:\n  queue_events_size: 2\n',
-  }]);
-  assert.deepEqual(moved.files.map((file) => file.uri), Object.keys(moved.edit.changes));
+  const productionChange = moved.edit.documentChanges
+    .find((change) => change.textDocument.uri === `file://${root}/production/mock.yml`);
+  assert.deepEqual(productionChange, {
+    textDocument: { uri: `file://${root}/production/mock.yml`, version: null },
+    edits: [{
+      range: { start: { line: 0, character: 0 }, end: { line: 4, character: 0 } },
+      newText: 'locals:\n  queue_events_size: 2\n',
+    }],
+  });
+  assert.deepEqual(moved.files.map((file) => file.uri), editedUris);
   const production = `${root}/production/mock.yml`;
   const productionFile = moved.files.find((file) => file.uri === `file://${production}`);
   assert.equal(productionFile.textHashBefore, textHashOf(files[production]));
@@ -389,4 +395,32 @@ test('with nothing changing the server does nothing: an unchanged reopen schedul
   await ws.setActive(dev);
   assert.equal(timers.pending.size, 0);
   assert.equal(reads.length, readsBefore);
+});
+
+test('a stack without a common layer file is offered moves, and applying one creates the file first', async () => {
+  const timers = fakeTimers();
+  const root = '/repo/no-common-stack';
+  const files = stackFiles(root);
+  delete files[`${root}/mock.yml`];
+  const dev = `${root}/dev/mock.yml`;
+  const ws = workspaceOver(files, timers);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${dev}`, dev, files[dev]);
+  const arrived = nextSuggestions(ws);
+  timers.fireAll();
+  const stackId = await arrived;
+  const devMarks = ws.suggestionMarks(stackId).files.find((file) => file.uri === `file://${dev}`).marks;
+  assert.equal(devMarks[0].suggestion.createsCommonLayer, true);
+  const moved = await ws.applySuggestion(stackId, devMarks[0].suggestion.id);
+  const commonUri = `file://${root}/mock.yml`;
+  const creation = moved.edit.documentChanges.findIndex((change) => change.kind === 'create');
+  const commonEdit = moved.edit.documentChanges
+    .findIndex((change) => change.textDocument && change.textDocument.uri === commonUri);
+  assert.deepEqual(moved.edit.documentChanges[creation], {
+    kind: 'create',
+    uri: commonUri,
+    options: { ignoreIfExists: true },
+  });
+  assert.ok(creation < commonEdit);
+  assert.match(moved.edit.documentChanges[commonEdit].edits[0].newText, /^locals:\n {2}queue_events_size: 1\n/);
 });

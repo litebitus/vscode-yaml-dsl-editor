@@ -58,7 +58,10 @@ const stagingUri = 'file:///repo/staging/mock.yml';
 const devText = 'queue:\n  events: 1\n';
 const stagingText = 'queue:\n  events: 2\n';
 const mark = { range: { start: { line: 0, character: 6 }, end: { line: 0, character: 6 } }, suggestion: { id: 'mock' } };
-const loadedMark = { ...mark, suggestion: { keepsCommonValue: [], keepsOwnValue: [], id: 'mock' } };
+const loadedMark = {
+  ...mark,
+  suggestion: { keepsCommonValue: [], keepsOwnValue: [], createsCommonLayer: false, id: 'mock' },
+};
 const reported = (uri, text) => ({ uri, textHash: textHashOf(text), marks: [mark] });
 
 test('marks are saved per file after a quiet second and load back in a new session while the file is unchanged', async () => {

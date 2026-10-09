@@ -91,6 +91,10 @@ function fakeVscode(options = {}) {
       onDidChangeTextDocument(fn) { listeners.change.push(fn); return disposable(); },
     },
     window: {
+      logged: [],
+      createOutputChannel() {
+        return { appendLine: (line) => vscode.window.logged.push(line), dispose() {} };
+      },
       activeTextEditor: options.editor === undefined ? null : options.editor,
       visibleTextEditors: options.visible || [],
       tabGroups: options.tabGroups,

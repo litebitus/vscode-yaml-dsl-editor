@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Suggestions: a stack with no common layer file gets the moves that create it.
+- Output: the YAML DSL channel logs each startup step, the first analysis of each opened file and every failure; a failed startup step no longer keeps the language server from starting.
+
 ## 0.2.0 - 2026-10-08
 
 - Locals: `locals.scope_name` names the scope whose declarations are a DSL's locals, resolved recursively in each fold, with hover showing a local's value and a cycle reported as a problem.

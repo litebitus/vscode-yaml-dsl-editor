@@ -392,6 +392,7 @@ test('activation paints the suggestions the server sends and registers the move'
     return decorationType;
   };
   vscode.window.onDidChangeActiveTextEditor = () => disposable;
+  vscode.window.createOutputChannel = () => ({ appendLine() {}, dispose() {} });
   vscode.window.onDidChangeVisibleTextEditors = (fn) => { vscode.visibleChanged = fn; return disposable; };
   vscode.window.registerFileDecorationProvider = (provider) => {
     fileDecorationProvider = provider;

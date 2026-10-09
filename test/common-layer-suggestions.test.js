@@ -384,13 +384,38 @@ test('a flow map the edits must write into, or a multi-line difference, is not s
   assert.deepEqual(commonLayerSuggestions(multiLine, noSchemaChecks), []);
 });
 
-test('a stack with fewer than two overlay files, or no common layer, has no suggestions', () => {
+test('a stack with no common layer file gets the moves that create it, starting with the keys every overlay states', () => {
+  const holder = (env, size) => `schema_version: "3"\nenv: ${env}\n\nqueue:\n  events:\n    size: ${size}\n    kept: x\n`;
+  const noCommon = stackOf(layeredDsl(), texts('', {
+    dev: holder('dev', 1),
+    staging: holder('staging', 1),
+    production: holder('production', 2),
+  }));
+  noCommon.files.delete(common);
+  const [move, ...rest] = commonLayerSuggestions(noCommon, noSchemaChecks);
+  assert.deepEqual(rest, []);
+  assert.deepEqual([move.kind, move.path, move.createsCommonLayer], ['move', ['queue'], true]);
+  const edited = editedTexts(noCommon, move);
+  assert.equal(edited.get(common), [
+    'schema_version: "3"',
+    '',
+    'locals:',
+    '  queue_events_size: 1',
+    '',
+    'queue:',
+    '  events:',
+    '    size: local.queue_events_size',
+    '    kept: x',
+    '',
+  ].join('\n'));
+  assert.equal(edited.get(overlayPath('dev')), 'schema_version: "3"\nenv: dev\n');
+  assert.equal(foldsAgreeAfter(noCommon, move, edited), true);
+});
+
+test('a stack with fewer than two overlay files, or a common layer that is not a map, has no suggestions', () => {
   const dsl = layeredDsl();
   const oneOverlay = stackOf(dsl, texts('', { dev: 'queue:\n  a: 1\n' }));
   assert.deepEqual(commonLayerSuggestions(oneOverlay, noSchemaChecks), []);
-  const noCommon = stackOf(dsl, texts('', { dev: 'queue:\n  a: 1\n', staging: 'queue:\n  a: 1\n' }));
-  noCommon.files.delete(common);
-  assert.deepEqual(commonLayerSuggestions(noCommon, noSchemaChecks), []);
   const listCommon = stackOf(dsl, texts('- listed\n', {
     dev: 'queue:\n  a: 1\n',
     staging: 'queue:\n  a: 1\n',
