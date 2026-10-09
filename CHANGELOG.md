@@ -4,6 +4,7 @@
 
 - Renaming: Rename Symbol renames a name in every layer's declaration and every reference of the stack.
 - Suggestions: a name edited by hand, while the stack still uses the old one, gets a hint renaming it everywhere.
+- Suggestions: a potential move shows as information, with the info gutter mark and an `ⓘ` hint, and colors no file or folder.
 
 ## 0.3.0 - 2026-10-09
 

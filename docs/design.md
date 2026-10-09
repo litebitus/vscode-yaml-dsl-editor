@@ -239,6 +239,8 @@ A block the walk finds then passes two schema checks before it is offered. First
 
 A field directly under the node marked `[~required]` is one the `{}` opt-out leaves out, and the extension does not read the condition. A block whose opt-out leaves one out is also a potential move, and its hover names the overlays and those fields and says the extension cannot tell whether the move is safe. The user may judge it safe, so its hover keeps the link, and the click applies the move as any other.
 
+A potential move is information. Its gutter mark is the info mark, its hint starts with `ⓘ`, and it colors neither its file's name nor any folder above it.
+
 A value repeated across the overlays is a duplicate. `layers.duplicate_check` bounds where the editor looks for one: it runs `depth` levels below the document root and no deeper, or the depth `key_depths` gives under a top-level key it lists, passes over the keys `skip_keys` lists at any depth, and suggests a duplicate at its topmost path. A key counts as one level: `a.b.c` is three levels deep.
 
 An overlay's value at a path is what its fold holds there: its own value, else the common layer's. When more than half the overlays that have a file, and at least two, hold one value the common layer does not, the editor suggests moving it into the common layer; the common layer's own value casts no vote. It is a move, with the move's hint, link and schema checks, and one click:

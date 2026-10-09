@@ -94,16 +94,22 @@ test('light bulbs paint on the visible editors their file\'s marks name, and cle
   const others = [];
   const position = { line: 2, character: 8 };
   const mark = { range: { start: position, end: position }, suggestion: moveSuggestion };
+  const potentialAt = { line: 4, character: 2 };
+  const potential = { range: { start: potentialAt, end: potentialAt }, suggestion: schemasDiffer };
   const vscode = fakeVscode([
     recordingEditor('file:///repo/dev/mock.yml', painted),
     recordingEditor('file:///repo/other.yml', others),
     { document: null },
   ]);
-  paintLightbulbs(vscode, 'lightbulb', new Map([['file:///repo/dev/mock.yml', [mark]]]));
-  assert.equal(painted[0].mark, 'lightbulb');
+  const gutterMarks = { lightbulb: 'lightbulb', potentialMove: 'potential-move' };
+  paintLightbulbs(vscode, gutterMarks, new Map([['file:///repo/dev/mock.yml', [mark, potential]]]));
+  assert.deepEqual(painted.map((item) => [item.mark, item.ranges.map((range) => range.startLine)]), [
+    ['lightbulb', [2]],
+    ['potential-move', [4]],
+  ]);
   assert.deepEqual({ ...painted[0].ranges[0] }, { startLine: 2, startCharacter: 8, endLine: 2, endCharacter: 8 });
-  assert.deepEqual(others[0].ranges, []);
-  paintLightbulbs({ window: {} }, 'lightbulb', new Map());
+  assert.deepEqual(others.map((item) => item.ranges), [[], []]);
+  paintLightbulbs({ window: {} }, gutterMarks, new Map());
 });
 
 function inlayVscode() {
@@ -163,6 +169,19 @@ test('a file with a suggestion shows its name in the light bulb color, with a li
   assert.equal(decoration.propagate, true);
   assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/staging/mock.yml' }), undefined);
   assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/other.yml' }), undefined);
+});
+
+test('a file whose only suggestions are potential moves takes no file decoration', () => {
+  const vscode = inlayVscode();
+  const at = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
+  const conditionalMove = { ...moveSuggestion, optOutConditionalFields: [{ overlay: 'uat', fields: ['mock_field'] }] };
+  const marksByUri = new Map([['file:///repo/uat/mock.yml', [
+    { range: at, suggestion: schemasDiffer },
+    { range: at, suggestion: conditionalMove },
+  ]]]);
+  assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/uat/mock.yml' }), undefined);
+  marksByUri.get('file:///repo/uat/mock.yml').push({ range: at, suggestion: moveSuggestion });
+  assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/uat/mock.yml' }).badge, '💡');
 });
 
 const schemasDiffer = {
@@ -250,7 +269,7 @@ test('a move whose opt-out leaves out a conditionally required field warns and k
   const at = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
   const marksByUri = new Map([['file:///repo/dev/mock.yml', [{ range: at, suggestion: conditional }]]]);
   const [hint] = suggestionInlayHints(vscode, marksByUri, documentOf('file:///repo/dev/mock.yml', ['queue:']));
-  assert.equal(hint.label[0].value, '💡 potential move: overlay (uat) opt-out leaves out a conditionally required field');
+  assert.equal(hint.label[0].value, 'ⓘ potential move: overlay (uat) opt-out leaves out a conditionally required field');
 });
 
 test('a potential move\'s inlay hint names the check that failed', () => {
@@ -263,9 +282,9 @@ test('a potential move\'s inlay hint names the check that failed', () => {
   ]]]);
   const document = documentOf('file:///repo/dev/mock.yml', ['queue:', 'queue:', 'queue:']);
   assert.deepEqual(suggestionInlayHints(vscode, marksByUri, document).map((hint) => hint.label[0].value), [
-    '💡 potential move: overlay schemas differ',
-    '💡 potential move: overlay (uat) opt-out would fail the schema',
-    '💡 potential move: overlay (uat, qa) opt-out would fail the schema',
+    'ⓘ potential move: overlay schemas differ',
+    'ⓘ potential move: overlay (uat) opt-out would fail the schema',
+    'ⓘ potential move: overlay (uat, qa) opt-out would fail the schema',
   ]);
 });
 
