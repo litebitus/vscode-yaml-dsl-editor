@@ -4,6 +4,7 @@ const { analyzeDocument } = require('../lib/analyze');
 const { createNodeIds } = require('../lib/node-ids');
 const {
   commonLayerSuggestions,
+  combinedMoveEdits,
   editedTexts,
   foldsAgreeAfter,
   localReferenceText,
@@ -121,6 +122,70 @@ test('a block most overlays hold moves to the common layer, each difference a lo
   const changedCount = edited.get(common).replace('max_receive_count: 5', 'max_receive_count: 6');
   const tampered = new Map(edited).set(common, changedCount);
   assert.equal(foldsAgreeAfter(stack, suggestion, tampered), false);
+});
+
+function neighborBlocksText(name, between = '') {
+  return [
+    'service:',
+    '  main:',
+    '    alpha:',
+    '      size: 1',
+    ...(between ? [`    ${between}: ${name}`] : []),
+    '    beta:',
+    '      size: 2',
+    '    gamma:',
+    '      size: 3',
+    '',
+  ].join('\n');
+}
+
+test('neighboring moves in one map combine into one move, its scope every line they take', () => {
+  const overlayTexts = Object.fromEntries(OVERLAYS.map((name) => [name, neighborBlocksText(name)]));
+  const stack = stackOf(layeredDsl(), texts('service:\n  main:\n    kept: mock-kept\n', overlayTexts));
+  const [suggestion, ...rest] = commonLayerSuggestions(stack, noSchemaChecks);
+  assert.equal(rest.length, 0);
+  assert.equal(suggestion.kind, 'move');
+  assert.deepEqual(suggestion.memberPaths, [
+    ['service', 'main', 'alpha'],
+    ['service', 'main', 'beta'],
+    ['service', 'main', 'gamma'],
+  ]);
+  assert.deepEqual(suggestion.marks.map((mark) => [mark.range.start.line, mark.scope.start.line, mark.scope.end.line]), [
+    [2, 2, 7],
+    [2, 2, 7],
+    [2, 2, 7],
+    [2, 2, 7],
+  ]);
+});
+
+test('a key between two moves keeps them two moves', () => {
+  const overlayTexts = Object.fromEntries(OVERLAYS.map((name) => [name, neighborBlocksText(name, 'owner')]));
+  const stack = stackOf(layeredDsl(), texts('service:\n  main:\n    kept: mock-kept\n', overlayTexts));
+  const moves = commonLayerSuggestions(stack, noSchemaChecks).filter((suggestion) => suggestion.kind === 'move');
+  assert.deepEqual(moves.map((suggestion) => [suggestion.path.join('.'), suggestion.memberPaths]), [
+    ['service.main.alpha', undefined],
+    ['service.main.beta', [['service', 'main', 'beta'], ['service', 'main', 'gamma']]],
+  ]);
+});
+
+test('a combined move writes its blocks into the common layer in the overlays\' order', () => {
+  const overlayTexts = Object.fromEntries(OVERLAYS.map((name) => [name, neighborBlocksText(name)]));
+  const stack = stackOf(layeredDsl(), texts('service:\n  main:\n    kept: mock-kept\n', overlayTexts));
+  const [suggestion] = commonLayerSuggestions(stack, noSchemaChecks);
+  const edited = editedTexts(stack, { edits: combinedMoveEdits(stack, suggestion, noSchemaChecks) });
+  assert.equal(edited.get(common), [
+    'service:',
+    '  main:',
+    '    kept: mock-kept',
+    '    alpha:',
+    '      size: 1',
+    '    beta:',
+    '      size: 2',
+    '    gamma:',
+    '      size: 3',
+    '',
+  ].join('\n'));
+  for (const name of OVERLAYS) assert.doesNotMatch(edited.get(overlayPath(name)), /alpha|beta|gamma/);
 });
 
 test('a difference whose values tie is declared in each overlay, the common layer holding the empty value of its type', () => {

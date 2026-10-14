@@ -210,6 +210,37 @@ test('owned files are watched by each DSL\'s include patterns under its config f
   assert.deepEqual(watched, ['/repo:**/mock.yml', '/repo:**/other.yml', '**/yaml-dsl.yml']);
 });
 
+test('an owned file deleted from disk while open with no unsaved edits is closed for the server', async () => {
+  const vscode = fakeVscode({
+    readFile: async () => Buffer.from(configText(dslEntry('sample', { file_includes: ['**/mock.yml'] }))),
+  });
+  vscode.RelativePattern = class { constructor(base, pattern) { this.base = base; this.pattern = pattern; } };
+  const deleteHandlers = [];
+  vscode.workspace.createFileSystemWatcher = (pattern) => ({
+    onDidChange: () => disposable(),
+    onDidCreate: () => disposable(),
+    onDidDelete(fn) {
+      if (typeof pattern !== 'string') deleteHandlers.push(fn);
+      return disposable();
+    },
+    dispose() {},
+  });
+  const client = fakeClient();
+  await activatedFully(vscode, { subscriptions: [] }, () => client);
+  const fileUri = (path) => ({ toString: () => `file://${path}` });
+  vscode.workspace.textDocuments = [
+    { uri: fileUri('/repo/clean/mock.yml'), isDirty: false },
+    { uri: fileUri('/repo/dirty/mock.yml'), isDirty: true },
+  ];
+  for (const path of ['/repo/clean/mock.yml', '/repo/dirty/mock.yml', '/repo/closed/mock.yml']) {
+    for (const deleted of deleteHandlers) deleted(fileUri(path));
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(client.sent.filter((item) => item.method === 'yaml-dsl/fileDeleted'), [
+    { method: 'yaml-dsl/fileDeleted', params: { uri: 'file:///repo/clean/mock.yml' } },
+  ]);
+});
+
 test('a workspace folder added or removed reloads the configs', async () => {
   const vscode = fakeVscode();
   let foldersChanged = null;

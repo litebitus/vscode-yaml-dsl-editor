@@ -853,6 +853,31 @@ test('a changed config reaches every resident stack, and drops the stacks it no 
   assert.deepEqual(ws.takeEvicted(), [otherCommon]);
 });
 
+test('closing a layer\'s tab reads the layer from disk again, so a file gone from disk leaves the stack', async () => {
+  const disk = { [common]: 'locals:\n  db: mock-value\n', [one]: 'use: local.db\n' };
+  const ws = workspace(disk);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, disk[common]);
+  await ws.sync(`file://${one}`, one, disk[one]);
+  delete disk[common];
+  await ws.layersChanged([common]);
+  assert.equal(ws.cache.get(common).data.files.has(common), true);
+  await ws.close(`file://${common}`);
+  assert.equal(ws.cache.get(common).data.files.has(common), false);
+  assert.deepEqual(ws.references(`file://${one}`).map((reference) => reference.kind), ['error']);
+});
+
+test('closing a layer\'s tab whose text matches the disk changes nothing', async () => {
+  const disk = { [common]: 'locals:\n  db: mock-value\n', [one]: 'use: local.db\n' };
+  const ws = workspace(disk);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, disk[common]);
+  await ws.sync(`file://${one}`, one, disk[one]);
+  const before = ws.cache.get(common).data;
+  await ws.close(`file://${common}`);
+  assert.equal(ws.cache.get(common).data, before);
+});
+
 const renameFiles = {
   [common]: [
     'locals:',

@@ -412,6 +412,24 @@ test('a layer file that changes on disk is watched and read again', async () => 
   assert.deepEqual(patterns, ['mock.json', 'mock.yml']);
 });
 
+test('an open file deleted from disk is closed, as a closed tab is', async () => {
+  const connection = fakeConnection();
+  const events = [];
+  const workspace = {
+    onVocabularyLoaded() {},
+    onSuggestions() {},
+    close: async (uri) => { events.push(['close', uri]); },
+    takeEvicted: () => [],
+    takeReanalyzedUris: () => [],
+    schemaWatchTargets: () => [],
+    layerWatchTargets: () => [],
+  };
+  bind(connection, fakeDocuments(), { workspace });
+  connection.handlers['yaml-dsl/fileDeleted']({ uri: 'file:///repo/mock.yml' });
+  await workspace.whenIdle();
+  assert.deepEqual(events, [['close', 'file:///repo/mock.yml']]);
+});
+
 test('a file the editor opens is analyzed once, though the library reports the open as a change too', async () => {
   const connection = fakeConnection();
   const documents = fakeDocuments();

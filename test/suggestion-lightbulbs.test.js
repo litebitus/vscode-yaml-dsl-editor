@@ -4,6 +4,7 @@ const {
   APPLY_COMMAND,
   hoverMarkdownText,
   paintLightbulbs,
+  paintScopeBorders,
   suggestionInlayHints,
   suggestionFileDecoration,
   applySuggestion,
@@ -286,6 +287,60 @@ test('a potential move\'s inlay hint names the check that failed', () => {
     'ⓘ potential move: overlay (uat) opt-out would fail the schema',
     'ⓘ potential move: overlay (uat, qa) opt-out would fail the schema',
   ]);
+});
+
+test('a combined move\'s hint names its blocks, and its hover lists them in order', () => {
+  const combined = {
+    ...moveSuggestion,
+    memberPaths: [['queue', 'events'], ['queue', 'alerts']],
+  };
+  const hover = hoverMarkdownText(combined);
+  assert.ok(hover.startsWith([
+    'These blocks are common to 3 of 4 overlays. Move them to the common layer:',
+    '',
+    '- `queue.events`',
+    '- `queue.alerts`',
+    '',
+  ].join('\n')));
+  const vscode = inlayVscode();
+  const at = { start: { line: 0, character: 6 }, end: { line: 0, character: 6 } };
+  const marksByUri = new Map([['file:///repo/dev/mock.yml', [{ range: at, suggestion: combined }]]]);
+  const [hint] = suggestionInlayHints(vscode, marksByUri, documentOf('file:///repo/dev/mock.yml', ['events:']));
+  assert.equal(hint.label[0].value, '💡 move to common layer: events, alerts');
+});
+
+test('a move\'s scope takes a border only while the cursor is on its light bulb\'s line', () => {
+  const painted = [];
+  const editor = recordingEditor('file:///repo/dev/mock.yml', painted);
+  const vscode = fakeVscode([editor]);
+  const parts = (family) => Object.fromEntries(['top', 'middle', 'bottom', 'single'].map((part) => [part, `${family}-${part}`]));
+  const scopeBorders = { lightbulb: parts('lightbulb'), potentialMove: parts('potential') };
+  const markAt = (line, lastLine, suggestion) => ({
+    range: { start: { line, character: 6 }, end: { line, character: 6 } },
+    scope: { start: { line, character: 0 }, end: { line: lastLine, character: 0 } },
+    suggestion,
+  });
+  const marksByUri = new Map([['file:///repo/dev/mock.yml', [
+    markAt(2, 6, moveSuggestion),
+    markAt(8, 8, schemasDiffer),
+  ]]]);
+  const linesPainted = () => Object.fromEntries(painted.filter((item) => item.ranges.length > 0)
+    .map((item) => [item.mark, item.ranges.map((range) => [range.startLine, range.endLine])]));
+  editor.selection = { active: { line: 2, character: 0 } };
+  paintScopeBorders(vscode, scopeBorders, marksByUri);
+  assert.deepEqual(linesPainted(), {
+    'lightbulb-top': [[2, 2]],
+    'lightbulb-middle': [[3, 5]],
+    'lightbulb-bottom': [[6, 6]],
+  });
+  painted.length = 0;
+  editor.selection = { active: { line: 8, character: 0 } };
+  paintScopeBorders(vscode, scopeBorders, marksByUri);
+  assert.deepEqual(linesPainted(), { 'potential-single': [[8, 8]] });
+  painted.length = 0;
+  editor.selection = { active: { line: 4, character: 0 } };
+  paintScopeBorders(vscode, scopeBorders, marksByUri);
+  assert.deepEqual(linesPainted(), {});
 });
 
 test('a rename hint names the old and new name, and its hover counts the places each file changes', () => {

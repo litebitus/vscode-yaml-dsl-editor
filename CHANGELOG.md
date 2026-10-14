@@ -5,6 +5,10 @@
 - Renaming: Rename Symbol renames a name in every layer's declaration and every reference of the stack.
 - Suggestions: a name edited by hand, while the stack still uses the old one, gets a hint renaming it everywhere.
 - Suggestions: a potential move shows as information, with the info gutter mark and an `ⓘ` hint, and colors no file or folder.
+- Suggestions: moves of neighboring keys in one map combine into one move that keeps the overlays' order.
+- Suggestions: a border marks the lines a suggestion takes while the cursor is on its light bulb line.
+- Layers: a layer file deleted from disk leaves its stack even while its tab is open, unless it holds unsaved edits.
+- Layers: closing a layer file's tab reads it from disk again.
 
 ## 0.3.0 - 2026-10-09
 
