@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 - 2026-10-13
 
 - Suggestions: a value most overlays repeat under a map the common layer lacks moves, opening the map, and combines with the moves beside it.
 - Suggestions: saved suggestions another build of the extension worked out are not shown, and their stacks are worked out again.
