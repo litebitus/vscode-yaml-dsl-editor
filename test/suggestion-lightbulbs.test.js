@@ -12,6 +12,8 @@ const {
 const { activateWith } = require('../lib/client');
 const { textHashOf } = require('../lib/text-hash');
 
+const MOCK_TEXT_CHANGE = { text: 'mock' };
+
 const moveSuggestion = {
   stackId: '/repo/mock.yml',
   id: 'mock-move',
@@ -561,13 +563,18 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.equal(painted.filter(isLightbulb).at(-1).ranges.length, 1);
   const edited = { languageId: 'yaml-dsl', uri: { scheme: 'file', toString: () => 'file:///repo/dev/mock.yml' } };
   const changesBefore = inlayChanges;
-  vscode.documentChanged({ document: edited });
+  vscode.documentChanged({ document: edited, contentChanges: [] });
+  const editedDocument = documentOf('file:///repo/dev/mock.yml', ['queue:']);
+  assert.notDeepEqual(inlayProvider.provider.provideInlayHints(editedDocument), []);
+  assert.equal(inlayChanges, changesBefore);
+  vscode.documentChanged({ document: edited, contentChanges: [MOCK_TEXT_CHANGE] });
   assert.deepEqual(painted.filter(isLightbulb).at(-1).ranges, []);
   assert.deepEqual(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])), []);
   assert.equal(inlayChanges, changesBefore + 1);
-  vscode.documentChanged({ document: edited });
+  vscode.documentChanged({ document: edited, contentChanges: [MOCK_TEXT_CHANGE] });
   assert.equal(inlayChanges, changesBefore + 1);
-  vscode.documentChanged({ document: { languageId: 'yaml', uri: { scheme: 'file', toString: () => 'file:///x.yml' } } });
+  const otherLanguage = { languageId: 'yaml', uri: { scheme: 'file', toString: () => 'file:///x.yml' } };
+  vscode.documentChanged({ document: otherLanguage, contentChanges: [MOCK_TEXT_CHANGE] });
   notes['yaml-dsl/suggestions']({});
   const cacheChanged = { affectsConfiguration: (setting) => setting === 'yaml-dsl-editor.cache' };
   stackCapacitySetting = 4;
@@ -615,10 +622,14 @@ test('activation paints the suggestions the server sends and registers the move'
     saves: 0,
     async save() { undone.saves += 1; return true; },
   };
-  vscode.documentChanged({ document: undone, reason: undefined });
+  vscode.documentChanged({ document: undone, contentChanges: [MOCK_TEXT_CHANGE], reason: undefined });
   await new Promise((resolve) => { setImmediate(resolve); });
   assert.equal(undone.saves, 0);
-  vscode.documentChanged({ document: undone, reason: vscode.TextDocumentChangeReason.Undo });
+  vscode.documentChanged({
+    document: undone,
+    contentChanges: [MOCK_TEXT_CHANGE],
+    reason: vscode.TextDocumentChangeReason.Undo,
+  });
   await new Promise((resolve) => { setImmediate(resolve); });
   assert.equal(undone.saves, 1);
 });

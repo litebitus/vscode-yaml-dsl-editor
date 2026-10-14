@@ -41,15 +41,17 @@ function manualTimers() {
 }
 
 const MOCK_STORAGE_FOLDER = { value: 'mock-storage' };
+const MOCK_BUILD_HASH = 'mock-build-hash';
 const storePath = `${MOCK_STORAGE_FOLDER.value}/${STORE_FILE_NAME}`;
 
-function storeOver(fileSystem, timers, storageFolder = MOCK_STORAGE_FOLDER) {
+function storeOver(fileSystem, timers, storageFolder = MOCK_STORAGE_FOLDER, buildHash = MOCK_BUILD_HASH) {
   return createSuggestionMarksStore({
     storageFolder,
     fileSystem,
     joinPath: (folder, name) => ({ value: `${folder.value}/${name}` }),
     parseUri: (uri) => ({ value: uri }),
     timerFunctions: timers,
+    buildHash,
   });
 }
 
@@ -91,18 +93,19 @@ test('a version 1 store, keyed by stack, migrates to the current format with eve
   const timers = manualTimers();
   const store = storeOver(fileSystem, timers);
   assert.deepEqual(await store.load(), { loaded: true });
-  assert.deepEqual(await store.verifySavedTexts(), { changedUris: [devUri], staleUris: [devUri] });
   assert.equal(store.marksByUri.has(devUri), false);
+  assert.deepEqual(await store.verifySavedTexts(), { changedUris: [], staleUris: [devUri] });
   timers.fireAll();
   await new Promise((resolve) => { setImmediate(resolve); });
   const saved = JSON.parse(fileSystem.files.get(storePath).toString('utf8'));
-  assert.deepEqual(saved, { version: STORE_FORMAT_VERSION, files: {} });
+  assert.deepEqual(saved, { version: STORE_FORMAT_VERSION, build: MOCK_BUILD_HASH, files: {} });
 });
 
 test('a saved mark without the kept-value fields loads with them empty, and a malformed mark is dropped', async () => {
   const fileSystem = memoryFileSystem({ [devUri]: devText });
   fileSystem.files.set(storePath, Buffer.from(JSON.stringify({
     version: STORE_FORMAT_VERSION,
+    build: MOCK_BUILD_HASH,
     files: { [devUri]: { stackId: '/repo/mock.yml', textHash: textHashOf(devText), marks: [mark, null, {}] } },
   }), 'utf8'));
   const store = storeOver(fileSystem, manualTimers());
@@ -124,6 +127,34 @@ test('saved marks show at once, then a file changed or removed while the editor 
   assert.deepEqual(verified, { changedUris: [devUri, stagingUri], staleUris: [devUri] });
   assert.equal(restarted.marksByUri.has(devUri), false);
   assert.equal(restarted.marksByUri.has(stagingUri), false);
+});
+
+test('marks another build of the extension saved are never shown, and their files still on disk are stale', async () => {
+  const fileSystem = memoryFileSystem({ [devUri]: devText, [stagingUri]: stagingText });
+  const store = storeOver(fileSystem, manualTimers(), MOCK_STORAGE_FOLDER, 'mock-older-build-hash');
+  store.replaceStack('/repo/mock.yml', [reported(devUri, devText), reported(stagingUri, stagingText)]);
+  await store.flush();
+  fileSystem.files.delete(stagingUri);
+  const timers = manualTimers();
+  const upgraded = storeOver(fileSystem, timers);
+  assert.deepEqual(await upgraded.load(), { loaded: true });
+  assert.equal(upgraded.marksByUri.size, 0);
+  assert.deepEqual(await upgraded.verifySavedTexts(), { changedUris: [], staleUris: [devUri] });
+  timers.fireAll();
+  await new Promise((resolve) => { setImmediate(resolve); });
+  const saved = JSON.parse(fileSystem.files.get(storePath).toString('utf8'));
+  assert.deepEqual(saved, { version: STORE_FORMAT_VERSION, build: MOCK_BUILD_HASH, files: {} });
+});
+
+test('a session that could not read its own build shows no saved marks, even ones saved the same way', async () => {
+  const fileSystem = memoryFileSystem({ [devUri]: devText });
+  const store = storeOver(fileSystem, manualTimers(), MOCK_STORAGE_FOLDER, null);
+  store.replaceStack('/repo/mock.yml', [reported(devUri, devText)]);
+  await store.flush();
+  const restarted = storeOver(fileSystem, manualTimers(), MOCK_STORAGE_FOLDER, null);
+  await restarted.load();
+  assert.equal(restarted.marksByUri.size, 0);
+  assert.deepEqual(await restarted.verifySavedTexts(), { changedUris: [], staleUris: [devUri] });
 });
 
 test('loading reads only the store file; the files it names are read when their texts are verified', async () => {

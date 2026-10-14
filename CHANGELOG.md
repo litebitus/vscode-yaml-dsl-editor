@@ -1,14 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Suggestions: a value most overlays repeat under a map the common layer lacks moves, opening the map, and combines with the moves beside it.
+- Suggestions: saved suggestions another build of the extension worked out are not shown, and their stacks are worked out again.
+- Output: startup logs the build of the extension it runs.
+- Suggestions: saving a file keeps its suggestions, where the save hid them until the next edit.
+- Suggestions: a repeated map is not offered as one move when an overlay keeping its own value holds a map there, which the click refused; its keys are offered instead.
+- Suggestions: moves of neighboring keys in one map combine into one move that keeps the overlays' order.
+- Suggestions: a border marks the lines a suggestion takes while the cursor is on its light bulb line.
+- Layers: a layer file deleted from disk leaves its stack even while its tab is open, unless it holds unsaved edits.
+- Layers: closing a layer file's tab reads it from disk again.
+
 ## 0.4.0 - 2026-10-09
 
 - Renaming: Rename Symbol renames a name in every layer's declaration and every reference of the stack.
 - Suggestions: a name edited by hand, while the stack still uses the old one, gets a hint renaming it everywhere.
 - Suggestions: a potential move shows as information, with the info gutter mark and an `ⓘ` hint, and colors no file or folder.
-- Suggestions: moves of neighboring keys in one map combine into one move that keeps the overlays' order.
-- Suggestions: a border marks the lines a suggestion takes while the cursor is on its light bulb line.
-- Layers: a layer file deleted from disk leaves its stack even while its tab is open, unless it holds unsaved edits.
-- Layers: closing a layer file's tab reads it from disk again.
 
 ## 0.3.0 - 2026-10-09
 

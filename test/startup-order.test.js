@@ -11,6 +11,7 @@ const OTHER_PATH = `${MOCK_REPO}/staging/mock.yml`;
 const ACTIVE_TEXT = 'queue:\n  events: ref queue.mock_dlq\n';
 const OTHER_TEXT = 'queue:\n  events: ref queue.mock_dlq\n';
 const GLOBAL_STORAGE = '/mock-global-storage';
+const MOCK_BUILD_HASH = 'mock-build-hash';
 
 const mockConfig = configText(dslEntry('resources', {
   scopes: { queue: scope() },
@@ -43,6 +44,7 @@ function savedMarksText() {
   };
   return JSON.stringify({
     version: 2,
+    build: MOCK_BUILD_HASH,
     files: {
       [`file://${ACTIVE_PATH}`]: {
         stackId: `${MOCK_REPO}/mock.yml`,
@@ -192,7 +194,8 @@ function startupHarness({ editors = [], answerDecorations = () => new Promise(()
     events.push('start language server');
     return client;
   };
-  return { vscode, context, start, events, listeners, attachPainter, watchers, diskFiles };
+  const readBuildHash = async () => MOCK_BUILD_HASH;
+  return { vscode, context, start, readBuildHash, events, listeners, attachPainter, watchers, diskFiles };
 }
 
 function indexOf(events, prefix) {
@@ -214,7 +217,7 @@ function assertInOrder(events, prefixes) {
 test('startup shows the file, colors it, paints saved suggestions, and only then starts analysis', async () => {
   const editor = { document: mockDocument(ACTIVE_PATH, ACTIVE_TEXT, 'yaml') };
   const harness = startupHarness({ editors: [editor] });
-  await activateWith(harness.vscode, harness.context, harness.start);
+  await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
   await settleBackground();
   assertInOrder(harness.events, [
     `language ${ACTIVE_PATH} yaml-dsl`,
@@ -230,7 +233,7 @@ test('startup shows the file, colors it, paints saved suggestions, and only then
 test('activation finishes while analysis never answers', async () => {
   const editor = { document: mockDocument(ACTIVE_PATH, ACTIVE_TEXT, 'yaml-dsl') };
   const harness = startupHarness({ editors: [editor] });
-  const activation = activateWith(harness.vscode, harness.context, harness.start);
+  const activation = activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
   const outcome = await Promise.race([activation.then(() => 'activated'), settleBackground().then(() => 'blocked')]);
   assert.equal(outcome, 'activated');
   const handle = await activation;
@@ -245,7 +248,7 @@ test('activation finishes while analysis never answers', async () => {
 test('startup reads no file of the workspace before painting, searches nothing and loads no stack on its own', async () => {
   const editor = { document: mockDocument(ACTIVE_PATH, ACTIVE_TEXT, 'yaml-dsl') };
   const harness = startupHarness({ editors: [editor], answerDecorations: async () => null });
-  const handle = await activateWith(harness.vscode, harness.context, harness.start);
+  const handle = await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
   await handle.startup;
   const firstPaint = indexOf(harness.events, `light bulb ${ACTIVE_PATH}`);
   const readsBeforePaint = harness.events.slice(0, firstPaint).filter((event) => event.startsWith('read '));
@@ -258,7 +261,7 @@ test('startup reads no file of the workspace before painting, searches nothing a
 test('a file opened after startup is claimed and underlined without waiting on any analysis', async () => {
   const active = { document: mockDocument(ACTIVE_PATH, ACTIVE_TEXT, 'yaml-dsl') };
   const harness = startupHarness({ editors: [active] });
-  await activateWith(harness.vscode, harness.context, harness.start);
+  await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
   const opened = harness.attachPainter({ document: mockDocument(OTHER_PATH, OTHER_TEXT, 'yaml') });
   harness.vscode.window.visibleTextEditors.push(opened);
   harness.events.length = 0;
@@ -275,7 +278,7 @@ test('a file opened after startup is claimed and underlined without waiting on a
 test('the active file is sent to the server before its language is switched, and the latest switch always lands', async () => {
   const first = { document: mockDocument(ACTIVE_PATH, ACTIVE_TEXT, 'yaml') };
   const harness = startupHarness({ editors: [first] });
-  await activateWith(harness.vscode, harness.context, harness.start);
+  await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
   const second = { document: mockDocument(OTHER_PATH, OTHER_TEXT, 'yaml'), setDecorations() {} };
   harness.events.length = 0;
   harness.vscode.window.activeTextEditor = second;
@@ -292,7 +295,7 @@ test('saved suggestions for a file changed while the editor was closed are refre
   const editor = { document: mockDocument(ACTIVE_PATH, ACTIVE_TEXT, 'yaml-dsl') };
   const harness = startupHarness({ editors: [editor], answerDecorations: async () => null });
   harness.diskFiles.set(ACTIVE_PATH, 'queue:\n  events: ref queue.mock_changed\n');
-  const handle = await activateWith(harness.vscode, harness.context, harness.start);
+  const handle = await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
   await handle.startup;
   assertInOrder(harness.events, [
     `light bulb ${ACTIVE_PATH}`,
@@ -304,7 +307,7 @@ test('saved suggestions for a file changed while the editor was closed are refre
 test('a DSL file that changes on disk drops its saved suggestions and has its stack worked out again', async () => {
   const editor = { document: mockDocument(ACTIVE_PATH, ACTIVE_TEXT, 'yaml-dsl') };
   const harness = startupHarness({ editors: [editor], answerDecorations: async () => null });
-  const handle = await activateWith(harness.vscode, harness.context, harness.start);
+  const handle = await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
   await handle.startup;
   const ownedWatchers = harness.watchers.filter((watcher) => typeof watcher.pattern !== 'string');
   assert.deepEqual(ownedWatchers.map((watcher) => `${watcher.pattern.base} ${watcher.pattern.pattern}`), [
@@ -328,7 +331,7 @@ test('every visible file paints its analysis as it lands, never behind another f
       ? new Promise(() => {})
       : Promise.resolve({ problems: [], references: [reference] })),
   });
-  await activateWith(harness.vscode, harness.context, harness.start);
+  await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
   await settleBackground();
   const fastPaints = harness.events.filter((event) => event === `underline ${OTHER_PATH}`);
   assert.ok(fastPaints.length >= 2, JSON.stringify(harness.events, null, 2));
@@ -336,4 +339,14 @@ test('every visible file paints its analysis as it lands, never behind another f
   harness.listeners.visible();
   await settleBackground();
   assert.ok(harness.events.includes(`underline ${OTHER_PATH}`), JSON.stringify(harness.events, null, 2));
+});
+
+test('startup logs the build of the extension it runs, or that the build could not be read', async () => {
+  const harness = startupHarness();
+  await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
+  assert.equal(harness.events.includes(`log extension build ${MOCK_BUILD_HASH.slice(0, 12)}`), true);
+  const unreadable = startupHarness();
+  const failingRead = async () => { throw new Error('mock unreadable build'); };
+  await activateWith(unreadable.vscode, unreadable.context, unreadable.start, failingRead);
+  assert.equal(unreadable.events.includes('log extension build unknown'), true);
 });

@@ -158,6 +158,16 @@ test('a deletion takes the entry\'s lines and a parent it leaves empty, merging 
   assert.equal(deletionOf(docOf('queue:\n  other: 1\n'), ['queue', 'events']), null);
 });
 
+test('a deletion right under its parent\'s key line takes the blank lines after it', () => {
+  const opening = 'queue:\n  events: 1\n\n  other: 2\n';
+  assert.equal(applyEdits(opening, [deletionOf(docOf(opening), ['queue', 'events'])]), 'queue:\n  other: 2\n');
+  const commented = 'queue:\n  # mock note\n  events: 1\n\n  other: 2\n';
+  assert.equal(
+    applyEdits(commented, [deletionOf(docOf(commented), ['queue', 'events'])]),
+    'queue:\n  # mock note\n\n  other: 2\n',
+  );
+});
+
 test('locals join the existing locals map in its order, or open one', () => {
   const declared = [{ name: 'zeta', valueText: '2' }, { name: 'mock_size', valueText: '1' }];
   const existing = docOf('locals:\n  alpha: x\n  team: mock\nqueue: {}\n');

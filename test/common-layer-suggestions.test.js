@@ -188,6 +188,46 @@ test('a combined move writes its blocks into the common layer in the overlays\' 
   for (const name of OVERLAYS) assert.doesNotMatch(edited.get(overlayPath(name)), /alpha|beta|gamma/);
 });
 
+test('neighboring values and blocks under a map the common layer lacks move as one, in the overlays\' order', () => {
+  const holder = (name) => [
+    'workload:',
+    '  app:',
+    '    kind: mock-kind',
+    '    image: mock-image',
+    '',
+    '    probe:',
+    '      port: 1',
+    '',
+    '    reach:',
+    `      ${name}: 1`,
+    '',
+  ].join('\n');
+  const overlayTexts = Object.fromEntries(OVERLAYS.map((name) => [name, holder(name)]));
+  const stack = stackOf(layeredDsl(), texts('schema_version: "3"\n', overlayTexts));
+  const [suggestion, ...rest] = commonLayerSuggestions(stack, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.equal(rest.length, 0);
+  assert.deepEqual(suggestion.memberPaths, [
+    ['workload', 'app', 'kind'],
+    ['workload', 'app', 'image'],
+    ['workload', 'app', 'probe'],
+  ]);
+  const edited = editedTexts(stack, { edits: combinedMoveEdits(stack, suggestion, noSchemaChecks) });
+  assert.equal(edited.get(common), [
+    'schema_version: "3"',
+    'workload:',
+    '  app:',
+    '    kind: mock-kind',
+    '    image: mock-image',
+    '',
+    '    probe:',
+    '      port: 1',
+    '',
+  ].join('\n'));
+  for (const name of OVERLAYS) {
+    assert.equal(edited.get(overlayPath(name)), `workload:\n  app:\n    reach:\n      ${name}: 1\n`);
+  }
+});
+
 test('a difference whose values tie is declared in each overlay, the common layer holding the empty value of its type', () => {
   const holder = (retention) => `queue:\n  events:\n    retention_seconds: ${retention}\n    max_receive_count: 5\n`;
   const stack = stackOf(layeredDsl(), texts('locals:\n  team: mock-team\n', {
@@ -214,7 +254,7 @@ test('a difference whose values tie is declared in each overlay, the common laye
   assert.equal(foldsAgreeAfter(stack, suggestion, edited), true);
 });
 
-test('a tied string or boolean takes "" or false in the common layer, and tied values of mixed types offer no move', () => {
+test('a tied string or boolean takes "" or false in the common layer, and tied values of mixed types stay in each overlay', () => {
   const holder = (name, enabled) => `queue:\n  events:\n    name: ${name}\n    enabled: ${enabled}\n    size: 1\n`;
   const stack = stackOf(layeredDsl(), texts('schema_version: "3"\n', {
     dev: holder('mock-dev', true),
@@ -255,7 +295,10 @@ test('a tied string or boolean takes "" or false in the common layer, and tied v
     staging: holder(7, true),
     uat: holder('mock-uat', true),
   }));
-  assert.equal(commonLayerSuggestions(mixed, noSchemaChecks).filter((found) => found.kind === 'move').length, 0);
+  const mixedMoves = commonLayerSuggestions(mixed, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.deepEqual(mixedMoves.map((found) => found.memberPaths), [
+    [['queue', 'events', 'enabled'], ['queue', 'events', 'size']],
+  ]);
 });
 
 test('a local every overlay repeats moves over the common layer\'s value, and an emptied locals map goes with it', () => {
@@ -317,7 +360,7 @@ test('a map local most overlays repeat moves, and an overlay without it opts out
   assert.equal(foldsAgreeAfter(stack, move, edited), true);
 });
 
-test('a repeated value past the duplicate check\'s depth, or under a map the common layer lacks, does not move', () => {
+test('a repeated value past the duplicate check\'s depth does not move, and one under a map the common layer lacks moves with the map', () => {
   const deep = stackOf(layeredDsl(), texts('data_source:\n  kms:\n    type: mock-old\n', {
     dev: 'data_source:\n  kms:\n    type: mock-new\n',
     staging: 'data_source:\n  kms:\n    type: mock-new\n',
@@ -327,7 +370,29 @@ test('a repeated value past the duplicate check\'s depth, or under a map the com
     dev: 'queue:\n  events:\n    size: 1\n    name: mock-dev\n',
     staging: 'queue:\n  events:\n    size: 1\n    name: 7\n',
   }));
-  assert.deepEqual(commonLayerSuggestions(unheldParent, noSchemaChecks).filter((found) => found.kind === 'move'), []);
+  const [move, ...rest] = commonLayerSuggestions(unheldParent, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.equal(rest.length, 0);
+  assert.deepEqual(move.path, ['queue', 'events', 'size']);
+  const edited = editedTexts(unheldParent, move);
+  assert.equal(edited.get(common), 'rds: {}\nqueue:\n  events:\n    size: 1\n');
+  assert.equal(edited.get(overlayPath('dev')), 'queue:\n  events:\n    name: mock-dev\n');
+  assert.equal(edited.get(overlayPath('staging')), 'queue:\n  events:\n    name: 7\n');
+  assert.equal(foldsAgreeAfter(unheldParent, move, edited), true);
+});
+
+test('a repeated map an overlay keeping its own map would merge with is not moved, and its keys are', () => {
+  const shared = 'locals:\n  registry: mock-registry\n  bucket: mock-b\n  extra: mock-extra\n';
+  const stack = stackOf(layeredDsl(), texts('schema_version: "3"\n', {
+    dev: 'locals:\n  registry: mock-registry\n  bucket: mock-a\n',
+    staging: shared,
+    uat: shared,
+  }));
+  const moves = commonLayerSuggestions(stack, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.deepEqual(moves.map((found) => [found.path.join('.'), found.keepsOwnValue]), [
+    ['locals.registry', []],
+    ['locals.bucket', ['dev']],
+  ]);
+  for (const move of moves) assert.equal(foldsAgreeAfter(stack, move, editedTexts(stack, move)), true);
 });
 
 test('a moved block keeps the blank lines the first overlay holding it puts around it', () => {
@@ -466,7 +531,7 @@ test('a flow map the edits must write into, or a multi-line difference, is not s
     staging: 'queue:\n  kept: 1\n  script: |\n    two\n',
     uat: 'queue:\n  kept: 1\n  script: |\n    three\n',
   }));
-  assert.deepEqual(commonLayerSuggestions(multiLine, noSchemaChecks), []);
+  assert.deepEqual(commonLayerSuggestions(multiLine, noSchemaChecks).map((found) => found.path), [['queue', 'kept']]);
 });
 
 test('a stack with no common layer file gets the moves that create it, starting with the keys every overlay states', () => {

@@ -343,8 +343,9 @@ test('activation associates matching files and reveals the fold', async () => {
   await activatedFully(fakeVscode({ documents: [] }), { subscriptions: [] }, () => configThrow);
 
 
-  vscode.listeners.change[0]({ document: { languageId: 'yaml-dsl', uri: { scheme: 'file' } } });
-  vscode.listeners.change[0]({ document: { languageId: 'yaml', uri: { scheme: 'file' } } });
+  const contentChanges = [{ text: 'mock' }];
+  vscode.listeners.change[0]({ document: { languageId: 'yaml-dsl', uri: { scheme: 'file' } }, contentChanges });
+  vscode.listeners.change[0]({ document: { languageId: 'yaml', uri: { scheme: 'file' } }, contentChanges });
   const foldDoc = { uri: { scheme: 'yaml-dsl-fold', path: '/repo/mock.yml/one' }, languageId: 'plaintext' };
   await vscode.listeners.open[0](foldDoc);
   assert.equal(foldDoc.languageId, 'yaml-dsl');
@@ -692,7 +693,7 @@ test('a reanalyzed notification repaints only the documents it names, and an edi
   await activatedFully(vscode, { subscriptions: [] }, () => client);
   await new Promise((resolve) => setImmediate(resolve));
   painted.length = 0;
-  vscode.listeners.change[0]({ document: first.document });
+  vscode.listeners.change[0]({ document: first.document, contentChanges: [{ text: 'mock' }] });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(painted, []);
   await client.notes['yaml-dsl/reanalyzed']({ uris: ['file:///repo/two.yml'] });
