@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 - 2026-10-14
 
 - Suggestions: a move or a delete carries the comment above each key it deletes or writes, and each map a move opens.
 - Suggestions: a concern's new common layer holds only the fallback's blocks its references reach.
