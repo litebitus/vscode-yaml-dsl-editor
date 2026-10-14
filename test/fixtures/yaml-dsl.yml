@@ -8,7 +8,7 @@ dsls:
       overlay_folders: [one, two]
       common_layer_discovery: parent
       duplicate_check:
-        depth: 3
+        depth: 2
         key_depths: {}
         skip_keys: []
     key_sort_orders:

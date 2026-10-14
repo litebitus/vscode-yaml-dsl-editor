@@ -21,11 +21,10 @@ const moveSuggestion = {
   path: ['queue', 'events'],
   overlayCount: 4,
   holders: ['dev', 'staging', 'production'],
-  absent: ['uat'],
-  differences: [{
-    name: 'events_size',
-    values: [{ text: '1', overlays: ['dev', 'staging'] }, { text: '`2`', overlays: ['production'] }],
-  }],
+  absent: [],
+  differences: [],
+  differencePaths: [],
+  optOuts: [],
   keepsCommonValue: [],
   keepsOwnValue: [],
   schemaGroups: [],
@@ -33,28 +32,70 @@ const moveSuggestion = {
   optOutConditionalFields: [],
 };
 
+const sizeDifference = {
+  name: 'events_size',
+  values: [{ text: '1', overlays: ['dev', 'staging'] }, { text: '`2`', overlays: ['production'] }],
+};
+
+const differingMove = {
+  ...moveSuggestion,
+  differences: [sizeDifference],
+  differencePaths: [['queue', 'events', 'size']],
+};
+
+const optingOutMove = {
+  ...moveSuggestion,
+  absent: ['uat'],
+  optOuts: [{ overlay: 'uat', relativePath: [], valueText: '{}' }],
+  differencePaths: [['queue', 'events']],
+};
+
 const applyArgument = { stackId: '/repo/mock.yml', id: 'mock-move' };
 const link = `command:${APPLY_COMMAND}?${encodeURIComponent(JSON.stringify(applyArgument))}`;
 
-test('the hover names the block, its differences and the overlays that opt out, with the move\'s link', () => {
+test('the hover names the block, its one difference or the overlays that opt out, with the move\'s link', () => {
+  const choiceNote = 'Moving it writes one difference into the overlays, so the choice is yours.';
   assert.equal(hoverMarkdownText(moveSuggestion), [
     '`queue.events` is common to 3 of 4 overlays. Move it to the common layer.',
+    '',
+    `[Move to common layer](${link})`,
+  ].join('\n'));
+  assert.equal(hoverMarkdownText(differingMove), [
+    '`queue.events` is common to 3 of 4 overlays. Move it to the common layer.',
+    '',
+    choiceNote,
     '',
     '1 difference becomes a local:',
     '',
     "- `events_size`: `1` (dev, staging), `'2'` (production)",
     '',
+    `[Move to common layer](${link})`,
+  ].join('\n'));
+  assert.equal(hoverMarkdownText(optingOutMove), [
+    '`queue.events` is common to 3 of 4 overlays. Move it to the common layer.',
+    '',
+    choiceNote,
+    '',
     'Opts out with `{}`: uat',
     '',
     `[Move to common layer](${link})`,
   ].join('\n'));
-  const [difference] = moveSuggestion.differences;
-  const twoDifferences = { ...moveSuggestion, absent: [], differences: [difference, difference] };
-  assert.match(hoverMarkdownText(twoDifferences), /^2 differences become locals:$/m);
-  assert.doesNotMatch(hoverMarkdownText({ ...moveSuggestion, absent: [], differences: [] }), /difference|Opts out/);
-  const promoted = { ...moveSuggestion, absent: [], differences: [], keepsCommonValue: ['uat'], keepsOwnValue: ['qa'] };
+  const listedValues = [{ text: '- a\n- b', overlays: ['dev'] }];
+  const listed = { ...differingMove, differences: [{ ...sizeDifference, values: listedValues }] };
+  assert.match(hoverMarkdownText(listed), /^- `events_size`: `\[a, b\]` \(dev\)$/m);
+  const mappedValues = [{ text: 'team: x\nenv: dev', overlays: ['dev'] }];
+  const mapped = { ...differingMove, differences: [{ ...sizeDifference, values: mappedValues }] };
+  assert.match(hoverMarkdownText(mapped), /^- `events_size`: `\{team: x, env: dev\}` \(dev\)$/m);
+  const promoted = {
+    ...moveSuggestion,
+    keepsCommonValue: ['uat'],
+    keepsOwnValue: ['qa'],
+    differencePaths: [['queue', 'events']],
+  };
   assert.equal(hoverMarkdownText(promoted), [
     '`queue.events` is common to 3 of 4 overlays. Move it to the common layer.',
+    '',
+    choiceNote,
     '',
     "Keeps the common layer's current value: uat",
     '',
@@ -181,6 +222,8 @@ test('a file whose only suggestions are potential moves takes no file decoration
   const marksByUri = new Map([['file:///repo/uat/mock.yml', [
     { range: at, suggestion: schemasDiffer },
     { range: at, suggestion: conditionalMove },
+    { range: at, suggestion: differingMove },
+    { range: at, suggestion: optingOutMove },
   ]]]);
   assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/uat/mock.yml' }), undefined);
   marksByUri.get('file:///repo/uat/mock.yml').push({ range: at, suggestion: moveSuggestion });
@@ -207,6 +250,7 @@ const optOutFails = {
   schemaGroups: [],
   optOutFailures: [{
     overlay: 'uat',
+    valueText: '{}',
     failures: [
       messageFailure('must be object'),
       {
@@ -262,10 +306,6 @@ test('a move whose opt-out leaves out a conditionally required field warns and k
     '',
     'The extension cannot tell whether the move is safe.',
     '',
-    '1 difference becomes a local:',
-    '',
-    "- `events_size`: `1` (dev, staging), `'2'` (production)",
-    '',
     `[Move to common layer](${link})`,
   ].join('\n'));
   const vscode = inlayVscode();
@@ -288,6 +328,27 @@ test('a potential move\'s inlay hint names the check that failed', () => {
     'ⓘ potential move: overlay schemas differ',
     'ⓘ potential move: overlay (uat) opt-out would fail the schema',
     'ⓘ potential move: overlay (uat, qa) opt-out would fail the schema',
+  ]);
+});
+
+test('a move with one difference is a potential move whose hint names the difference below the block', () => {
+  const vscode = inlayVscode();
+  const at = (line) => ({ start: { line, character: 0 }, end: { line, character: 0 } });
+  const combinedWithDifference = {
+    ...differingMove,
+    memberPaths: [['queue', 'alerts'], ['queue', 'events']],
+    path: ['queue', 'alerts'],
+  };
+  const marksByUri = new Map([['file:///repo/dev/mock.yml', [
+    { range: at(0), suggestion: differingMove },
+    { range: at(1), suggestion: optingOutMove },
+    { range: at(2), suggestion: combinedWithDifference },
+  ]]]);
+  const document = documentOf('file:///repo/dev/mock.yml', ['queue:', 'queue:', 'queue:']);
+  assert.deepEqual(suggestionInlayHints(vscode, marksByUri, document).map((hint) => hint.label[0].value), [
+    'ⓘ potential move: one difference, size',
+    'ⓘ potential move: one difference, events',
+    'ⓘ potential move: one difference, events.size',
   ]);
 });
 

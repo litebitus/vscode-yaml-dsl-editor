@@ -62,7 +62,14 @@ const stagingText = 'queue:\n  events: 2\n';
 const mark = { range: { start: { line: 0, character: 6 }, end: { line: 0, character: 6 } }, suggestion: { id: 'mock' } };
 const loadedMark = {
   ...mark,
-  suggestion: { keepsCommonValue: [], keepsOwnValue: [], createsCommonLayer: false, id: 'mock' },
+  suggestion: {
+    keepsCommonValue: [],
+    keepsOwnValue: [],
+    createsCommonLayer: false,
+    differencePaths: [],
+    optOuts: [],
+    id: 'mock',
+  },
 };
 const reported = (uri, text) => ({ uri, textHash: textHashOf(text), marks: [mark] });
 

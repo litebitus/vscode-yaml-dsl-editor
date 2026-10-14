@@ -18,7 +18,7 @@ const config = configText(dslEntry('resource', {
   layers: {
     overlay_folders: OVERLAYS,
     common_layer_discovery: 'ancestor',
-    duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
+    duplicate_check: { depth: 1, key_depths: {}, skip_keys: [] },
   },
   key_sort_orders: [
     { path: '$', skip_keys: [], order: 'alphabetical', first_keys: [], last_keys: [] },

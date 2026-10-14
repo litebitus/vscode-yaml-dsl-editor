@@ -37,13 +37,17 @@ const resourceKeySortOrders = [
   },
 ];
 
+function unitLayers(depth, keyDepths = { data_source: 2, locals: 2 }) {
+  return {
+    overlay_folders: OVERLAYS,
+    common_layer_discovery: 'ancestor',
+    duplicate_check: { depth, key_depths: keyDepths, skip_keys: ['schema_version'] },
+  };
+}
+
 function layeredDsl(fields = {}, localPositions = ['whole_scalar', 'whole_placeholder', 'placeholder_in_text']) {
   return parsedDsl(dslEntry('resource', {
-    layers: {
-      overlay_folders: OVERLAYS,
-      common_layer_discovery: 'ancestor',
-      duplicate_check: { depth: 3, key_depths: { data_source: 2 }, skip_keys: ['schema_version'] },
-    },
+    layers: unitLayers(3),
     key_sort_orders: resourceKeySortOrders,
     placeholder: placeholder(),
     locals: { scope_name: 'local' },
@@ -78,27 +82,30 @@ function texts(commonText, overlayTexts) {
   return out;
 }
 
-test('a block most overlays hold moves to the common layer, each difference a local', () => {
-  const stack = stackOf(layeredDsl(), texts('locals:\n  team: mock-team\n', {
-    dev: 'queue:\n  events:\n    retention_seconds: 86400\n    max_receive_count: 5\n',
+test('a block every overlay holds with one difference is a move writing the difference as a local', () => {
+  const eventsText = 'queue:\n  events:\n    retention_seconds: 86400\n    max_receive_count: 5\n';
+  const stack = stackOf(layeredDsl({ layers: unitLayers(1) }), texts('locals:\n  team: mock-team\n', {
+    dev: eventsText,
     staging: 'queue:\n  events:\n    retention_seconds: 86400  # same\n    max_receive_count: 5\n',
-    uat: 'other: {}\n',
+    uat: eventsText,
     production: 'locals:\n  zone: mock-zone\nqueue:\n  events: { retention_seconds: 1209600, max_receive_count: 5 }\n',
   }));
   const [suggestion, ...rest] = commonLayerSuggestions(stack, noSchemaChecks);
   assert.equal(rest.length, 0);
   assert.equal(suggestion.kind, 'move');
   assert.deepEqual(suggestion.path, ['queue']);
-  assert.deepEqual(suggestion.holders, ['dev', 'staging', 'production']);
-  assert.deepEqual(suggestion.absent, ['uat']);
+  assert.deepEqual(suggestion.holders, ['dev', 'staging', 'uat', 'production']);
+  assert.deepEqual(suggestion.absent, []);
+  assert.deepEqual(suggestion.differencePaths, [['queue', 'events', 'retention_seconds']]);
   assert.deepEqual(suggestion.differences, [{
     name: 'queue_retention_seconds',
     referenceText: 'local.queue_retention_seconds',
-    values: [{ text: '86400', overlays: ['dev', 'staging'] }, { text: '1209600', overlays: ['production'] }],
+    values: [{ text: '86400', overlays: ['dev', 'staging', 'uat'] }, { text: '1209600', overlays: ['production'] }],
   }]);
   assert.deepEqual(suggestion.marks.map((mark) => [mark.file, mark.range.start]), [
     [overlayPath('dev'), { line: 0, character: 6 }],
     [overlayPath('staging'), { line: 0, character: 6 }],
+    [overlayPath('uat'), { line: 0, character: 6 }],
     [overlayPath('production'), { line: 2, character: 6 }],
   ]);
   const edited = editedTexts(stack, suggestion);
@@ -113,7 +120,7 @@ test('a block most overlays hold moves to the common layer, each difference a lo
     '',
   ].join('\n'));
   assert.equal(edited.get(overlayPath('dev')), '');
-  assert.equal(edited.get(overlayPath('uat')), 'other: {}\nqueue: {}\n');
+  assert.equal(edited.get(overlayPath('uat')), '');
   assert.equal(
     edited.get(overlayPath('production')),
     'locals:\n  queue_retention_seconds: 1209600\n  zone: mock-zone\n',
@@ -230,7 +237,7 @@ test('neighboring values and blocks under a map the common layer lacks move as o
 
 test('a difference whose values tie is declared in each overlay, the common layer holding the empty value of its type', () => {
   const holder = (retention) => `queue:\n  events:\n    retention_seconds: ${retention}\n    max_receive_count: 5\n`;
-  const stack = stackOf(layeredDsl(), texts('locals:\n  team: mock-team\n', {
+  const stack = stackOf(layeredDsl({ layers: unitLayers(1) }), texts('locals:\n  team: mock-team\n', {
     dev: holder(86400),
     staging: holder(86400),
     uat: holder(1209600),
@@ -254,51 +261,31 @@ test('a difference whose values tie is declared in each overlay, the common laye
   assert.equal(foldsAgreeAfter(stack, suggestion, edited), true);
 });
 
-test('a tied string or boolean takes "" or false in the common layer, and tied values of mixed types stay in each overlay', () => {
+test('a tied string or boolean takes "" or false in the common layer, and a block with two differences is not offered', () => {
   const holder = (name, enabled) => `queue:\n  events:\n    name: ${name}\n    enabled: ${enabled}\n    size: 1\n`;
-  const stack = stackOf(layeredDsl(), texts('schema_version: "3"\n', {
-    dev: holder('mock-dev', true),
-    staging: holder('mock-staging', false),
-    uat: holder('mock-uat', true),
-    production: holder('mock-production', false),
-  }));
-  const [suggestion] = commonLayerSuggestions(stack, noSchemaChecks);
-  const edited = editedTexts(stack, suggestion);
-  assert.equal(edited.get(common), [
-    'schema_version: "3"',
-    '',
-    'locals:',
-    '  queue_enabled: false',
-    '  queue_name: ""',
-    '',
-    'queue:',
-    '  events:',
-    '    name: local.queue_name',
-    '    enabled: local.queue_enabled',
-    '    size: 1',
-    '',
-  ].join('\n'));
-  assert.equal(foldsAgreeAfter(stack, suggestion, edited), true);
-  const optingOut = stackOf(layeredDsl(), texts('schema_version: "3"\n', {
-    dev: holder('mock-dev', true),
-    staging: holder('mock-staging', true),
-    uat: holder('mock-uat', true),
-    production: 'other: {}\n',
-  }));
-  const [optOutSuggestion] = commonLayerSuggestions(optingOut, noSchemaChecks);
-  const optOutEdited = editedTexts(optingOut, optOutSuggestion);
-  assert.match(optOutEdited.get(common), /^locals:\n {2}queue_name: ""\n/m);
-  assert.equal(optOutEdited.get(overlayPath('production')), 'other: {}\nqueue: {}\n');
-  assert.equal(foldsAgreeAfter(optingOut, optOutSuggestion, optOutEdited), true);
-  const mixed = stackOf(layeredDsl(), texts('schema_version: "3"\n', {
+  const dsl = layeredDsl({ layers: unitLayers(1) });
+  const tied = (values) => {
+    const overlayTexts = Object.fromEntries(OVERLAYS.map((name, index) => [name, holder(...values[index])]));
+    return stackOf(dsl, texts('schema_version: "3"\n', overlayTexts));
+  };
+  const tiedNames = tied([['mock-dev', true], ['mock-staging', true], ['mock-uat', true], ['mock-production', true]]);
+  const [nameMove] = commonLayerSuggestions(tiedNames, noSchemaChecks);
+  const nameEdited = editedTexts(tiedNames, nameMove);
+  assert.match(nameEdited.get(common), /^ {2}queue_name: ""$/m);
+  assert.equal(foldsAgreeAfter(tiedNames, nameMove, nameEdited), true);
+  const tiedFlags = tied([['mock-name', true], ['mock-name', false], ['mock-name', true], ['mock-name', false]]);
+  const [flagMove] = commonLayerSuggestions(tiedFlags, noSchemaChecks);
+  const flagEdited = editedTexts(tiedFlags, flagMove);
+  assert.match(flagEdited.get(common), /^ {2}queue_enabled: false$/m);
+  assert.equal(foldsAgreeAfter(tiedFlags, flagMove, flagEdited), true);
+  const both = tied([['mock-dev', true], ['mock-staging', false], ['mock-uat', true], ['mock-production', false]]);
+  assert.deepEqual(commonLayerSuggestions(both, noSchemaChecks), []);
+  const mixed = stackOf(dsl, texts('schema_version: "3"\n', {
     dev: holder('mock-dev', true),
     staging: holder(7, true),
     uat: holder('mock-uat', true),
   }));
-  const mixedMoves = commonLayerSuggestions(mixed, noSchemaChecks).filter((found) => found.kind === 'move');
-  assert.deepEqual(mixedMoves.map((found) => found.memberPaths), [
-    [['queue', 'events', 'enabled'], ['queue', 'events', 'size']],
-  ]);
+  assert.deepEqual(commonLayerSuggestions(mixed, noSchemaChecks), []);
 });
 
 test('a local every overlay repeats moves over the common layer\'s value, and an emptied locals map goes with it', () => {
@@ -403,7 +390,7 @@ test('a moved block keeps the blank lines the first overlay holding it puts arou
     uat: holder('uat', ''),
   }));
   const [suggestion] = commonLayerSuggestions(stack, noSchemaChecks);
-  assert.deepEqual(suggestion.path, ['data_source']);
+  assert.deepEqual(suggestion.path, ['data_source', 'kms']);
   assert.equal(
     editedTexts(stack, suggestion).get(common),
     'schema_version: "3"\nrds:\n  capacity: mock\n\ndata_source:\n  kms:\n    type: mock\n',
@@ -456,21 +443,23 @@ test('a duplicate of the common layer is deleted from its overlay, within the co
   assert.deepEqual(commonLayerSuggestions(keyDepth, noSchemaChecks), []);
 });
 
-test('without locals a block with differences is not moved, and an equal block inside it is', () => {
-  const dsl = { ...layeredDsl(), locals: null };
-  const stack = stackOf(dsl, texts('', {
-    dev: 'queue:\n  size: 1\n  events:\n    a: 1\n',
-    staging: 'queue:\n  size: 2\n  events:\n    a: 1\n',
-    uat: 'queue:\n  size: 3\n  events:\n    a: 1\n',
-    production: 'other: 1\n',
+test('without locals a block with a difference is not moved, and one without a difference is', () => {
+  const dsl = { ...layeredDsl({ layers: unitLayers(1) }), locals: null };
+  const differing = stackOf(dsl, texts('', {
+    dev: 'queue:\n  size: 1\n  a: 1\n',
+    staging: 'queue:\n  size: 2\n  a: 1\n',
+    uat: 'queue:\n  size: 2\n  a: 1\n',
   }));
-  const suggestions = commonLayerSuggestions(stack, noSchemaChecks);
-  assert.deepEqual(suggestions.map((suggestion) => suggestion.path), [['queue', 'events']]);
-  assert.deepEqual(suggestions[0].absent, ['production']);
-  const edited = editedTexts(stack, suggestions[0]);
-  assert.equal(edited.get(common), 'queue:\n  events:\n    a: 1\n');
-  assert.equal(edited.get(overlayPath('dev')), 'queue:\n  size: 1\n');
-  assert.equal(foldsAgreeAfter(stack, suggestions[0], edited), true);
+  assert.deepEqual(commonLayerSuggestions(differing, noSchemaChecks), []);
+  const sameText = 'queue:\n  size: 2\n  a: 1\n';
+  const same = stackOf(dsl, texts('', { dev: sameText, staging: sameText, uat: sameText }));
+  const [move, ...rest] = commonLayerSuggestions(same, noSchemaChecks);
+  assert.equal(rest.length, 0);
+  assert.deepEqual([move.path, move.differencePaths], [['queue'], []]);
+  const edited = editedTexts(same, move);
+  assert.equal(edited.get(common), sameText);
+  assert.equal(edited.get(overlayPath('dev')), '');
+  assert.equal(foldsAgreeAfter(same, move, edited), true);
 });
 
 test('a block whose every leaf differs, or whose keys differ, moves nothing', () => {
@@ -483,7 +472,7 @@ test('a block whose every leaf differs, or whose keys differ, moves nothing', ()
 });
 
 test('a local is named by the block\'s key and the nearest named key, leaving out declared names, calls and list items', () => {
-  const withCalls = layeredDsl({ function: markerFunction() });
+  const withCalls = layeredDsl({ function: markerFunction(), layers: unitLayers(1) });
   const named = (value) => `queue:\n  events:\n    tags fn.merge*:\n      - team: mock\n      - env: ${value}\n    kept: x\n`;
   const namedCall = stackOf(withCalls, texts('', {
     dev: named('mock-dev'),
@@ -502,7 +491,7 @@ test('a local is named by the block\'s key and the nearest named key, leaving ou
 
 test('a local name the stack already declares takes the next named key up, then the block\'s ancestors', () => {
   const holder = (size) => `queue:\n  events:\n    limits:\n      size: ${size}\n    kept: x\n`;
-  const nextKeyUp = stackOf(layeredDsl(), texts('locals:\n  queue_size: taken\n', {
+  const nextKeyUp = stackOf(layeredDsl({ layers: unitLayers(1) }), texts('locals:\n  queue_size: taken\n', {
     dev: holder(1),
     staging: holder(2),
     uat: holder(2),
@@ -536,7 +525,7 @@ test('a flow map the edits must write into, or a multi-line difference, is not s
 
 test('a stack with no common layer file gets the moves that create it, starting with the keys every overlay states', () => {
   const holder = (env, size) => `schema_version: "3"\nenv: ${env}\n\nqueue:\n  events:\n    size: ${size}\n    kept: x\n`;
-  const noCommon = stackOf(layeredDsl(), texts('', {
+  const noCommon = stackOf(layeredDsl({ layers: unitLayers(1) }), texts('', {
     dev: holder('dev', 1),
     staging: holder('staging', 1),
     production: holder('production', 2),
@@ -602,7 +591,7 @@ const mockSchemas = {
 };
 
 function stackWithSchemas(schemaNames) {
-  const stack = stackOf(layeredDsl(), texts('', {
+  const stack = stackOf(layeredDsl({ layers: unitLayers(1) }), texts('', {
     dev: 'queue:\n  events:\n    a: 1\n',
     staging: 'queue:\n  events:\n    a: 1\n',
     uat: 'queue:\n  events:\n    a: 1\n',
@@ -647,6 +636,7 @@ test('a block whose opt-out the shared schema node rejects is a potential move n
   assert.deepEqual(suggestion.optOutFailures, [
     {
       overlay: 'production',
+      valueText: '{}',
       failures: [{ kind: 'message', text: "must have required property 'events'", alternatives: [] }],
     },
   ]);
@@ -678,4 +668,141 @@ test('a block whose opt-out leaves out a conditionally required field stays a mo
   assert.equal(suggestion.kind, 'move');
   assert.deepEqual(suggestion.optOutConditionalFields, [{ overlay: 'production', fields: ['queue.events'] }]);
   assert.ok(suggestion.edits.size > 0);
+});
+
+const resourceUnits = () => layeredDsl({ layers: unitLayers(2) });
+
+test('a resource moves whole: its keys never move one by one, and a list an overlay lacks is its one difference', () => {
+  const lacking = 'queue:\n  invoke:\n    name: mock-invoke\n    retention_seconds: 60\n';
+  const held = `${lacking}    publishers:\n      - mock-role\n`;
+  const stack = stackOf(resourceUnits(), texts('schema_version: "3"\n', {
+    dev: lacking,
+    staging: held,
+    uat: held,
+  }));
+  const [move, ...rest] = commonLayerSuggestions(stack, noSchemaChecks);
+  assert.equal(rest.length, 0);
+  assert.deepEqual([move.kind, move.path, move.holders], ['move', ['queue', 'invoke'], ['dev', 'staging', 'uat']]);
+  assert.deepEqual(move.differencePaths, [['queue', 'invoke', 'publishers']]);
+  assert.deepEqual(move.optOuts, [{ overlay: 'dev', relativePath: ['publishers'], valueText: '[]' }]);
+  const edited = editedTexts(stack, move);
+  assert.equal(edited.get(common), [
+    'schema_version: "3"',
+    '',
+    'locals:',
+    '  invoke_publishers:',
+    '    - mock-role',
+    '',
+    'queue:',
+    '  invoke:',
+    '    name: mock-invoke',
+    '    retention_seconds: 60',
+    '    publishers: local.invoke_publishers',
+    '',
+  ].join('\n'));
+  assert.equal(edited.get(overlayPath('dev')), 'locals:\n  invoke_publishers: []\n');
+  assert.equal(edited.get(overlayPath('staging')), '');
+  assert.equal(foldsAgreeAfter(stack, move, edited), true);
+});
+
+test('a list whose items differ in number is one difference, declared on the lines below its local', () => {
+  const holder = (hosts) => [
+    'queue:',
+    '  invoke:',
+    '    name: mock-invoke',
+    '    hosts:',
+    ...hosts.map((host) => `      - ${host}`),
+    '',
+  ].join('\n');
+  const stack = stackOf(resourceUnits(), texts('', {
+    dev: holder(['mock-a']),
+    staging: holder(['mock-a', 'mock-b']),
+    uat: holder(['mock-a', 'mock-b']),
+  }));
+  const [move] = commonLayerSuggestions(stack, noSchemaChecks);
+  assert.deepEqual(move.differencePaths, [['queue', 'invoke', 'hosts']]);
+  const edited = editedTexts(stack, move);
+  assert.match(edited.get(common), /^locals:\n {2}invoke_hosts:\n {4}- mock-a\n {4}- mock-b\n/);
+  assert.match(edited.get(common), /^ {4}hosts: local\.invoke_hosts$/m);
+  assert.equal(edited.get(overlayPath('dev')), 'locals:\n  invoke_hosts:\n    - mock-a\n');
+  assert.equal(foldsAgreeAfter(stack, move, edited), true);
+});
+
+test('a scalar an overlay lacks takes its schema default as the one difference, and without one nothing moves', () => {
+  const held = 'queue:\n  invoke:\n    name: mock-invoke\n    fifo: true\n';
+  const lacking = 'queue:\n  invoke:\n    name: mock-invoke\n';
+  const fields = (fifo) => ({ type: 'object', properties: { name: { type: 'string' }, fifo } });
+  const schemas = {
+    'fifo-default': { type: 'object', properties: { queue: { type: 'object', additionalProperties: fields({
+      type: 'boolean',
+      default: false,
+    }) } } },
+    'fifo-no-default': { type: 'object', properties: { queue: { type: 'object', additionalProperties: fields({
+      type: 'boolean',
+    }) } } },
+  };
+  const checks = createSchemaChecks((schemaHash) => schemas[schemaHash]);
+  const stackWith = (schemaName) => {
+    const stack = stackOf(resourceUnits(), texts('', { dev: lacking, staging: held, uat: held }));
+    stack.schemas = new Map(OVERLAYS.map((name) => [overlayPath(name), { hash: schemaName }]));
+    return stack;
+  };
+  const defaulted = stackWith('fifo-default');
+  const [move] = commonLayerSuggestions(defaulted, checks);
+  assert.deepEqual(move.optOuts, [{ overlay: 'dev', relativePath: ['fifo'], valueText: 'false' }]);
+  const edited = editedTexts(defaulted, move);
+  assert.equal(edited.get(overlayPath('dev')), 'locals:\n  invoke_fifo: false\n');
+  assert.equal(foldsAgreeAfter(defaulted, move, edited), true);
+  assert.deepEqual(commonLayerSuggestions(stackWith('fifo-no-default'), checks), []);
+});
+
+test('a list unit an overlay lacks opts out with [] written at its path, and an empty map or list is not moved', () => {
+  const stack = stackOf(layeredDsl(), texts('', {
+    dev: 'queue:\n  invoke:\n    hosts: [mock-a]\n    tags: {}\n',
+    staging: 'queue:\n  invoke:\n    hosts: [mock-a]\n    tags: {}\n',
+    uat: 'queue:\n  invoke:\n    tags: {}\n',
+  }));
+  const [move, ...rest] = commonLayerSuggestions(stack, noSchemaChecks);
+  assert.equal(rest.length, 0);
+  assert.deepEqual([move.path, move.absent, move.differencePaths], [
+    ['queue', 'invoke', 'hosts'],
+    ['uat'],
+    [['queue', 'invoke', 'hosts']],
+  ]);
+  const edited = editedTexts(stack, move);
+  assert.equal(edited.get(overlayPath('uat')), 'queue:\n  invoke:\n    hosts: []\n    tags: {}\n');
+  assert.equal(foldsAgreeAfter(stack, move, edited), true);
+});
+
+test('neighboring moves combine while the combined move holds at most one difference', () => {
+  const holder = (name) => [
+    'service:',
+    '  main:',
+    '    alpha:',
+    '      size: 1',
+    '    beta:',
+    '      kind: mock-kind',
+    `      size: ${name}`,
+    '    gamma:',
+    '      kind: mock-kind',
+    '      size: 3',
+    '',
+  ].join('\n');
+  const dsl = layeredDsl();
+  const units = stackOf(dsl, texts('service:\n  main:\n    kept: mock-kept\n', {
+    dev: holder('mock-dev'),
+    staging: holder('mock-shared'),
+    uat: holder('mock-shared'),
+  }));
+  const moves = commonLayerSuggestions(units, noSchemaChecks).filter((found) => found.kind === 'move');
+  const memberKeys = moves.map((found) => found.memberPaths.map((memberPath) => memberPath[2]));
+  assert.deepEqual(memberKeys, [['alpha', 'beta', 'gamma']]);
+  assert.equal(moves[0].differencePaths.length, 1);
+  const twoDifferences = stackOf(dsl, texts('service:\n  main:\n    kept: mock-kept\n', {
+    dev: holder('mock-dev').replace('size: 3', 'size: 4'),
+    staging: holder('mock-shared'),
+    uat: holder('mock-shared'),
+  }));
+  const split = commonLayerSuggestions(twoDifferences, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.deepEqual(split.map((found) => found.differencePaths.length), [1, 1]);
 });

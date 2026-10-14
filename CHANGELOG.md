@@ -6,7 +6,10 @@
 - Suggestions: saved suggestions another build of the extension worked out are not shown, and their stacks are worked out again.
 - Output: startup logs the build of the extension it runs.
 - Suggestions: saving a file keeps its suggestions, where the save hid them until the next edit.
-- Suggestions: a repeated map is not offered as one move when an overlay keeping its own value holds a map there, which the click refused; its keys are offered instead.
+- Suggestions: a move takes one unit whole, placed by `duplicate_check.depth` and `key_depths`, so no unit is split between the common layer and an overlay.
+- Suggestions: a unit with one difference is a potential move that keeps its link, and a unit with more is not offered.
+- Suggestions: an overlay lacking a list or map opts out with `[]` or `{}`, and one lacking a scalar takes its schema's default.
+- Suggestions: a difference holding a list or map is written as a local declared on the lines below its name.
 - Suggestions: moves of neighboring keys in one map combine into one move that keeps the overlays' order.
 - Suggestions: a border marks the lines a suggestion takes while the cursor is on its light bulb line.
 - Layers: a layer file deleted from disk leaves its stack even while its tab is open, unless it holds unsaved edits.

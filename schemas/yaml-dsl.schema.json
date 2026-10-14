@@ -89,24 +89,24 @@
         },
         "duplicate_check": {
           "type": "object",
-          "description": "The check of an overlay for what the common layer already holds.",
+          "description": "The unit a suggestion takes, a node of the overlays it moves or deletes whole.",
           "required": ["depth", "key_depths", "skip_keys"],
           "additionalProperties": false,
           "properties": {
             "depth": {
               "type": "integer",
               "minimum": 1,
-              "description": "How many levels below the document root the check runs, under a top-level key key_depths does not list."
+              "description": "How many levels below the document root the unit sits, under a top-level key key_depths does not list."
             },
             "key_depths": {
               "type": "object",
               "additionalProperties": { "type": "integer", "minimum": 1 },
-              "description": "The depth under a given top-level key, {} when every key takes depth."
+              "description": "The unit's depth under a given top-level key, {} when every key takes depth."
             },
             "skip_keys": {
               "type": "array",
               "items": { "type": "string" },
-              "description": "Keys the check passes over, at any depth."
+              "description": "Keys no suggestion compares or moves, at any depth."
             }
           }
         }

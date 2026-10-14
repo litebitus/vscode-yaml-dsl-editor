@@ -203,60 +203,60 @@ sequenceDiagram
 
 ## Extracting the common layer
 
-A block that every overlay states for itself will drift. The next edit changes one overlay, and the others keep the old copy. Extraction puts that block in the common layer so the stack has one copy.
+A unit that every overlay states for itself will drift. The next edit changes one overlay, and the others keep the old copy. Extraction puts that unit in the common layer so the stack has one copy.
 
-A block is a map at a path below the document root, outside the locals. The editor suggests extracting it when:
+A move takes one unit whole. `layers.duplicate_check` places the unit: it sits `depth` levels below the document root, or as deep as `key_depths` gives under a top-level key it lists, and a scalar or list above that depth is a unit of its own. A key counts as one level: `a.b.c` is three levels deep. `skip_keys` lists the keys no suggestion compares or moves, at any depth. Nothing inside a unit moves on its own, and nothing above it moves as one block, so a unit never ends up split between the common layer and an overlay. In the resource DSL the unit is a resource, `type.name`, two levels deep.
 
-- more than half the overlays that have a file hold it, and at least two do;
-- every overlay that holds it holds the same keys at every depth;
-- the common layer holds nothing at its path, and a map at each path above it.
+Every place where the overlays disagree on a unit is a difference: a value that differs, a list or map some overlay lacks, a scalar some overlay lacks, and the unit itself missing from an overlay. The line between a move and a potential move is what the click writes into an overlay:
 
-The suggestion is made at the topmost block that qualifies, never at a block inside it.
+- a unit every overlay holds, all alike, is a move; the click deletes the copies and writes one into the common layer, and no overlay gains anything;
+- a unit with one difference is a potential move with a link; the click also writes into an overlay to keep its fold, so the user decides;
+- a unit with more than one difference is not offered.
+
+A list or map an overlay lacks is written as `[]` or `{}` for that overlay, and a scalar it lacks as the `default` its schema node states; a scalar with no stated default has nothing that keeps the overlay's fold, and its unit is not offered.
 
 A stack whose common layer file does not exist yet is the starting point extraction is for: its moves read the common layer as empty, and the click creates the file. A new common layer starts with the keys `layers.duplicate_check.skip_keys` names that every overlay holds the same, since those are the keys each layer states for itself.
 
-Values are compared as written: a reference, a local and a placeholder are their text, whatever they resolve to. A leaf is a difference when the overlays that hold the block do not all hold the same value there. A block with differences is suggested only in a DSL with locals, and only when at least one leaf is the same in every overlay that holds it.
+Values are compared as written: a reference, a local and a placeholder are their text, whatever they resolve to. Maps are compared key by key, and lists whose items match in number item by item; a list whose items differ in number is one difference. A map unit with a difference is offered only in a DSL with locals, outside the locals, and only when at least one leaf is the same in every overlay that holds it, since the difference is written as a local and the unit lands whole in the common layer.
 
-One click:
+One click on a map unit:
 
-- writes the block into the common layer, copied from the first overlay holding it in `layers.overlay_folders` order, comments, key order and the blank lines around it included, with each difference replaced by a reference to its local;
-- declares each difference's local in the common layer with the value most of those overlays hold, and in each overlay holding another value with its own; when no one value is held by the most overlays, each overlay declares its own value and the common layer declares the empty value of their type, `""`, `0` or `false`, so the name resolves in an overlay that opts out; tied values of differing types, or `null`, offer no move;
-- deletes the block from each overlay that holds it, and a parent map left empty by that, merging the blank lines around it into one;
-- writes `{}` at the block's path into each overlay with a file that does not hold it, so that overlay keeps none of it;
+- writes the unit into the common layer, copied from the first overlay in `layers.overlay_folders` order that holds every difference, comments, key order and the blank lines around it included, with the difference replaced by a reference to its local;
+- declares the difference's local in the common layer with the value most overlays hold, and in each other overlay with its own, or with `[]`, `{}` or the schema default where it lacks the key; when no one value is held by the most overlays, each overlay declares its own value and the common layer declares the empty value of their type, `""`, `0`, `false`, `[]` or `{}`, so the name resolves in an overlay that opts out; tied values of differing types, or `null`, offer no move; a list or map in block style is declared on the lines below the local's name;
+- deletes the unit from each overlay that holds it, and a parent map left empty by that, merging the blank lines around it into one, and taking the blank lines after it when it sits right under its parent's key;
+- writes `{}` at the unit's path into each overlay with a file that does not hold it;
 - saves every file it changed.
 
 The click is one undo step across those files. An undo or redo that brings one of them back to its text before or after a click saves it, so undoing a move leaves no file to save by hand.
 
 A new key goes where `key_sort_orders` says for the map it lands in. Each entry names a path and an `order`, and the first entry whose path selects the map applies, so specific paths come first. `alphabetical` places the key at its sorted place within the keys at the top of the map that are already in order, and where that order breaks when it sorts after them all; the keys after the break are not considered. `significance` reads the map as three groups: the keys `first_keys` lists, in its order; every other key; then the keys `last_keys` lists, in its order. Both lists are `[]` under `alphabetical`, and a key sits in at most one of them. A listed key goes before the first key of the map that ranks after it. Any other key goes where the overlays holding it place it among the other keys: before the next of its neighbors there that the map holds, else after the previous one, taking the overlays in `layers.overlay_folders` order, and at the end of the other keys when none of its neighbors is there. Keys already in the map keep their order. A new key takes the blank lines above and below it in the first overlay holding it, in `layers.overlay_folders` order. A key no overlay holds takes one blank line above and below when it spans more than one line, and none when it is one line. The count includes the blank lines already beside where the key lands once every edit of the click is made, and none are added at the top or the end of the file. A map no entry covers takes no new key, and a suggestion that would write one is not made.
 
-A local is named by the block's key and the nearest named key above the leaf, joined with `_`. A named key is any key between them except a key a `declarations` rule reads a name from, a list item, and a call: a call key contributes the name written before its call marker, and a call without a name contributes nothing. A name the stack already declares takes the next named key up in front of the nearest one, and once those run out, the block's ancestors' keys. The reference is the local reference rule's own form: a whole scalar where the rule allows one, else a placeholder. A difference whose name the reference rule cannot read back, a difference spanning more than one line, and a map the edits must write into that is in flow style are not suggested.
+A local is named by the block's key and the nearest named key above the leaf, joined with `_`. A named key is any key between them except a key a `declarations` rule reads a name from, a list item, and a call: a call key contributes the name written before its call marker, and a call without a name contributes nothing. A name the stack already declares takes the next named key up in front of the nearest one, and once those run out, the block's ancestors' keys. The reference is the local reference rule's own form: a whole scalar where the rule allows one, else a placeholder. A difference whose name the reference rule cannot read back, and a map the edits must write into that is in flow style, are not suggested.
 
-After the click every overlay's folded document reads the same at the block's path, with the new locals resolved, except that an overlay without the block holds `{}` there. Before writing anything, the click applies its edits to a copy of each file, folds the copies and compares them at the block's path. A mismatch writes nothing and says so.
+After the click every overlay's folded document reads the same at the unit's path, with the new locals resolved, except where an overlay opts out: it holds its `{}`, `[]` or schema default there. Before writing anything, the click applies its edits to a copy of each file, folds the copies and compares them at the block's path. A mismatch writes nothing and says so.
 
 The hover names the block and how many overlays hold it, each difference with its values and the overlays holding each, and the overlays that opt out.
 
-A block the walk finds then passes two schema checks before it is offered. First, every overlay with a file, holding the block or not, reads the node at the block's path in its own schema, and those nodes must be the same. A node is compared by a hash of it with its references resolved and its annotations (`description`, `title`, `examples`, `$comment`) set aside, its requirement marker kept, cached per schema node. Second, `{}` must pass that node, for each overlay that opts out, with requiredness read from the requirement markers. A block that fails either check is a potential move: its hint names the check that failed, and its hover lists the overlays and the schema's own messages, so the user decides the fix. A failed `anyOf` or `oneOf` is listed as its alternatives, each with its own failures, and a failed `not` reads as the description of the schema it sits in, so the user reads the schema's intent without opening it. Such a potential move has no link. Once the schemas agree, or the overlays hold the block, the suggestions worked out next offer the move.
+A block the walk finds then passes two schema checks before it is offered. First, every overlay with a file, holding the block or not, reads the node at the block's path in its own schema, and those nodes must be the same. A node is compared by a hash of it with its references resolved and its annotations (`description`, `title`, `examples`, `$comment`) set aside, its requirement marker kept, cached per schema node. Second, each opt-out must pass the node at its own path in the schema of the overlay that takes it: `{}`, `[]` or the default, with requiredness read from the requirement markers. A block that fails either check is a potential move: its hint names the check that failed, and its hover lists the overlays and the schema's own messages, so the user decides the fix. A failed `anyOf` or `oneOf` is listed as its alternatives, each with its own failures, and a failed `not` reads as the description of the schema it sits in, so the user reads the schema's intent without opening it. Such a potential move has no link. Once the schemas agree, or the overlays hold the block, the suggestions worked out next offer the move.
 
 A field directly under the node marked `[~required]` is one the `{}` opt-out leaves out, and the extension does not read the condition. A block whose opt-out leaves one out is also a potential move, and its hover names the overlays and those fields and says the extension cannot tell whether the move is safe. The user may judge it safe, so its hover keeps the link, and the click applies the move as any other.
 
-Moves of neighboring keys in one map are one move: two moves combine when the same overlays hold each and the same overlays opt out, and each key follows the other in every overlay holding them. Its hint names the keys, its hover lists the blocks in order, and the click writes them into the common layer one after another in that order, each placed and spaced by the overlays as they stood before the click, and each checked against the folds as a move of its own. While the cursor is on a suggestion's light bulb line, a border marks every line the suggestion takes.
+Moves of neighboring keys in one map are one move: two moves combine when the same overlays hold each and the same overlays opt out, each key follows the other in every overlay holding them, and the combined move holds at most one difference. Its hint names the keys, its hover lists the blocks in order, and the click writes them into the common layer one after another in that order, each placed and spaced by the overlays as they stood before the click, and each checked against the folds as a move of its own. While the cursor is on a suggestion's light bulb line, a border marks every line the suggestion takes.
 
 A potential move is information. Its gutter mark is the info mark, its hint starts with `ⓘ`, and it colors neither its file's name nor any folder above it.
 
-A value repeated across the overlays is a duplicate. `layers.duplicate_check` bounds where the editor looks for one: it runs `depth` levels below the document root and no deeper, or the depth `key_depths` gives under a top-level key it lists, passes over the keys `skip_keys` lists at any depth, and suggests a duplicate at its topmost path. A key counts as one level: `a.b.c` is three levels deep.
-
-An overlay's value at a path is what its fold holds there: its own value, else the common layer's. When more than half the overlays that have a file, and at least two, hold one value the common layer does not, the editor suggests moving it into the common layer; the common layer's own value casts no vote. It is a move, with the move's hint, link and schema checks, and one click:
+A scalar, a list or a map in flow style is a unit by value. An overlay's value at its path is what its fold holds there: its own value, else the common layer's. When more than half the overlays that have a file, and at least two, hold one value the common layer does not, the editor suggests moving it into the common layer; the common layer's own value casts no vote. Every overlay holding another value, or keeping the common layer's former value, or lacking it, is the unit's one difference. One click:
 
 - writes the value into the common layer at the path, over what the common layer held there, opening the maps above it the common layer lacks;
 - deletes it from each overlay holding it, and a parent map left empty by that;
 - writes the common layer's former value into each overlay whose fold held it;
 - leaves each overlay holding another value with its own;
-- writes `{}` into each overlay whose fold held nothing, for a map;
+- writes `[]`, `{}` or the schema default into each overlay whose fold held nothing;
 - saves every file it changed.
 
-A scalar or a list that some overlay's fold lacks, a map where the common layer also holds a map, or where an overlay keeping its own value holds a map, which merges and is compared key by key below it, a map outside the locals the common layer does not hold, which is a block move's, and a path inside a block suggested for extraction are not suggested this way. The hover also names the overlays that keep the common layer's former value and those that keep their own.
+A map where the common layer also holds a map, or where an overlay keeping its own value holds a map, merges, and is not moved by value. An empty map or list is an opt-out, not content, and is not moved. The hover also names the overlays that keep the common layer's former value and those that keep their own.
 
-What an overlay holds the same as the common layer at the same path is a duplicate too, and the editor suggests deleting it from that overlay. A key whose value is empty in the overlay or the common layer is not a duplicate, because an overlay's `null` deletes the key. One click deletes the duplicate, and a parent map left empty by that, and saves the file. That overlay's folded document reads the same after it.
+What an overlay holds the same as the common layer at the same path, no deeper than the unit, is a duplicate too, and the editor suggests deleting it from that overlay at its topmost path. A key whose value is empty in the overlay or the common layer is not a duplicate, because an overlay's `null` deletes the key. One click deletes the duplicate, and a parent map left empty by that, and saves the file. That overlay's folded document reads the same after it.
 
 The parse gives every node an id from a table its stack shares: a scalar's from its type and value, a list's from its items' ids in order, a map's from its keys and their values' ids, keys sorted. A second id counts every scalar alike, so two blocks with the same keys at every depth share it. Equal ids are equal values, so comparing two blocks is comparing two numbers, and comments, quoting, flow or block style and key order do not count. Each id sits beside its node's source range, so a match leads back to the exact lines. The parse that answers every edit computes the ids, and an unchanged block keeps its id. One walk over the overlays' trees, path by path, finds the suggestions: where the overlays' ids agree the walk stops, and where they differ it descends only as far as the differences. The table belongs to the stack and goes with it when the stack is evicted.
 
@@ -308,10 +308,8 @@ dsls:
       overlay_folders: [dev, staging]
       common_layer_discovery: ancestor
       duplicate_check:
-        depth: 3
-        key_depths:
-          data_source: 2
-          locals: 2
+        depth: 2
+        key_depths: {}
         skip_keys: [schema_version]
     placeholder:
       pattern: "\\$\\{(?<body>[^}\\n]*)\\}"
