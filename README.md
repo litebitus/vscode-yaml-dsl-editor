@@ -87,7 +87,20 @@ A block the overlays repeat moves into the common layer in one click, its differ
 
 ### Overlay diff
 
-Select lines and click the diff button in the editor's title bar: one view beside the file shows how every overlay configures them, each differing value labeled with the overlays that hold it, each difference in its own color. A button on the view narrows it to the overlays you check. The colors are theme colors you can override with `workbench.colorCustomizations`.
+Select lines, then open the diff with any of:
+
+- the diff button <img src="media/diff-button.png" alt="diff button" height="16"> in the editor's title bar
+- `Diff across overlays` in the right-click menu
+- `YAML DSL: Diff across overlays` in the Command Palette
+
+One view beside the file shows how every overlay configures them, each differing value labeled with the overlays that hold it, each difference in its own color. The view follows the selection.
+
+Narrow the view to the overlays you check with either:
+
+- the button in the view's title bar
+- `YAML DSL: Choose overlays to diff` in the Command Palette
+
+The colors are theme colors you can override with `workbench.colorCustomizations`.
 
 ### Responsive and bounded
 
@@ -166,3 +179,7 @@ Before the bump, `make publish` runs `make test-antigravity` and `make test-curs
 
 To only build the .vsix without publishing: `make package`.
 To retry a single store for the current version: `make publish-ovsx` / `make publish-vsce`.
+
+## Footnotes
+
+The diff button image is the `diff` icon from [Codicons](https://github.com/microsoft/vscode-codicons), © Microsoft, CC BY 4.0.
