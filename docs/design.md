@@ -626,7 +626,7 @@ A file matching two DSLs is reported and claimed by neither. Other YAML is untou
 
 ## Ownership
 
-The extension contributes the language `yaml-dsl`. It starts only when a workspace folder holds `yaml-dsl.yml`, and leaves a folder without one alone, even in a window where another folder has one. When the workspace config loads, each DSL's files are associated with that language: those its `file_includes` globs match and its `file_excludes` globs do not. Such a file opens as `yaml-dsl`, and the language server's document selector is that language.
+The extension contributes the language `yaml-dsl`. It starts only when a workspace folder holds `yaml-dsl.yml`, and leaves a folder without one alone, even in a window where another folder has one. When the workspace config loads, each DSL's files are associated with that language: those its `file_includes` globs or the `{concern}` names in its `layers.common_layer_files` match and its `file_excludes` globs do not. Such a file opens as `yaml-dsl`, and the language server's document selector is that language.
 
 An extension that selects `yaml` does not own these files and does not activate on them. The Red Hat YAML extension is one of those. A file that matches no DSL pattern stays `yaml`.
 
