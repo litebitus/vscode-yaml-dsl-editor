@@ -104,6 +104,12 @@
           "dark": "./media/fileicon.svg"
         },
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "yaml-dsl-overlay-diff",
+        "aliases": [
+          "YAML DSL overlay diff"
+        ]
       }
     ],
     "grammars": [
@@ -111,6 +117,118 @@
         "language": "yaml-dsl",
         "scopeName": "source.yaml.dsl",
         "path": "./syntaxes/yaml-dsl.tmLanguage.json"
+      },
+      {
+        "language": "yaml-dsl-overlay-diff",
+        "scopeName": "source.yaml.dsl.overlay-diff",
+        "path": "./syntaxes/yaml-dsl-overlay-diff.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "yaml-dsl-editor.diffAcrossOverlays",
+        "title": "Diff across overlays",
+        "category": "YAML DSL",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "yaml-dsl-editor.chooseDiffOverlays",
+        "title": "Choose overlays to diff",
+        "category": "YAML DSL",
+        "icon": "$(filter)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "yaml-dsl-editor.diffAcrossOverlays",
+          "when": "yamlDslEditor.dslFileHasSelection",
+          "group": "navigation"
+        },
+        {
+          "command": "yaml-dsl-editor.chooseDiffOverlays",
+          "when": "resourceScheme == yaml-dsl-overlay-diff",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "yaml-dsl-editor.diffAcrossOverlays",
+          "when": "editorLangId == yaml-dsl && editorHasSelection",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "yaml-dsl-editor.diffAcrossOverlays",
+          "when": "yamlDslEditor.dslFileHasSelection"
+        },
+        {
+          "command": "yaml-dsl-editor.chooseDiffOverlays",
+          "when": "resourceScheme == yaml-dsl-overlay-diff"
+        }
+      ]
+    },
+    "colors": [
+      {
+        "id": "yamlDslEditor.overlayDiff.difference1",
+        "description": "Background of a difference in an overlay diff, first color of the palette.",
+        "defaults": {
+          "dark": "#D68C8C47",
+          "light": "#D68C8C47",
+          "highContrast": "#D68C8C47",
+          "highContrastLight": "#D68C8C47"
+        }
+      },
+      {
+        "id": "yamlDslEditor.overlayDiff.difference2",
+        "description": "Background of a difference in an overlay diff, second color of the palette.",
+        "defaults": {
+          "dark": "#82AAD247",
+          "light": "#82AAD247",
+          "highContrast": "#82AAD247",
+          "highContrastLight": "#82AAD247"
+        }
+      },
+      {
+        "id": "yamlDslEditor.overlayDiff.difference3",
+        "description": "Background of a difference in an overlay diff, third color of the palette.",
+        "defaults": {
+          "dark": "#D2BE8247",
+          "light": "#D2BE8247",
+          "highContrast": "#D2BE8247",
+          "highContrastLight": "#D2BE8247"
+        }
+      },
+      {
+        "id": "yamlDslEditor.overlayDiff.difference4",
+        "description": "Background of a difference in an overlay diff, fourth color of the palette.",
+        "defaults": {
+          "dark": "#8CBE9647",
+          "light": "#8CBE9647",
+          "highContrast": "#8CBE9647",
+          "highContrastLight": "#8CBE9647"
+        }
+      },
+      {
+        "id": "yamlDslEditor.overlayDiff.difference5",
+        "description": "Background of a difference in an overlay diff, fifth color of the palette.",
+        "defaults": {
+          "dark": "#AA96D247",
+          "light": "#AA96D247",
+          "highContrast": "#AA96D247",
+          "highContrastLight": "#AA96D247"
+        }
+      },
+      {
+        "id": "yamlDslEditor.overlayDiff.difference6",
+        "description": "Background of a difference in an overlay diff, sixth color of the palette.",
+        "defaults": {
+          "dark": "#D7A57D47",
+          "light": "#D7A57D47",
+          "highContrast": "#D7A57D47",
+          "highContrastLight": "#D7A57D47"
+        }
       }
     ]
   },

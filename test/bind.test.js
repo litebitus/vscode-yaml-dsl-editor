@@ -486,3 +486,41 @@ test('a layer no editor has open is watched while its stack is loaded, and a cha
   assert.match(await foldOfStaging(), /size: 3/);
   assert.ok(connection.notifications.some((notification) => notification.method === 'yaml-dsl/reanalyzed'));
 });
+
+test('the server answers a layer file\'s overlays and the diff of a selection across them', async () => {
+  const layeredConfig = configText(dslEntry('resources', {
+    layers: {
+      overlay_folders: ['dev', 'staging'],
+      common_layer_discovery: 'parent',
+      duplicate_check: { depth: 1, key_depths: {}, skip_keys: [] },
+    },
+  }));
+  const files = {
+    '/repo/app/mock.yml': 'shared: 1\n',
+    '/repo/app/dev/mock.yml': 'size: 1\n',
+    '/repo/app/staging/mock.yml': 'size: 2\n',
+  };
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const workspace = bind(connection, documents, {
+    readFile: async (filePath) => files[filePath] ?? null,
+    fetchText: async () => null,
+  });
+  await connection.handlers['yaml-dsl/config']({ entries: [{ text: layeredConfig, dir: '/repo' }] });
+  const uri = 'file:///repo/app/dev/mock.yml';
+  await documents.handlers.open({ document: { uri, getText: () => files['/repo/app/dev/mock.yml'] } });
+  await workspace.whenIdle();
+  const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 7 } };
+  assert.deepEqual(await connection.handlers['yaml-dsl/overlayDiffStack']({ uri }), {
+    title: 'app',
+    overlayNames: ['dev', 'staging'],
+  });
+  const diff = await connection.handlers['yaml-dsl/overlayDiff']({ uri, range, overlayNames: ['dev', 'staging'] });
+  assert.equal(diff.title, 'app');
+  assert.deepEqual(diff.lines.map((line) => line.text), [
+    '# dev, staging: 1 difference',
+    'size: 1  # dev',
+    'size: 2  # staging',
+  ]);
+  assert.equal(await connection.handlers['yaml-dsl/overlayDiff']({ uri, range }), null);
+});

@@ -1,0 +1,5 @@
+mocktype:
+  queue:
+    size: 10
+    retry:
+      attempts: 3

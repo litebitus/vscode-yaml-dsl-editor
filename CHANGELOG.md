@@ -4,6 +4,7 @@
 
 - Layers: `layers.common_layer_files` lists the names a common layer may take, so a concern below its overlays can have its own, which discovery and moves prefer.
 - Suggestions: the move link names the common layer file it writes into, `new` when the move creates it.
+- Overlay diff: a title-bar button on selected lines opens a read-only view of how the overlays differ, which follows the selection.
 
 ## 0.4.1 - 2026-10-13
 

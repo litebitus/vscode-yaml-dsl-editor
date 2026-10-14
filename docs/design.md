@@ -197,7 +197,28 @@ The schema is not the engine's checks. The editor handles everything about autho
 
 ## Diffing across overlays
 
-The command opens the stack's overlays together. Each entry is that overlay's folded document: the common layer merged with the overlay file by the same deep merge the engine uses. A path whose folded value is the same in every overlay is quiet. A path whose folded value differs is the diff. An overlay with no file is empty on the common layer, not a missing stack.
+How a block is configured differently across overlays is read in one view, never by opening each overlay file and comparing by eye. While lines of a layer file are selected, a diff button sits in the editor's title bar and "Diff across overlays" tops the editor's context menu, whether or not a suggestion exists. One click opens the view with every overlay, beside the file and leaving the focus there; a button on the view chooses which overlays it diffs, the current ones checked, and renders it again with them. While the view is open it follows the selection: selecting lines in any layer file of its stack renders it again with the same overlays. The view is a read-only document opened beside the file, titled with the stack's path from the workspace root, overlay directory and file name left out: it shows the differences, and resolving them is the author's.
+
+The view's first line names the overlays it diffs and how many differences it found, `no differences` when they all agree. The view diffs the keys the selected lines hold, their nested lines included, and writes the path from the document root down to them as plain lines for context. It renders them the way a move writes a block into the common layer: copied from the first overlay that holds them, in that overlay's key order, with a list or map value in flow style. Each overlay's side is its folded document, the common layer merged with the overlay file by the same deep merge the engine uses. Comments are never a difference.
+
+- A line every checked overlay folds alike is written once.
+- A key whose value differs is written once per distinct value, the lines grouped together, each labeled with the overlays that hold it in `layers.overlay_folders` order.
+- A key an overlay lacks is written struck, `key:`, among that key's lines and labeled with the overlay. Its parents stay as plain lines, so a missing key is struck at its leaf wherever it sits.
+- A block an overlay lacks entirely is struck once at its key, above the block, and the lines below diff the overlays that hold it.
+
+Each difference, every line of one key, takes one background color. The next difference takes the next color of a palette of mellow shades contributed as theme colors, so adjacent differences never share one.
+
+```
+mocktype:
+  shared:
+    label: mock-shared
+~   size: 1  # overlay-1, overlay-3
+~   size: 2  # overlay-2
+    retention:
+~     days: 7  # overlay-1, overlay-3
+~     d̶a̶y̶s̶:̶  # overlay-2
+    tags: [a]
+```
 
 ## Suggestions
 

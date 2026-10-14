@@ -85,6 +85,10 @@ A reference nothing declares, an unknown placeholder and a call the DSL's functi
 
 A block the overlays repeat moves into the common layer in one click, its differences written as locals. A repeat of the common layer is deleted from an overlay the same way. Every move is checked against each overlay's schema first. One undo reverts the whole move, across every file, and saves them.
 
+### Overlay diff
+
+Select lines and click the diff button in the editor's title bar: one view beside the file shows how every overlay configures them, each differing value labeled with the overlays that hold it, each difference in its own color. A button on the view narrows it to the overlays you check. The colors are theme colors you can override with `workbench.colorCustomizations`.
+
 ### Responsive and bounded
 
 The active file's work starts at once, ahead of background work, and every cache has a set capacity.
@@ -133,7 +137,7 @@ F5 (Extension Development Host). There is no compile step. The extension is plai
 
 ### Tests
 
-`make test` runs the unit suite and its coverage gate. `make test-all` runs that suite, then downloads each exact version in `vscodeTestVersions` in `package.json` and runs `test/integration` in it. It does not use an editor installed on the machine. `make package` runs `test-all` before it builds the `.vsix`.
+`make test` runs the unit suite and its coverage gate. `make test-all` runs that suite, then downloads each exact version in `vscodeTestVersions` in `package.json` and runs `test/integration` in it. It does not use an editor installed on the machine. `make test-antigravity` and `make test-cursor` run `test/integration` in the Antigravity IDE and Cursor installed under `/Applications`, and are skipped when that editor is not installed. `make package` runs `test-all` before it builds the `.vsix`.
 
 ### Publish
 
@@ -158,7 +162,7 @@ make publish              # bump patch; publish to Open VSX + VS Code Marketplac
 make publish BUMP=minor   # bump minor instead
 ```
 
-The version bump renames the CHANGELOG's `## Unreleased` heading to the new version and the date, in the release commit; a release without that heading stops before the bump.
+Before the bump, `make publish` runs `make test-antigravity` and `make test-cursor`, so a release is tested in each target editor installed on the machine. The version bump renames the CHANGELOG's `## Unreleased` heading to the new version and the date, in the release commit; a release without that heading stops before the bump.
 
 To only build the .vsix without publishing: `make package`.
 To retry a single store for the current version: `make publish-ovsx` / `make publish-vsce`.

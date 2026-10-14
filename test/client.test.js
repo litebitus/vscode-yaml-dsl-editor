@@ -87,6 +87,8 @@ function fakeVscode(options = {}) {
         };
       },
       registerTextDocumentContentProvider(scheme, value) {
+        vscode.providersByScheme[scheme] = value;
+        if (scheme !== 'yaml-dsl-fold') return disposable();
         provider.scheme = scheme;
         provider.value = value;
         return disposable();
@@ -113,7 +115,10 @@ function fakeVscode(options = {}) {
       },
     },
     commands: options.commands || {
-      executeCommand: async (...args) => { vscode.peeked.push(args); },
+      executeCommand: async (...args) => {
+        if (args[0] === 'setContext') vscode.contextsSet.push(args.slice(1));
+        else vscode.peeked.push(args);
+      },
       registerCommand(name, fn) {
         vscode.commandsByName[name] = fn;
         return disposable();
@@ -124,12 +129,14 @@ function fakeVscode(options = {}) {
     },
     shown: [],
     peeked: [],
+    contextsSet: [],
     decorations: [],
     commandsByName: {},
     languagesSet: [],
     listeners,
     watcher,
     provider,
+    providersByScheme: {},
   };
   return vscode;
 }

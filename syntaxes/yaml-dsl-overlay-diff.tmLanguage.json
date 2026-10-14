@@ -1,0 +1,7 @@
+{
+  "name": "YAML DSL overlay diff",
+  "scopeName": "source.yaml.dsl.overlay-diff",
+  "patterns": [
+    { "include": "source.yaml.dsl" }
+  ]
+}

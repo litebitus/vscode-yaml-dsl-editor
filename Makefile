@@ -12,11 +12,13 @@ VSIX = yaml-dsl-editor.vsix
 VERSION = $(shell node -p "require('./package.json').version")
 PUBLISHER = $(shell node -p "require('./package.json').publisher")
 EXT_ID = $(PUBLISHER).$(shell node -p "require('./package.json').name")
+ANTIGRAVITY_EXECUTABLE = /Applications/Antigravity IDE.app/Contents/MacOS/Electron
+CURSOR_EXECUTABLE = /Applications/Cursor.app/Contents/MacOS/Cursor
 
-.PHONY: test test-all package install-cursor install-antigravity publish preflight bump push publish-ovsx publish-vsce uninstall
+.PHONY: test test-all test-antigravity test-cursor package install-cursor install-antigravity publish preflight bump push publish-ovsx publish-vsce uninstall
 
 test:
-	node --test --experimental-test-coverage \
+	node --test --test-timeout=5000 --test-force-exit --experimental-test-coverage \
 		--test-coverage-include='lib/**/*.js' \
 		--test-coverage-include-all \
 		--test-coverage-lines=90 \
@@ -29,6 +31,16 @@ test:
 # (cached in .vscode-test/), launches it with the extension, runs test/integration/
 test-all: test
 	npx vscode-test
+
+test-antigravity:
+	@if [ -x "$(ANTIGRAVITY_EXECUTABLE)" ]; then \
+		TARGET_IDE_LABEL=antigravity-ide TARGET_IDE_EXECUTABLE="$(ANTIGRAVITY_EXECUTABLE)" npx vscode-test; \
+	else echo "test-antigravity skipped: $(ANTIGRAVITY_EXECUTABLE) is not installed"; fi
+
+test-cursor:
+	@if [ -x "$(CURSOR_EXECUTABLE)" ]; then \
+		TARGET_IDE_LABEL=cursor TARGET_IDE_EXECUTABLE="$(CURSOR_EXECUTABLE)" npx vscode-test; \
+	else echo "test-cursor skipped: $(CURSOR_EXECUTABLE) is not installed"; fi
 
 package: test-all
 	vsce package -o $(VSIX)
@@ -51,7 +63,7 @@ install-antigravity:
 # push runs last so tags only reach the remote for published versions, and
 # pushes only the current version's tag; if the vsce step hangs and you
 # Ctrl+C, run `make push` afterwards.
-publish: preflight bump publish-ovsx publish-vsce push
+publish: preflight test-antigravity test-cursor bump publish-ovsx publish-vsce push
 
 # dirty check is stricter than npm version's own: also refuses on untracked
 # files, since vsce/ovsx package the working tree and would ship them uncommitted

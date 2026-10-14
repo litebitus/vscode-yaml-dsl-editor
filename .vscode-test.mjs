@@ -77,11 +77,20 @@ const base = {
   workspaceFolder: workspaceFile,
   mocha: {
     ui: 'tdd',
-    timeout: 20000,
+    timeout: 5000,
   },
 };
 
-export default defineConfig(versions.map((version) => ({
+const targetIde = process.env.TARGET_IDE_EXECUTABLE
+  ? [{
+    label: process.env.TARGET_IDE_LABEL,
+    useInstallation: { fromPath: process.env.TARGET_IDE_EXECUTABLE },
+    ...base,
+    launchArgs: [`--user-data-dir=${userDataWithPlantedMarks()}`],
+  }]
+  : null;
+
+export default defineConfig(targetIde || versions.map((version) => ({
   label: version,
   version,
   ...base,
