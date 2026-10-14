@@ -644,3 +644,4 @@ The extension's own settings are VS Code settings under the extension's name, `y
 - A move turns list and map differences into locals, and on a tie the common layer declares a list's local as `[]` and a map's as `{}`.
 - A local renamed in an overlay or the common layer, once the edit is done, gets a suggestion to rename it in every other file that declares or references it, as one multi-file edit.
 - `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.
+- Find All References on a declaration lists every reference to it across the common layer and each overlay.
