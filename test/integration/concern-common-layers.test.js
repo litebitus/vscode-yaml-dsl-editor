@@ -28,6 +28,7 @@ function applyArgumentIn(tooltip) {
 async function fileTextBecomes(filePath, expected) {
   const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
+    if (expected === null && !fs.existsSync(filePath)) return;
     if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === expected) return;
     await new Promise((resolve) => { setTimeout(resolve, 50); });
   }
@@ -62,6 +63,32 @@ suite('concern common layers', () => {
     );
     assert.equal(fs.readFileSync(fallbackPath, 'utf8'), fallbackText);
     await hintLabelsBecome(overlay, []);
+  });
+
+  test('undoing a move that created a concern\'s common layer removes the file and saves the overlays it restored', async () => {
+    const groupName = `concern-group-undone-${vscode.version}`;
+    fs.cpSync(concernPath('concern-group'), concernPath(groupName), { recursive: true });
+    const overlayPath = concernPath(groupName, 'overlay-1', 'concern-2', 'mock.yml');
+    const overlayText = fs.readFileSync(overlayPath, 'utf8');
+    const concernFile = concernPath(groupName, 'concern-2.mock.yml');
+    const overlay = (await shownDocument(overlayPath)).document;
+    await hintLabelsBecome(overlay, [MOVE_TO_COMMON_LAYER]);
+    await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(await hintTooltipOf(overlay)));
+    await fileTextBecomes(overlayPath, '');
+    const concernSaves = [];
+    const saveWatch = vscode.workspace.onWillSaveTextDocument((event) => {
+      if (event.document.uri.fsPath === concernFile) concernSaves.push(event.document.getText());
+    });
+    try {
+      await vscode.commands.executeCommand('undo');
+      await fileTextBecomes(overlayPath, overlayText);
+      await fileTextBecomes(concernFile, null);
+      await new Promise((resolve) => { setTimeout(resolve, 500); });
+    } finally {
+      saveWatch.dispose();
+    }
+    assert.deepEqual(concernSaves, []);
+    assert.equal(fs.existsSync(concernFile), false);
   });
 
   test('a move takes the comments above the keys it deletes and writes the first overlay\'s into the common layer', async () => {

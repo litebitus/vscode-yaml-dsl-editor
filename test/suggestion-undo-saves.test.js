@@ -40,6 +40,17 @@ test('an undo or redo that lands a file on the text before or after an apply sav
   assert.equal(redone.saves, 1);
 });
 
+test('an undo landing a file the apply created on its text before is not saved, and a redo is', async () => {
+  const undoSaves = createSuggestionUndoSaves();
+  undoSaves.recordApply([{ ...appliedFile(commonUri), fileCreated: true }]);
+  const undone = mockDocument(commonUri, beforeText);
+  assert.equal(await undoSaves.documentChanged(undone, true), false);
+  assert.equal(undone.saves, 0);
+  const redone = mockDocument(commonUri, afterText);
+  assert.equal(await undoSaves.documentChanged(redone, true), true);
+  assert.equal(redone.saves, 1);
+});
+
 test('an undo the editor marks dirty in a later change is saved then, unless the text moved on', async () => {
   const undoSaves = createSuggestionUndoSaves();
   undoSaves.recordApply([appliedFile(devUri)]);

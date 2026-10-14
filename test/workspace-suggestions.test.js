@@ -509,6 +509,9 @@ test('a concern without its common layer file folds with the default one, and a 
     concernEdit.edits[0].newText,
     'locals:\n  # mock note on size\n  size: local.base_size\n  base_size: 1\nqueue:\n  size: local.size\n',
   );
+  const fileCreatedByUri = Object.fromEntries(moved.files.map((file) => [file.uri, file.fileCreated]));
+  assert.equal(fileCreatedByUri[concernUri], true);
+  assert.equal(fileCreatedByUri[`file://${dev}`], false);
 });
 
 test('a concern common layer that exists is the common layer, and one that appears or goes switches the stack', async () => {

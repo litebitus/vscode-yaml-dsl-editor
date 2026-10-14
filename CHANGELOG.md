@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Suggestions: undoing a move that created a common layer file no longer tries to save the removed file.
+
 ## 0.5.1 - 2026-10-14
 
 - Suggestions: a move or a delete carries the comment above each key it deletes or writes, and each map a move opens.
