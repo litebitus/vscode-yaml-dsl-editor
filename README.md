@@ -22,7 +22,48 @@ Each DSL is a block in `yaml-dsl.yml`, and nothing about a DSL is built in.
 
 ### Layered stacks
 
-A common layer and its overlays are one stack. Each overlay's folded document, the common layer merged under it, opens beside the file you edit.
+A file's concern is the nearest directory above it that is not an overlay directory. A concern's overlays and the common layer they take are one stack. Each overlay's folded document, the common layer merged under it, opens beside the file you edit.
+
+#### Concern above its overlays
+
+```
+concern-1/
+├── mock-dsl.yml  # common layer of concern-1
+├── overlay-1/mock-dsl.yml  # overlay-1 of concern-1
+└── overlay-2/mock-dsl.yml  # overlay-2 of concern-1
+concern-2/
+├── mock-dsl.yml  # common layer of concern-2
+├── overlay-1/mock-dsl.yml  # overlay-1 of concern-2
+└── overlay-2/mock-dsl.yml  # overlay-2 of concern-2
+```
+
+```yaml
+layers:
+  overlay_folders: [overlay-1, overlay-2]
+  common_layer_discovery: parent
+```
+
+#### Concern below its overlays
+
+```
+concern-group/
+├── mock-dsl.yml  # fallback common layer, for a concern without its own
+├── concern-1.mock-dsl.yml  # common layer of concern-1
+├── overlay-1/
+│   ├── concern-1/mock-dsl.yml  # overlay-1 of concern-1
+│   └── concern-2/mock-dsl.yml  # overlay-1 of concern-2
+└── overlay-2/
+    ├── concern-1/mock-dsl.yml  # overlay-2 of concern-1
+    └── concern-2/mock-dsl.yml  # overlay-2 of concern-2
+```
+
+```yaml
+layers:
+  overlay_folders: [overlay-1, overlay-2]
+  common_layer_discovery: ancestor
+  common_layer_files:
+    mock-dsl.yml: ["{concern}.mock-dsl.yml", mock-dsl.yml]
+```
 
 ### Schema hover
 

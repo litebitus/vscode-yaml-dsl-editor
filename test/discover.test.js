@@ -49,3 +49,43 @@ test('parent takes the common layer only from the directory above the file\'s ow
   assert.equal(nested.activeOverlay, null);
   assert.equal(nested.overlays.two, '/repo/mock-stack/one/config/two/mock.yml');
 });
+
+const concernLayers = {
+  ...ancestorLayers,
+  commonLayerFiles: { 'mock.yml': ['{concern}.mock.yml', 'mock-common.yml', 'mock.yml'] },
+};
+
+test('a file below an overlay folder tries its concern\'s common layer first, then the plain names in order', () => {
+  const nested = discoverStack('/repo/mock-stack/one/config/mock.yml', concernLayers, root);
+  assert.deepEqual(nested.commonCandidates, [
+    '/repo/mock-stack/config.mock.yml',
+    '/repo/mock-stack/mock-common.yml',
+    '/repo/mock-stack/mock.yml',
+  ]);
+  assert.equal(nested.common, '/repo/mock-stack/config.mock.yml');
+  assert.equal(nested.id, '/repo/mock-stack/mock.yml#config');
+  const deeper = discoverStack('/repo/mock-stack/one/inner/config/mock.yml', concernLayers, root);
+  assert.equal(deeper.commonCandidates[0], '/repo/mock-stack/config.mock.yml');
+  assert.equal(deeper.overlays.two, '/repo/mock-stack/two/inner/config/mock.yml');
+});
+
+test('a file directly in an overlay folder skips the concern names', () => {
+  const direct = discoverStack('/repo/mock-stack/one/mock.yml', concernLayers, root);
+  assert.deepEqual(direct.commonCandidates, ['/repo/mock-stack/mock-common.yml', '/repo/mock-stack/mock.yml']);
+  assert.equal(direct.id, '/repo/mock-stack/mock.yml');
+});
+
+test('a common layer name opened itself finds the stack its overlays find', () => {
+  const concern = discoverStack('/repo/mock-stack/config.mock.yml', concernLayers, root);
+  const overlay = discoverStack('/repo/mock-stack/one/config/mock.yml', concernLayers, root);
+  assert.equal(concern.id, overlay.id);
+  assert.deepEqual(concern.overlays, overlay.overlays);
+  assert.equal(concern.activeOverlay, null);
+  const plain = discoverStack('/repo/mock-stack/mock-common.yml', concernLayers, root);
+  assert.equal(plain.id, '/repo/mock-stack/mock.yml');
+  assert.equal(plain.overlays.one, '/repo/mock-stack/one/mock.yml');
+  const keyed = discoverStack('/repo/mock-stack/mock.yml', concernLayers, root);
+  assert.equal(keyed.id, '/repo/mock-stack/mock.yml');
+  const unlisted = discoverStack('/repo/mock-stack/other.yml', concernLayers, root);
+  assert.deepEqual(unlisted.commonCandidates, ['/repo/mock-stack/other.yml']);
+});

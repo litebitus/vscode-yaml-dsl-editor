@@ -110,6 +110,16 @@ test('the hover names the block, its one difference or the overlays that opt out
   ].join('\n'));
 });
 
+test('the move link names the common layer file it writes into, new when the move creates it', () => {
+  const existing = { ...moveSuggestion, commonLayerFile: 'mock-stack/mock.yml', createsCommonLayer: false };
+  assert.match(hoverMarkdownText(existing), /^\[Move to common layer \(mock-stack\/mock\.yml\)\]\(command:/m);
+  const created = { ...moveSuggestion, commonLayerFile: 'mock-stack/config.mock.yml', createsCommonLayer: true };
+  assert.match(hoverMarkdownText(created), /^\[Move to common layer \(new mock-stack\/config\.mock\.yml\)\]\(command:/m);
+  assert.doesNotMatch(hoverMarkdownText(created), /Creates the common layer file/);
+  const marked = { ...existing, commonLayerFile: 'mock_stack/[mock].yml' };
+  assert.match(hoverMarkdownText(marked), /\(mock\\_stack\/\\\[mock\\\]\.yml\)\]/);
+});
+
 function fakeVscode(editors) {
   return {
     Range: class {

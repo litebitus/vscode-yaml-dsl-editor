@@ -210,6 +210,28 @@ test('owned files are watched by each DSL\'s include patterns under its config f
   assert.deepEqual(watched, ['/repo:**/mock.yml', '/repo:**/other.yml', '**/yaml-dsl.yml']);
 });
 
+test('a concern common layer name is watched beside the include patterns', async () => {
+  const layered = dslEntry('sample', {
+    file_includes: ['**/mock.yml'],
+    layers: {
+      overlay_folders: ['one'],
+      common_layer_discovery: 'ancestor',
+      common_layer_files: { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] },
+      duplicate_check: { depth: 1, key_depths: {}, skip_keys: [] },
+    },
+  });
+  const vscode = fakeVscode({ readFile: async () => Buffer.from(configText(layered)) });
+  vscode.RelativePattern = class { constructor(base, pattern) { this.base = base; this.pattern = pattern; } };
+  const watched = [];
+  const createWatcher = vscode.workspace.createFileSystemWatcher;
+  vscode.workspace.createFileSystemWatcher = (pattern) => {
+    watched.push(typeof pattern === 'string' ? pattern : `${pattern.base}:${pattern.pattern}`);
+    return createWatcher(pattern);
+  };
+  await activatedFully(vscode, { subscriptions: [] }, () => fakeClient());
+  assert.deepEqual(watched, ['/repo:**/mock.yml', '/repo:**/*.mock.yml', '**/yaml-dsl.yml']);
+});
+
 test('an owned file deleted from disk while open with no unsaved edits is closed for the server', async () => {
   const vscode = fakeVscode({
     readFile: async () => Buffer.from(configText(dslEntry('sample', { file_includes: ['**/mock.yml'] }))),

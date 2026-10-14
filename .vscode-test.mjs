@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,8 +16,11 @@ const runFolder = realpathSync(mkdtempSync(path.join(tmpdir(), 'yaml-dsl-editor-
 const writableFolder = path.join(runFolder, 'writable');
 mkdirSync(writableFolder);
 copyFileSync(path.join(fixturesFolder, 'yaml-dsl.yml'), path.join(writableFolder, 'yaml-dsl.yml'));
+const concernFolder = path.join(runFolder, 'concerns');
+cpSync(fileURLToPath(new URL('./test/concern-fixtures', import.meta.url)), concernFolder, { recursive: true });
 const workspaceFile = path.join(runFolder, 'integration.code-workspace');
-writeFileSync(workspaceFile, JSON.stringify({ folders: [{ path: fixturesFolder }, { path: writableFolder }] }));
+const workspaceFolders = [{ path: fixturesFolder }, { path: writableFolder }, { path: concernFolder }];
+writeFileSync(workspaceFile, JSON.stringify({ folders: workspaceFolders }));
 
 const sha256Of = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
 const plantedStackFolder = path.join(writableFolder, 'planted-marks');

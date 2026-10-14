@@ -411,6 +411,7 @@ test('a stack without a common layer file is offered moves, and applying one cre
   const stackId = await arrived;
   const devMarks = ws.suggestionMarks(stackId).files.find((file) => file.uri === `file://${dev}`).marks;
   assert.equal(devMarks[0].suggestion.createsCommonLayer, true);
+  assert.equal(devMarks[0].suggestion.commonLayerFile, 'no-common-stack/mock.yml');
   const moved = await ws.applySuggestion(stackId, devMarks[0].suggestion.id);
   const commonUri = `file://${root}/mock.yml`;
   const creation = moved.edit.documentChanges.findIndex((change) => change.kind === 'create');
@@ -423,4 +424,127 @@ test('a stack without a common layer file is offered moves, and applying one cre
   });
   assert.ok(creation < commonEdit);
   assert.match(moved.edit.documentChanges[commonEdit].edits[0].newText, /^locals:\n {2}queue_size: 1\n/);
+});
+
+const concernConfig = configText(dslEntry('resource', {
+  file_includes: ['**/mock.yml'],
+  layers: {
+    overlay_folders: OVERLAYS,
+    common_layer_discovery: 'ancestor',
+    common_layer_files: { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] },
+    duplicate_check: { depth: 1, key_depths: {}, skip_keys: [] },
+  },
+  key_sort_orders: [
+    { path: '$', skip_keys: [], order: 'alphabetical', first_keys: [], last_keys: [] },
+    { path: '$..*', skip_keys: [], order: 'alphabetical', first_keys: [], last_keys: [] },
+  ],
+  placeholder: placeholder(),
+  locals: { scope_name: 'local' },
+  scopes: { local: scope() },
+  declarations: [declaration('$.locals.*', 'local', { key_token: 'first_word' })],
+  references: [reference('^local\\.(?<name>[a-z0-9_]+)$', 'local')],
+}));
+
+function concernStackFiles(root) {
+  const overlay = 'queue:\n  size: 1\n';
+  return {
+    [`${root}/mock.yml`]: 'alarm:\n  period: 60\n',
+    [`${root}/dev/config/mock.yml`]: overlay,
+    [`${root}/staging/config/mock.yml`]: overlay,
+    [`${root}/production/config/mock.yml`]: overlay,
+  };
+}
+
+test('a concern without its common layer file folds with the default one, and a move creates the concern\'s', async () => {
+  const timers = fakeTimers();
+  const root = '/repo/concern-stack';
+  const files = concernStackFiles(root);
+  const dev = `${root}/dev/config/mock.yml`;
+  const ws = workspaceOver(files, timers);
+  await ws.setConfigs([{ text: concernConfig, dir: '/repo' }]);
+  await ws.sync(`file://${dev}`, dev, files[dev]);
+  const arrived = nextSuggestions(ws);
+  timers.fireAll();
+  const stackId = await arrived;
+  assert.equal(stackId, `${root}/mock.yml#config`);
+  assert.equal(ws.cache.get(stackId).data.common, `${root}/mock.yml`);
+  assert.match(ws.foldText(stackId, 'dev'), /alarm:\n {2}period: 60/);
+  const devMarks = ws.suggestionMarks(stackId).files.find((file) => file.uri === `file://${dev}`).marks;
+  assert.equal(devMarks[0].suggestion.createsCommonLayer, true);
+  assert.equal(devMarks[0].suggestion.commonLayerFile, 'concern-stack/config.mock.yml');
+  const moved = await ws.applySuggestion(stackId, devMarks[0].suggestion.id);
+  const concernUri = `file://${root}/config.mock.yml`;
+  assert.deepEqual(moved.edit.documentChanges[0], {
+    kind: 'create',
+    uri: concernUri,
+    options: { ignoreIfExists: true },
+  });
+  const touched = moved.edit.documentChanges
+    .filter((change) => change.textDocument)
+    .map((change) => change.textDocument.uri);
+  assert.equal(touched.includes(`file://${root}/mock.yml`), false);
+  const concernEdit = moved.edit.documentChanges
+    .find((change) => change.textDocument && change.textDocument.uri === concernUri);
+  assert.equal(concernEdit.edits.length, 1);
+  assert.equal(concernEdit.edits[0].newText, 'alarm:\n  period: 60\nqueue:\n  size: 1\n');
+});
+
+test('a concern common layer that exists is the common layer, and one that appears or goes switches the stack', async () => {
+  const timers = fakeTimers();
+  const root = '/repo/concern-switch';
+  const files = concernStackFiles(root);
+  const concern = `${root}/config.mock.yml`;
+  const dev = `${root}/dev/config/mock.yml`;
+  const ws = workspaceOver(files, timers);
+  await ws.setConfigs([{ text: concernConfig, dir: '/repo' }]);
+  await ws.sync(`file://${dev}`, dev, files[dev]);
+  const stackId = `${root}/mock.yml#config`;
+  assert.equal(ws.cache.get(stackId).data.common, `${root}/mock.yml`);
+  files[concern] = 'locals:\n  team: mock\n';
+  await ws.layersChanged([concern]);
+  assert.equal(ws.cache.get(stackId).data.common, concern);
+  assert.doesNotMatch(ws.foldText(stackId, 'dev'), /alarm/);
+  assert.match(ws.foldText(stackId, 'dev'), /team: mock/);
+  const before = ws.cache.get(stackId).data;
+  files[`${root}/mock.yml`] = 'alarm:\n  period: 120\n';
+  await ws.layersChanged([`${root}/mock.yml`]);
+  assert.equal(ws.cache.get(stackId).data, before);
+  delete files[concern];
+  await ws.layersChanged([concern]);
+  assert.equal(ws.cache.get(stackId).data.common, `${root}/mock.yml`);
+  assert.match(ws.foldText(stackId, 'dev'), /period: 120/);
+});
+
+test('opening a concern common layer joins the stack its overlays make', async () => {
+  const timers = fakeTimers();
+  const root = '/repo/concern-open';
+  const files = { ...concernStackFiles(root), [`${root}/config.mock.yml`]: 'locals:\n  team: mock\n' };
+  const concern = `${root}/config.mock.yml`;
+  const dev = `${root}/dev/config/mock.yml`;
+  const ws = workspaceOver(files, timers);
+  await ws.setConfigs([{ text: concernConfig, dir: '/repo' }]);
+  await ws.sync(`file://${dev}`, dev, files[dev]);
+  await ws.sync(`file://${concern}`, concern, 'locals:\n  team: other\n');
+  const { data } = ws.cache.get(`${root}/mock.yml#config`);
+  assert.equal(data.common, concern);
+  assert.equal(data.files.get(concern).text, 'locals:\n  team: other\n');
+});
+
+test('an overlay repeating the default common layer a concern folds with is offered the delete, which creates nothing', async () => {
+  const timers = fakeTimers();
+  const root = '/repo/concern-delete';
+  const files = concernStackFiles(root);
+  const dev = `${root}/dev/config/mock.yml`;
+  files[dev] = 'alarm:\n  period: 60\nqueue:\n  size: 2\n';
+  const ws = workspaceOver(files, timers);
+  await ws.setConfigs([{ text: concernConfig, dir: '/repo' }]);
+  await ws.sync(`file://${dev}`, dev, files[dev]);
+  const arrived = nextSuggestions(ws);
+  timers.fireAll();
+  const stackId = await arrived;
+  const deletion = ws.suggestionMarks(stackId).files
+    .flatMap((file) => file.marks)
+    .find((mark) => mark.suggestion.kind === 'delete');
+  assert.deepEqual(deletion.suggestion.path, ['alarm']);
+  assert.equal(deletion.suggestion.createsCommonLayer, false);
 });

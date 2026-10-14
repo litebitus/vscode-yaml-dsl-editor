@@ -32,6 +32,8 @@ dsls:
     layers:
       overlay_folders: [one, 2]
       common_layer_discovery: ancestor
+      common_layer_files:
+        mock.yml: ["{concern}.mock.yml", mock.yml]
       duplicate_check:
         depth: 3
         key_depths: { data_source: 2 }
@@ -149,6 +151,7 @@ test('a complete config states every field and keeps them', () => {
   assert.deepEqual(resources.layers, {
     overlayFolders: ['one'],
     commonLayerDiscovery: 'ancestor',
+    commonLayerFiles: { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] },
     duplicateCheck: { depth: 3, keyDepths: { data_source: 2 }, skipKeys: ['schema_version'] },
   });
   assert.equal(resources.placeholder.pattern, '\\$\\{(?<body>[^}]*)\\}');
@@ -245,6 +248,63 @@ test('the duplicate check states its depth and the keys it passes over', () => {
     'shallow.layers.duplicate_check.skip_keys is required',
     'unmapped.layers.duplicate_check.key_depths is required: a mapping of keys to whole numbers from 1',
   ]) assert.ok(parsed.error.includes(message), message);
+});
+
+test('common layer files list the names a common layer may take, each a file name, one without {concern}', () => {
+  const layered = (id, discovery, commonLayerFiles) => dslEntry(id, {
+    layers: {
+      overlay_folders: ['one'],
+      common_layer_discovery: discovery,
+      common_layer_files: commonLayerFiles,
+      duplicate_check: { depth: 1, key_depths: {}, skip_keys: [] },
+    },
+  });
+  const parsed = parseConfig(configText(
+    layered('stated', 'ancestor', { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] }),
+    layered('unmapped', 'ancestor', ['mock.yml']),
+    layered('empty', 'ancestor', { 'mock.yml': [] }),
+    layered('pathed', 'ancestor', { 'mock.yml': ['nested/mock.yml'] }),
+    layered('twice', 'ancestor', { 'mock.yml': ['mock.yml', 'mock.yml'] }),
+    layered('doubled', 'ancestor', { 'mock.yml': ['{concern}.{concern}.yml', 'mock.yml'] }),
+    layered('concerned', 'ancestor', { 'mock.yml': ['{concern}.mock.yml'] }),
+    layered('parented', 'parent', { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] }),
+    layered('keyed', 'ancestor', { '..': ['mock.yml'] }),
+  ));
+  assert.deepEqual(parsed.dsls[0].layers.commonLayerFiles, { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] });
+  assert.ok(parsed.dsls.slice(1).every((dsl) => dsl.layers === null));
+  for (const message of [
+    'unmapped.layers.common_layer_files must be a mapping of a layer file name to the names its common layer may take',
+    'empty.layers.common_layer_files.mock.yml is required: a list of file names, the first tried first',
+    'pathed.layers.common_layer_files.mock.yml is required: a list of file names',
+    'twice.layers.common_layer_files.mock.yml lists a name more than once',
+    'doubled.layers.common_layer_files.mock.yml holds {concern} more than once in a name',
+    'concerned.layers.common_layer_files.mock.yml holds no name without {concern}',
+    'parented.layers.common_layer_files.mock.yml names a {concern} common layer, which only '
+      + 'common_layer_discovery: ancestor reaches',
+    'keyed.layers.common_layer_files... is keyed by a layer file name',
+  ]) assert.ok(parsed.error.includes(message), message);
+  const unstated = parseConfig(configText(dslEntry('unstated', {
+    layers: {
+      overlay_folders: ['one'],
+      common_layer_discovery: 'ancestor',
+      duplicate_check: { depth: 1, key_depths: {}, skip_keys: [] },
+    },
+  })));
+  assert.deepEqual(unstated.dsls[0].layers.commonLayerFiles, {});
+});
+
+test('a concern common layer belongs to its DSL whatever file_includes says, and file_excludes still applies', () => {
+  const layered = {
+    id: 'layered',
+    fileIncludes: ['**/mock.yml'],
+    fileExcludes: ['**/skip/**'],
+    layers: { commonLayerFiles: { 'mock.yml': ['{concern}.mock.yml', 'mock-common.yml', 'mock.yml'] } },
+  };
+  assert.equal(ownsFile(layered, '/repo/mock-stack/config.mock.yml'), true);
+  assert.equal(ownsFile(layered, '/repo/skip/config.mock.yml'), false);
+  assert.equal(ownsFile(layered, '/repo/mock-stack/mock-common.yml'), false);
+  assert.equal(ownsFile(layered, '/repo/mock-stack/other.yml'), false);
+  assert.equal(ownsFile({ ...layered, layers: null }, '/repo/mock-stack/config.mock.yml'), false);
 });
 
 test('a path is a JSONPath listed once per list; ..* ends it, and includes_subtree is read only where it shipped', () => {

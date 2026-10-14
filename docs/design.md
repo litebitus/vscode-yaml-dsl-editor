@@ -1,16 +1,16 @@
 # YAML DSL editor
 
-Authoring `sample.yml` is hard without this extension, and that is why it exists. A stack is a common layer and its overlays. The file on screen is one of those, not an overlay's full config. A field's documentation sits beside a `$ref` the usual YAML tooling never reads. A `ref` and a `local` are strings, so nothing jumps to the declaration. The extension is the editor that makes that document authorable.
+Authoring `mock-dsl.yml` is hard without this extension, and that is why it exists. A stack is a common layer and its overlays. The file on screen is one of those, not an overlay's full config. A field's documentation sits beside a `$ref` the usual YAML tooling never reads. A `ref` and a `local` are strings, so nothing jumps to the declaration. The extension is the editor that makes that document authorable.
 
 The extension is generic. Any DSL written this way is a block in the workspace config, `yaml-dsl.yml`. Nothing about a particular DSL is compiled into the extension, and the config states every rule: the extension has no defaults, because every DSL is different. The block says which files belong, the DSL's scopes, where names are declared and how they are referenced, its placeholders and functions, when the DSL has layers which directories are overlays, and a fallback schema for a document that does not name one. Scopes, references, placeholders and calls are generic: the editor validates, navigates, completes and hovers them the same way in every DSL. Each DSL's block supplies the syntax, and those syntaxes differ.
 
-`sample.yml` is the DSL this document works through. Its field types are shared definitions, because a value may be a scalar, a `ref`, or a bare `local`. A simpler DSL uses the same engine through its own config block. The first config block, and the first files the editor is proven against, are `sample.yml`.
+`mock-dsl.yml` is the DSL this document works through. Its field types are shared definitions, because a value may be a scalar, a `ref`, or a bare `local`. A simpler DSL uses the same engine through its own config block. The first config block, and the first files the editor is proven against, are `mock-dsl.yml`.
 
 Features are fine-tuned iteratively. The first slice is what any editor for a programming language provides: hover documentation, and navigation of refs and locals. Diffing overlays, suggestions, and extraction into the common layer come after that slice and are tuned the same way.
 
 ## Language server
 
-The editor is a language server. It has to be. Activating any `sample.yml` puts the whole stack in scope: the common layer and every adjacent overlay. The server holds that context. Switching from one file in the stack to another uses it. Rebuilding the stack on each switch would be slow.
+The editor is a language server. It has to be. Activating any `mock-dsl.yml` puts the whole stack in scope: the common layer and every adjacent overlay. The server holds that context. Switching from one file in the stack to another uses it. Rebuilding the stack on each switch would be slow.
 
 The server keeps the stack current as the files change, including the folded document of each overlay. Those folded documents are buffers in the editor view, so the author sees an overlay's full config instead of assembling it from the files. Hover and navigation run against the stack in scope, not against the active file alone.
 
@@ -65,19 +65,56 @@ Line coverage and branch coverage of the extension's own code are each at least 
 
 ## Common layer and overlays
 
-The core of a layered DSL is how a stack is composed. One `sample.yml` is the common layer. Each overlay is a `sample.yml` under a directory named in `layers.overlay_folders`, `one` or `two`, directly below the common layer's directory. `layers.common_layer_discovery` states how far below: `parent`, the overlay directory holds the file itself, `mock-stack/one/sample.yml`; `ancestor`, the file may sit deeper, at the same path below the overlay directory in every overlay, so `mock-stack/one/config/sample.yml` takes `mock-stack/sample.yml`, the nearest ancestor above an overlay directory. A file below no overlay directory is a common layer. The engine deep-merges the common layer under the overlay, and the folded document is what a plan sees. The same shape without an instance directory (`mock-family/sample.yml` beside `mock-family/one/`) is the same composition.
+The core of a layered DSL is how a stack is composed. One `mock-dsl.yml` is the common layer. Each overlay is a `mock-dsl.yml` under an overlay directory, one `layers.overlay_folders` names, such as `overlay-1` or `overlay-2`, directly below the common layer's directory. `layers.common_layer_discovery` states how far below: `parent`, the overlay directory holds the file itself, `concern-1/overlay-1/mock-dsl.yml`; `ancestor`, the file may sit deeper, at the same path below the overlay directory in every overlay, so `concern-group/overlay-1/concern-1/mock-dsl.yml` takes `concern-group/mock-dsl.yml`, the nearest ancestor above an overlay directory. A file below no overlay directory is a common layer. The engine deep-merges the common layer under the overlay, and the folded document is what a plan sees.
 
-```
-mock-stack/sample.yml
-mock-stack/one/sample.yml
-mock-stack/two/sample.yml
-mock-stack/three/sample.yml
-mock-stack/four/sample.yml
-```
+A file's concern is the nearest directory above it that is not an overlay directory: `concern-1` for `concern-1/overlay-1/mock-dsl.yml`, a concern above its overlays, and for `concern-group/overlay-1/concern-1/mock-dsl.yml`, a concern below them. A concern's overlays and the common layer they take are one stack. `layers.common_layer_files` maps an overlay's file name to the names its common layer may take in the overlay directories' parent, in order, and the first that exists is the common layer. A name holding `{concern}` is a concern's own common layer, tried only for a concern below its overlays. Under `mock-dsl.yml: ["{concern}.mock-dsl.yml", mock-dsl.yml]`, `concern-group/overlay-1/concern-1/mock-dsl.yml` takes `concern-group/concern-1.mock-dsl.yml`, else the fallback `concern-group/mock-dsl.yml`. A file whose name has no entry takes a common layer of its own name. A file a `{concern}` name matches belongs to the DSL as a common layer, whatever `file_includes` says.
 
 An author editing one of those files sees only that file. The language server buffers the stack in the editor view: each overlay's folded document, common layer merged with that overlay. Shared config lives in the common layer, including a local that a resource references. The `layers` block in the config is this composition.
 
 While any file in the stack is active, refs and locals resolve in that file's fold. Across overlays, the editor diffs the folded documents. A block repeated in every overlay is one edit away from drifting: the next change lands in a single overlay and the others keep the old copy. The editor suggests moving that block into the common layer, and one click applies it.
+
+### Concern above its overlays
+
+```
+concern-1/
+├── mock-dsl.yml  # common layer of concern-1
+├── overlay-1/mock-dsl.yml  # overlay-1 of concern-1
+└── overlay-2/mock-dsl.yml  # overlay-2 of concern-1
+concern-2/
+├── mock-dsl.yml  # common layer of concern-2
+├── overlay-1/mock-dsl.yml  # overlay-1 of concern-2
+└── overlay-2/mock-dsl.yml  # overlay-2 of concern-2
+```
+
+```yaml
+layers:
+  overlay_folders: [overlay-1, overlay-2]
+  common_layer_discovery: parent
+```
+
+### Concern below its overlays
+
+```
+concern-group/
+├── mock-dsl.yml  # fallback common layer, for a concern without its own
+├── concern-1.mock-dsl.yml  # common layer of concern-1
+├── overlay-1/
+│   ├── concern-1/mock-dsl.yml  # overlay-1 of concern-1
+│   └── concern-2/mock-dsl.yml  # overlay-1 of concern-2
+└── overlay-2/
+    ├── concern-1/mock-dsl.yml  # overlay-2 of concern-1
+    └── concern-2/mock-dsl.yml  # overlay-2 of concern-2
+```
+
+```yaml
+layers:
+  overlay_folders: [overlay-1, overlay-2]
+  common_layer_discovery: ancestor
+  common_layer_files:
+    mock-dsl.yml: ["{concern}.mock-dsl.yml", mock-dsl.yml]
+```
+
+A DSL with both takes this config, since `ancestor` also reaches a concern above its overlays.
 
 ## Formatting
 
@@ -109,7 +146,7 @@ A key holding a local placeholder is also known by the local's value. Moving a b
 
 Go to definition on a reference opens the declaration it names, and so does Command-click. A builtin has no declaration. A reference nothing visible declares is an error, and its hover reads `Invalid reference: <scope>.<name>`. When nothing visible matches, go to definition does not move. Resting the pointer on a reference that names a declaration opens no popup of the extension's. A reference naming several declarations carries a link, on which the editor shows its Command-click tooltip, and Command-click on it opens a popup at the reference showing them all, in this language, each section headed by its overlay's name, `common layer` for the common layer's, and the heading opens the declaration; go to definition on it does not move. The references peek is not opened.
 
-In `sample.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. Its scope is `<type>`, the mapping key enclosing the resource. A local is a key under `locals`, referenced as a whole scalar `local.<name>` or as `${local.<name>}` inside a scalar. A value shared by resources is a local in the common layer.
+In `mock-dsl.yml` a ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. Its scope is `<type>`, the mapping key enclosing the resource. A local is a key under `locals`, referenced as a whole scalar `local.<name>` or as `${local.<name>}` inside a scalar. A value shared by resources is a local in the common layer.
 
 The analysis classifies every reference: local when it resolves in the same file, external when it resolves in another file of the stack, error when nothing visible matches. The editor underlines each reference from the text as soon as the file opens, using the config's reference rules, and redraws it by its class once the analysis answers: a local reference keeps a straight underline and an external one is a squiggle, both in the text's own colors. An error turns red, text and squiggle, and its line carries an error mark in the gutter. The whole reference takes its class's underline, placeholders inside it included.
 
@@ -217,6 +254,8 @@ A list or map an overlay lacks is written as `[]` or `{}` for that overlay, and 
 
 A stack whose common layer file does not exist yet is the starting point extraction is for: its moves read the common layer as empty, and the click creates the file. A new common layer starts with the keys `layers.duplicate_check.skip_keys` names that every overlay holds the same, since those are the keys each layer states for itself.
 
+A move writes into the first of the names `layers.common_layer_files` tries for the stack. When that file does not exist and a later name's does, the click creates it holding the text of the common layer the overlays fold with now, so no fold changes beyond the move.
+
 Values are compared as written: a reference, a local and a placeholder are their text, whatever they resolve to. Maps are compared key by key, and lists whose items match in number item by item; a list whose items differ in number is one difference. A map unit with a difference is offered only in a DSL with locals, outside the locals, and only when at least one leaf is the same in every overlay that holds it, since the difference is written as a local and the unit lands whole in the common layer.
 
 One click on a map unit:
@@ -307,6 +346,8 @@ dsls:
     layers:
       overlay_folders: [dev, staging]
       common_layer_discovery: ancestor
+      common_layer_files:
+        resources.yml: ["{concern}.resources.yml", resources.yml]
       duplicate_check:
         depth: 2
         key_depths: {}
