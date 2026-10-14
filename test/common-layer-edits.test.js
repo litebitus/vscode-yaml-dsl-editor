@@ -9,6 +9,8 @@ const {
   sourceSpacingOf,
   NO_BLANK_LINES,
   blockLines,
+  commentedBlockLines,
+  keyCommentLines,
   normalizedEdits,
   applyEdits,
 } = require('../lib/common-layer-edits');
@@ -164,7 +166,61 @@ test('a deletion right under its parent\'s key line takes the blank lines after 
   const commented = 'queue:\n  # mock note\n  events: 1\n\n  other: 2\n';
   assert.equal(
     applyEdits(commented, [deletionOf(docOf(commented), ['queue', 'events'])]),
-    'queue:\n  # mock note\n\n  other: 2\n',
+    'queue:\n  other: 2\n',
+  );
+});
+
+test('a deletion takes the comment lines directly above the key it deletes, at the key\'s indentation', () => {
+  const section = 'keep: 1\n\n# mock section note\n# mock second line\nqueue:\n  # mock unit note\n  events: 1\n';
+  assert.equal(applyEdits(section, [deletionOf(docOf(section), ['queue', 'events'])]), 'keep: 1\n');
+  const sibling = 'queue:\n  a: 1\n  # mock unit note\n  events: 1\n';
+  assert.equal(applyEdits(sibling, [deletionOf(docOf(sibling), ['queue', 'events'])]), 'queue:\n  a: 1\n');
+  const apart = 'queue:\n  a: 1\n  # mock note on a\n\n  events: 1\n';
+  assert.equal(
+    applyEdits(apart, [deletionOf(docOf(apart), ['queue', 'events'])]),
+    'queue:\n  a: 1\n  # mock note on a\n',
+  );
+  const otherIndent = 'queue:\n  a:\n    b: 1\n    # mock note inside a\n  events: 1\n';
+  assert.equal(
+    applyEdits(otherIndent, [deletionOf(docOf(otherIndent), ['queue', 'events'])]),
+    'queue:\n  a:\n    b: 1\n    # mock note inside a\n',
+  );
+});
+
+test('an insertion before a commented key lands above its comment, spaced from above the comment', () => {
+  const doc = docOf('alpha: 1\n\n# mock note on gamma\ngamma: 3\n');
+  const spaced = (parentMap, parentPath, newKey) => ({
+    ...placementIn(parentMap, newKey, ALPHABETICAL, []),
+    spacing: { blankLinesAbove: 1, blankLinesBelow: 1 },
+  });
+  const insertion = insertionUnder(doc, ['beta'], ['beta'], (indent) => [`${' '.repeat(indent)}beta: 2`], spaced);
+  assert.equal(appliedEdits(doc.text, [insertion]), 'alpha: 1\n\nbeta: 2\n\n# mock note on gamma\ngamma: 3\n');
+  const source = docOf('# mock note on queue\nqueue:\n  a: 1\n');
+  assert.deepEqual(sourceSpacingOf([docOf(`keep: 1\n\n${source.text}`)], ['queue']), {
+    blankLinesAbove: 1,
+    blankLinesBelow: 0,
+  });
+});
+
+test('a commented block brings the comment above its key, and an opened key brings its own, at the new indentation', () => {
+  const source = docOf('# mock section note\nqueue:\n    # mock unit note\n    events:\n        a: 1\n');
+  const [queueEntry] = source.tree.entries;
+  const [eventsEntry] = queueEntry.value.entries;
+  assert.deepEqual(commentedBlockLines(source, eventsEntry, [], 2), ['  # mock unit note', '  events:', '      a: 1']);
+  assert.deepEqual(keyCommentLines(source, queueEntry, 0), ['# mock section note']);
+  assert.deepEqual(keyCommentLines(source, eventsEntry.value.entries[0], 6), []);
+  const target = docOf('alpha: 1\n');
+  const insertion = insertionUnder(
+    target,
+    ['queue', 'events'],
+    ['queue', 'events'],
+    (indent) => commentedBlockLines(source, eventsEntry, [], indent),
+    alphabetical,
+    (index, indent) => keyCommentLines(source, [queueEntry, eventsEntry][index], indent),
+  );
+  assert.equal(
+    appliedEdits(target.text, [insertion]),
+    'alpha: 1\n# mock section note\nqueue:\n  # mock unit note\n  events:\n      a: 1\n',
   );
 });
 

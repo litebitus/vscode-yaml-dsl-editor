@@ -1,3 +1,4 @@
 mocktype:
   shared:
     label: mock-shared
+    owner: local.owner

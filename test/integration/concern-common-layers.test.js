@@ -46,7 +46,7 @@ suite('concern common layers', () => {
     await hintLabelsBecome(overlay, [SAME_IN_COMMON_LAYER]);
   });
 
-  test('a concern below its overlays without a common layer of its own moves into a new one that starts as the fallback', async () => {
+  test('a concern below its overlays without a common layer of its own moves into a new one holding the fallback blocks its references reach', async () => {
     const groupName = `concern-group-moved-${vscode.version}`;
     fs.cpSync(concernPath('concern-group'), concernPath(groupName), { recursive: true });
     const fallbackPath = concernPath(groupName, 'mock.yml');
@@ -58,9 +58,43 @@ suite('concern common layers', () => {
     await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(tooltip));
     await fileTextBecomes(
       concernPath(groupName, 'concern-2.mock.yml'),
-      'mocktype:\n  fallback:\n    label: mock-fallback\n  shared:\n    label: mock-shared\n',
+      'locals:\n  owner: local.team\n  team: mock-team\nmocktype:\n  shared:\n    label: mock-shared\n    owner: local.owner\n',
     );
     assert.equal(fs.readFileSync(fallbackPath, 'utf8'), fallbackText);
     await hintLabelsBecome(overlay, []);
+  });
+
+  test('a move takes the comments above the keys it deletes and writes the first overlay\'s into the common layer', async () => {
+    const groupName = `commented-move-${vscode.version}`;
+    fs.cpSync(concernPath('commented-move'), concernPath(groupName), { recursive: true });
+    const overlay = (await shownDocument(concernPath(groupName, 'overlay-1', 'mock.yml'))).document;
+    await hintLabelsBecome(overlay, [MOVE_TO_COMMON_LAYER]);
+    await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(await hintTooltipOf(overlay)));
+    await fileTextBecomes(concernPath(groupName, 'mock.yml'), [
+      'base:',
+      '  kept:',
+      '    label: mock-kept',
+      '',
+      '# mock section note one',
+      'mocktype:',
+      '  # mock unit note one',
+      '  shared:',
+      '    label: mock-shared',
+      '',
+    ].join('\n'));
+    await fileTextBecomes(concernPath(groupName, 'overlay-1', 'mock.yml'), 'one: 1\n');
+    await fileTextBecomes(concernPath(groupName, 'overlay-2', 'mock.yml'), 'two: 2\n');
+  });
+
+  test('a delete takes the comment above the key it deletes', async () => {
+    const groupName = `commented-delete-${vscode.version}`;
+    fs.cpSync(concernPath('commented-delete'), concernPath(groupName), { recursive: true });
+    const overlay = (await shownDocument(concernPath(groupName, 'overlay-1', 'mock.yml'))).document;
+    await hintLabelsBecome(overlay, [SAME_IN_COMMON_LAYER]);
+    await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(await hintTooltipOf(overlay)));
+    await fileTextBecomes(
+      concernPath(groupName, 'overlay-1', 'mock.yml'),
+      'mocktype:\n  own:\n    label: mock-own\n',
+    );
   });
 });

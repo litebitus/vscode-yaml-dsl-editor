@@ -455,10 +455,29 @@ function concernStackFiles(root) {
   };
 }
 
-test('a concern without its common layer file folds with the default one, and a move creates the concern\'s', async () => {
+function referencingConcernStackFiles(root) {
+  const overlay = 'queue:\n  size: local.size\n';
+  return {
+    [`${root}/mock.yml`]: [
+      'alarm:',
+      '  period: 60',
+      'locals:',
+      '  # mock note on size',
+      '  size: local.base_size',
+      '  base_size: 1',
+      '  unused: 2',
+      '',
+    ].join('\n'),
+    [`${root}/dev/config/mock.yml`]: overlay,
+    [`${root}/staging/config/mock.yml`]: overlay,
+    [`${root}/production/config/mock.yml`]: overlay,
+  };
+}
+
+test('a concern without its common layer file folds with the default one, and a move creates the concern\'s with the blocks its references reach', async () => {
   const timers = fakeTimers();
   const root = '/repo/concern-stack';
-  const files = concernStackFiles(root);
+  const files = referencingConcernStackFiles(root);
   const dev = `${root}/dev/config/mock.yml`;
   const ws = workspaceOver(files, timers);
   await ws.setConfigs([{ text: concernConfig, dir: '/repo' }]);
@@ -486,7 +505,10 @@ test('a concern without its common layer file folds with the default one, and a 
   const concernEdit = moved.edit.documentChanges
     .find((change) => change.textDocument && change.textDocument.uri === concernUri);
   assert.equal(concernEdit.edits.length, 1);
-  assert.equal(concernEdit.edits[0].newText, 'alarm:\n  period: 60\nqueue:\n  size: 1\n');
+  assert.equal(
+    concernEdit.edits[0].newText,
+    'locals:\n  # mock note on size\n  size: local.base_size\n  base_size: 1\nqueue:\n  size: local.size\n',
+  );
 });
 
 test('a concern common layer that exists is the common layer, and one that appears or goes switches the stack', async () => {
@@ -530,21 +552,21 @@ test('opening a concern common layer joins the stack its overlays make', async (
   assert.equal(data.files.get(concern).text, 'locals:\n  team: other\n');
 });
 
-test('an overlay repeating the default common layer a concern folds with is offered the delete, which creates nothing', async () => {
+test('an overlay repeating a block of the default common layer its concern references is offered the delete, which creates nothing', async () => {
   const timers = fakeTimers();
   const root = '/repo/concern-delete';
-  const files = concernStackFiles(root);
+  const files = referencingConcernStackFiles(root);
   const dev = `${root}/dev/config/mock.yml`;
-  files[dev] = 'alarm:\n  period: 60\nqueue:\n  size: 2\n';
+  files[dev] = 'alarm:\n  period: 60\nlocals:\n  size: local.base_size\n  base_size: 1\nqueue:\n  size: local.size\n';
   const ws = workspaceOver(files, timers);
   await ws.setConfigs([{ text: concernConfig, dir: '/repo' }]);
   await ws.sync(`file://${dev}`, dev, files[dev]);
   const arrived = nextSuggestions(ws);
   timers.fireAll();
   const stackId = await arrived;
-  const deletion = ws.suggestionMarks(stackId).files
+  const deletions = ws.suggestionMarks(stackId).files
     .flatMap((file) => file.marks)
-    .find((mark) => mark.suggestion.kind === 'delete');
-  assert.deepEqual(deletion.suggestion.path, ['alarm']);
-  assert.equal(deletion.suggestion.createsCommonLayer, false);
+    .filter((mark) => mark.suggestion.kind === 'delete');
+  assert.deepEqual(deletions.map((mark) => mark.suggestion.path), [['locals']]);
+  assert.equal(deletions[0].suggestion.createsCommonLayer, false);
 });

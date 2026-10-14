@@ -397,6 +397,62 @@ test('a moved block keeps the blank lines the first overlay holding it puts arou
   );
 });
 
+test('a move takes the comment above each key it deletes, and writes the first overlay\'s above each key it writes', () => {
+  const holder = (env) => `env: ${env}\n\n# mock ${env} section note\nservice:\n  # mock ${env} unit note\n  main:\n    size: 1\n`;
+  const opened = stackOf(layeredDsl(), texts('rds: {}\n', {
+    dev: holder('dev'),
+    staging: holder('staging'),
+    uat: holder('uat'),
+  }));
+  const [move] = commonLayerSuggestions(opened, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.deepEqual(move.path, ['service', 'main', 'size']);
+  const edited = editedTexts(opened, move);
+  assert.equal(
+    edited.get(common),
+    'rds: {}\n\n# mock dev section note\nservice:\n  # mock dev unit note\n  main:\n    size: 1\n',
+  );
+  assert.equal(edited.get(overlayPath('dev')), 'env: dev\n');
+  assert.equal(edited.get(overlayPath('staging')), 'env: staging\n');
+  const sectionHeld = stackOf(layeredDsl(), texts('# mock common note\nservice:\n  other:\n    size: 2\n', {
+    dev: holder('dev'),
+    staging: holder('staging'),
+    uat: holder('uat'),
+  }));
+  const [deeper] = commonLayerSuggestions(sectionHeld, noSchemaChecks).filter((found) => found.kind === 'move');
+  assert.equal(
+    editedTexts(sectionHeld, deeper).get(common),
+    '# mock common note\nservice:\n  other:\n    size: 2\n  # mock dev unit note\n  main:\n    size: 1\n',
+  );
+});
+
+test('a value move writes its comment over the common layer\'s, and the former value goes down with its own', () => {
+  const holder = 'rds:\n  defaults:\n    # mock serverless note\n    capacity: serverless\n';
+  const stack = stackOf(layeredDsl(), texts('rds:\n  defaults:\n    # mock provisioned note\n    capacity: provisioned\n', {
+    dev: holder,
+    staging: holder,
+    uat: holder,
+    production: 'other: 1\n',
+  }));
+  const [move] = commonLayerSuggestions(stack, noSchemaChecks).filter((found) => found.kind === 'move');
+  const edited = editedTexts(stack, move);
+  assert.equal(edited.get(common), holder);
+  assert.equal(edited.get(overlayPath('dev')), '');
+  assert.equal(
+    edited.get(overlayPath('production')),
+    'other: 1\nrds:\n  defaults:\n    # mock provisioned note\n    capacity: provisioned\n',
+  );
+  assert.equal(foldsAgreeAfter(stack, move, edited), true);
+});
+
+test('a delete takes the comment above the key it deletes', () => {
+  const stack = stackOf(layeredDsl(), texts('queue:\n  events:\n    a: 1\n', {
+    dev: 'queue:\n  other: 2\n  # mock note\n  events:\n    a: 1\n',
+  }));
+  const [deletion] = commonLayerSuggestions(stack, noSchemaChecks);
+  assert.equal(deletion.kind, 'delete');
+  assert.equal(editedTexts(stack, deletion).get(overlayPath('dev')), 'queue:\n  other: 2\n');
+});
+
 test('a block held by half the overlays or fewer is not suggested', () => {
   const stack = stackOf(layeredDsl(), texts('', {
     dev: 'queue:\n  events:\n    a: 1\n',

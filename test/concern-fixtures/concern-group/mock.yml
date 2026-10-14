@@ -1,3 +1,7 @@
+locals:
+  owner: local.team
+  team: mock-team
+  unused: mock-unused
 mocktype:
   fallback:
     label: mock-fallback

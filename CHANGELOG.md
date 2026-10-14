@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Suggestions: a move or a delete carries the comment above each key it deletes or writes, and each map a move opens.
+- Suggestions: a concern's new common layer holds only the fallback's blocks its references reach.
+
 ## 0.5.0 - 2026-10-14
 
 - Layers: `layers.common_layer_files` lists the names a common layer may take, so a concern below its overlays can have its own, which discovery and moves prefer.

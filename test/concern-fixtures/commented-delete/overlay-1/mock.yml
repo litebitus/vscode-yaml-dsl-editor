@@ -1,0 +1,6 @@
+mocktype:
+  own:
+    label: mock-own
+  # mock duplicate note
+  shared:
+    label: mock-shared

@@ -1,0 +1,7 @@
+one: 1
+
+# mock section note one
+mocktype:
+  # mock unit note one
+  shared:
+    label: mock-shared
