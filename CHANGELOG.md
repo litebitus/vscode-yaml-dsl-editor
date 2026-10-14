@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 - 2026-10-14
 
 - Suggestions: undoing a move that created a common layer file no longer tries to save the removed file.
 
