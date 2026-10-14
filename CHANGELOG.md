@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-10-14
 
 - Layers: `layers.common_layer_files` lists the names a common layer may take, so a concern below its overlays can have its own, which discovery and moves prefer.
 - Suggestions: the move link names the common layer file it writes into, `new` when the move creates it.
