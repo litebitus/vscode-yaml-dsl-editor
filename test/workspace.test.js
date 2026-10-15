@@ -405,6 +405,29 @@ test('each overlay\'s fold is validated, each error placed in the file that wrot
   assert.deepEqual(validationMessages(unruled, two), [[2, '`name` is required']]);
 });
 
+test('a schema that changes on disk revalidates every file reading it, the common layer included', async () => {
+  const modeline = (schemaPath) => `# yaml-language-server: $schema=${schemaPath}\n`;
+  const schemaPath = `${root}/schema.json`;
+  const files = {
+    [schemaPath]: validatedStackSchema,
+    [common]: `${modeline('schema.json')}mocktype:\n  shared:\n    mode: medium\n`,
+    [one]: `${modeline('../schema.json')}mocktype:\n  shared:\n    name: mock\n    size: 1\n`,
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: configText(resourcesEntry({ validator: validatorRules })), dir: '/repo' }]);
+  for (const filePath of [common, one]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  await visitStack(ws, one);
+  assert.deepEqual(validationMessages(ws, common), [[3, '`mode` must be one of `"fast"`, `"slow"` (one)']]);
+  const widened = JSON.parse(validatedStackSchema);
+  widened.properties.mocktype.additionalProperties.properties.mode.enum.push('medium');
+  widened.properties.mocktype.additionalProperties.properties.size.type = 'string';
+  files[schemaPath] = JSON.stringify(widened);
+  await ws.schemasChanged([schemaPath]);
+  await visitStack(ws, one);
+  assert.deepEqual(validationMessages(ws, common), []);
+  assert.deepEqual(validationMessages(ws, one), [[4, '`size` must be string']]);
+});
+
 test('the modeline\'s schema path links to the schema it names, a path from the file\'s folder or a URL as written', async () => {
   const urlModeline = '# yaml-language-server: $schema=https://example.test/mock.schema.json\n';
   const files = {

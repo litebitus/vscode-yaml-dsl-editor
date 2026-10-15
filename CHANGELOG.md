@@ -7,6 +7,7 @@
 - Completion: keys and values complete from the file's schema: a map's fields, each with its requirement marker and description, deprecated ones struck through, and a field's `enum`, `const` and boolean values.
 - Validation: each document is validated against its schema, an overlay as its fold, with the requirement markers deciding which fields are required, and each validation error marked on the key that wrote it.
 - Config: a DSL's `validator` block states its `merge_base_keys` and `child_values_from_parent_key`, read only by validation.
+- Validation: a field a call key of the DSL's `marker_function` supplies is not reported missing.
 - Settings: `validator.enabled`, `validator.errorSeverity` and `validator.fileDecoration` turn validation errors off, set their severity, and color their files.
 - Problems: every warning but a deprecation is underlined in yellow.
 - Schemas: the schema path in a file's modeline is a link that opens the schema.

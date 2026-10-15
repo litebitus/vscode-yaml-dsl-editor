@@ -183,10 +183,10 @@ What the extension holds is a copy of what the files say: a resident stack's ana
 | a layer file of a resident stack changes on disk while no editor has it open | on the change | the file is read again | background |
 | a layer file is deleted from disk | on the deletion | the file leaves the stack, even while an editor holds it with no unsaved edits, and comes back when it returns to disk | background |
 | a layer file's editor closes | on the close | the file is read from disk again, so discarded edits, or a file gone from disk, leave the stack with what the disk holds | background |
-| a path a resident file's schema search reads changes on disk | on the change | that file's schema reloads, and its stack is analyzed again; a schema on disk changes when its stack is initialized again | background |
+| a path a resident file's schema search reads changes on disk | on the change | that file's schema reloads, and its stack is analyzed and validated again, the common layer through each overlay's fold; a schema on disk changes when its stack is initialized again | background |
 | a `yaml-dsl.yml` is saved, created or deleted, or a workspace folder is added or removed | on the change | the configs reload; every resident stack is analyzed again under them, and a stack they no longer claim is dropped | background |
 | a file's text on disk differs from the hash its kept suggestions were worked out from | at startup, and when the file changes on disk | its kept suggestions are dropped, and its stack is worked out again without entering the cache | background |
-| the schema a file reads differs from the hash its kept suggestions were worked out against | at startup, and when the schema changes on disk | its kept suggestions are dropped, and its stack is worked out again without entering the cache | background |
+| the schema a file reads differs from the hash its kept suggestions were worked out against | at startup, and when the schema changes on disk | its kept suggestions and validation error mark are dropped, and its stack is worked out again without entering the cache | background |
 | another build of the extension worked out a file's kept suggestions | at startup | they are never shown, and the stack of each such file still on disk is worked out again | background, last |
 
 These hold through every change:
@@ -657,6 +657,7 @@ Each document is validated against its schema, with the requirement markers deci
 - An error is marked on the key of the value it is about, in the file that wrote that value. In the common layer, its message names the overlays whose folds it fails in.
 - A missing required field is marked on its map's key, and an unknown field on its own key.
 - A fold holding a file with a YAML error is not validated.
+- A key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode`, supplies that field, so the field is not reported missing.
 - The error's message names the field and what it must be. A field whose allowed forms are a described definition reads as that description's first sentence, and any other reads that it matches none of its allowed forms.
 
 A DSL's `validator` block states how a document is read before it is validated, and only validation reads it:

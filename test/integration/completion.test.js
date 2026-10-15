@@ -1,4 +1,5 @@
 const assert = require('assert');
+const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
 const { WAIT_DEADLINE_MILLISECONDS, shownDocument, fixtureCopy } = require('./editor-hints');
@@ -123,6 +124,26 @@ suite('schema completion', () => {
     }
     assert.ok(schemaLink);
     assert.equal(editor.document.getText(schemaLink.range), './mock.schema.json');
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
+  test('a schema written on disk is read again, its new field offered without reopening the file', async () => {
+    const fixture = fixtureCopy('schema-completion', 'reloaded-schema');
+    const schemaPath = path.join(fixture, 'mock.schema.json');
+    const editor = await shownDocument(path.join(fixture, 'mock.yml'));
+    const cursor = await typedAtEnd(editor, '  ');
+    await completionItemsAt(editor.document, cursor);
+    const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+    schema.properties.mocktype.properties.mock_added = { type: 'string', description: '[optional] Added on disk.' };
+    fs.writeFileSync(schemaPath, JSON.stringify(schema));
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    let labels = [];
+    while (!labels.includes('mock_added') && Date.now() < deadline) {
+      labels = (await completionItemsAt(editor.document, cursor)).map(labelOf);
+      if (!labels.includes('mock_added')) await new Promise((resolve) => { setTimeout(resolve, 100); });
+    }
+    assert.ok(labels.includes('mock_added'), JSON.stringify(labels));
+    await vscode.commands.executeCommand('workbench.action.files.revert');
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
