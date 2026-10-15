@@ -67,7 +67,7 @@ layers:
 
 ### Schema hover
 
-Hover reads the schema as authored, so a field shows the description written beside its `$ref`, not the shared composite's. A deprecated field is struck through, and its hover says so.
+Hover reads the schema as authored, so a field shows the description written beside its `$ref`, not the shared composite's. A deprecated field is a warning: struck through, marked in the gutter, and its file and folders shown in yellow.
 
 The JSON Schema drafts read, each by its own parser:
 

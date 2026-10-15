@@ -3,7 +3,8 @@
 ## Unreleased
 
 - Schemas: JSON Schema draft-07, draft 2019-09 and draft 2020-12 are read, each by a parser named after it; a schema declaring no draft or an older one is read as draft-07, and one declaring any other draft is an info problem.
-- Schemas: a deprecated field's key is struck through and its hover starts with `deprecated:`, in the drafts that define `deprecated`.
+- Schemas: a deprecated field is a warning, in the drafts that define `deprecated`: its key is struck through in yellow, its message is the key's hover, and its file and folders show in yellow with a `⚠` badge.
+- Problems: a warning carries a yellow triangle in the gutter.
 
 ## 0.5.3 - 2026-10-14
 

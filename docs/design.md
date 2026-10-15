@@ -14,7 +14,7 @@ The editor is a language server. It has to be. Activating any `mock-dsl.yml` put
 
 The server keeps the stack current as the files change, including the folded document of each overlay. Those folded documents are buffers in the editor view, so the author sees an overlay's full config instead of assembling it from the files. Hover and navigation run against the stack in scope, not against the active file alone.
 
-On each change the server parses the changed YAML, reads that file's schema, and resolves references, placeholders and calls across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem has a severity. An error is red text with a red squiggle at its range, in the red the DevOps tools print failures in, and its line carries an error mark in the gutter. An info problem, a schema the file names that cannot be loaded, is a wavy underline in the blue the DevOps tools print info in, with no change to the text, and its line carries an info mark in the gutter, the same shape and size as the error mark. Either shows its message on hover, and an empty range covers its whole line.
+On each change the server parses the changed YAML, reads that file's schema, and resolves references, placeholders and calls across the stack. Hover and navigation are requests against that analysis. Problems and later suggestions are further results of the same pass. A problem has a severity. An error is red text with a red squiggle at its range, in the red the DevOps tools print failures in, and its line carries an error mark in the gutter. A warning is drawn by what it marks, in the yellow the DevOps tools print warnings in, and its line carries a warning mark in the gutter, a triangle. An info problem, a schema the file names that cannot be loaded, is a wavy underline in the blue the DevOps tools print info in, with no change to the text, and its line carries an info mark in the gutter, the same shape and size as the error mark. Either shows its message on hover, and an empty range covers its whole line.
 
 The extension is an editor first, and nothing it does holds back the file. On startup it does no analysis: a file of a DSL opens as that DSL's language at once, colored by the grammar, with its references underlined from the text. The suggestions saved from earlier sessions are painted next, from the one file that keeps them. Only then does analysis start, in the background, and its classes, problems and suggestions paint as they land. A newly opened file follows the same order.
 
@@ -233,8 +233,11 @@ A parser states what its draft's keywords mean:
 
 In a draft that reads `deprecated`, a field whose schema node, or a node its references reach, holds `deprecated: true`:
 
-- has its key struck through;
-- hovers as `deprecated: ` followed by its description.
+- is a warning on its key, whose message, `` `<key>` is deprecated: `` followed by the field's description, is the key's hover in place of the schema documentation;
+- has its key struck through in the warning yellow;
+- names its file, and every folder above it, in the warning yellow, with a `⚠` badge on the file and its tab.
+
+The server reports, for each stack it has analyzed, the files holding a warning, so a file shows it in the Explorer whether it is open or not. A file holding both a warning and a suggestion shows the warning's color and badge.
 
 ## Diffing across overlays
 

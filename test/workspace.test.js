@@ -1026,3 +1026,22 @@ test('a name renamed everywhere is the name a later hand edit is measured from',
     .filter((mark) => mark.suggestion.kind === 'rename');
   assert.deepEqual(hints.map((mark) => [mark.suggestion.rename.oldName, mark.suggestion.rename.newName]), [['store', 'db']]);
 });
+
+test('a deprecated key is a warning problem, and a reanalyzed stack reports the files holding one', async () => {
+  const files = {
+    '/repo/warn/schema.json': JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      properties: { old: { description: 'use kept', deprecated: true }, kept: {} },
+    }),
+    '/repo/warn/mock.yml': '# yaml-language-server: $schema=schema.json\nold: 1\nkept: 2\n',
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: configText(dslEntry('plain')), dir: '/repo' }]);
+  await ws.sync('file:///repo/warn/mock.yml', '/repo/warn/mock.yml', files['/repo/warn/mock.yml']);
+  const warnings = ws.problems('file:///repo/warn/mock.yml').filter((problem) => problem.severity === 'warning');
+  assert.deepEqual(warnings.map((problem) => problem.message), ['`old` is deprecated: use kept']);
+  assert.equal(ws.decorations('file:///repo/warn/mock.yml').deprecatedKeys.length, 1);
+  ws.takeReanalyzedUris();
+  assert.deepEqual(ws.takeWarningReports().map((report) => report.uris), [['file:///repo/warn/mock.yml']]);
+  assert.deepEqual(ws.takeWarningReports(), []);
+});

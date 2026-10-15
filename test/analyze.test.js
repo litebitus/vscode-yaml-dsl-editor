@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {
   analyzeDocument,
   hoverAt,
-  deprecatedKeyRanges,
+  deprecatedFields,
   definitionAt,
   linksFor,
   pathToUri,
@@ -40,7 +40,7 @@ test('hover and definition outside a reference or a field are empty', () => {
   assert.equal(described.contents.value, 'the name');
 });
 
-test('a deprecated field\'s hover starts with deprecated, and its keys are listed for striking through', () => {
+test('a deprecated field leaves its hover to its warning, whose message names the key', () => {
   const text = 'mocktype:\n  old: 1\n  plain: 2\n  bare: 3\n';
   const doc = analyzeDocument(text, '/repo/a.yml', { symbols: [], references: [] });
   const stack = { symbols: [], common: '/repo/a.yml' };
@@ -51,13 +51,16 @@ test('a deprecated field\'s hover starts with deprecated, and its keys are liste
   };
   const schemaOf = (draftUri) => ({ $schema: draftUri, properties: { mocktype: { properties: fields } } });
   const draft2020 = schemaOf('https://json-schema.org/draft/2020-12/schema');
-  assert.equal(hoverAt(doc, { line: 1, character: 2 }, stack, draft2020).contents.value, 'deprecated: use plain');
+  assert.equal(hoverAt(doc, { line: 1, character: 2 }, stack, draft2020), null);
   assert.equal(hoverAt(doc, { line: 2, character: 2 }, stack, draft2020).contents.value, 'the plain field');
-  assert.equal(hoverAt(doc, { line: 3, character: 2 }, stack, draft2020).contents.value, 'deprecated');
-  assert.deepEqual(deprecatedKeyRanges(doc, draft2020), [rangeOf(text, 'old'), rangeOf(text, 'bare')]);
+  assert.equal(hoverAt(doc, { line: 3, character: 2 }, stack, draft2020), null);
+  assert.deepEqual(deprecatedFields(doc, draft2020), [
+    { range: rangeOf(text, 'old'), message: '`old` is deprecated: use plain' },
+    { range: rangeOf(text, 'bare'), message: '`bare` is deprecated' },
+  ]);
   const draft07 = schemaOf('http://json-schema.org/draft-07/schema#');
   assert.equal(hoverAt(doc, { line: 1, character: 2 }, stack, draft07).contents.value, 'use plain');
-  assert.deepEqual(deprecatedKeyRanges(doc, draft07), []);
+  assert.deepEqual(deprecatedFields(doc, draft07), []);
 });
 
 const refRule = {

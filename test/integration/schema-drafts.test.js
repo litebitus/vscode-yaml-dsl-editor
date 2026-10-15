@@ -27,6 +27,11 @@ async function hoverTextAt(doc, needle) {
   return text;
 }
 
+async function hoverTextNowAt(doc, needle) {
+  const position = positionOf(doc, needle);
+  return hoverTextOf(await vscode.commands.executeCommand('vscode.executeHoverProvider', doc.uri, position));
+}
+
 async function draftDocument(draftFolder) {
   const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
   return (await shownDocument(path.join(fixtures, 'drafts', draftFolder, 'mock.yml'))).document;
@@ -41,19 +46,19 @@ suite('JSON Schema drafts', () => {
     assert.equal(await hoverTextAt(doc, 'old'), 'use pair');
   });
 
-  test('draft 2019-09 hovers an $anchor reference and states a deprecated field', async () => {
+  test('draft 2019-09 hovers an $anchor reference and leaves a deprecated field to its warning', async () => {
     const doc = await draftDocument('draft-2019-09');
     assert.equal(await hoverTextAt(doc, 'first'), 'the first of the pair');
     assert.equal(await hoverTextAt(doc, 'label'), 'the named label');
-    assert.equal(await hoverTextAt(doc, 'old'), 'deprecated: use pair');
+    assert.equal(await hoverTextNowAt(doc, 'old'), '');
   });
 
-  test('draft 2020-12 hovers prefixItems, items and a $dynamicRef, and states a deprecated field', async () => {
+  test('draft 2020-12 hovers prefixItems, items and a $dynamicRef, and leaves a deprecated field to its warning', async () => {
     const doc = await draftDocument('draft-2020-12');
     assert.equal(await hoverTextAt(doc, 'first'), 'the first of the pair');
     assert.equal(await hoverTextAt(doc, '2\n'), 'every later item');
     assert.equal(await hoverTextAt(doc, 'label'), 'the named label');
-    assert.equal(await hoverTextAt(doc, 'old'), 'deprecated: use pair');
+    assert.equal(await hoverTextNowAt(doc, 'old'), '');
   });
 
   test('a schema declaring an older draft is read as draft-07', async () => {

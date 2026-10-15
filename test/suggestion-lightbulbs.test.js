@@ -611,6 +611,12 @@ test('activation paints the suggestions the server sends and registers the move'
     === 'mock-extension/media/error-gutter-mark.svg');
   assert.equal(errorMark.options.color, '#dc7975');
   assert.equal(errorMark.options.textDecoration, 'underline wavy #dc7975');
+  const warningMark = decorationTypes.find((decorationType) => decorationType.options.gutterIconPath
+    === 'mock-extension/media/warning-gutter-mark.svg');
+  assert.equal(warningMark.options.textDecoration, undefined);
+  const deprecatedMark = decorationTypes.find((decorationType) => decorationType.options.textDecoration
+    === 'line-through #ece200');
+  assert.ok(deprecatedMark);
   assert.deepEqual(inlayProvider.selector, { language: 'yaml-dsl' });
   assert.equal(inlayChanges, 1);
   const hints = inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:']));
@@ -618,6 +624,12 @@ test('activation paints the suggestions the server sends and registers the move'
   const devUri = { toString: () => 'file:///repo/dev/mock.yml' };
   assert.equal(fileDecorationChanges, 1);
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri).color.id, 'editorLightBulb.foreground');
+  notes['yaml-dsl/warnings']({ stackId: '/repo/mock.yml', uris: ['file:///repo/dev/mock.yml'] });
+  assert.equal(fileDecorationChanges, 2);
+  const warned = fileDecorationProvider.provideFileDecoration(devUri);
+  assert.deepEqual([warned.badge, warned.color.id], ['⚠', 'yamlDslEditor.warningForeground']);
+  notes['yaml-dsl/warnings']({ stackId: '/repo/mock.yml', uris: [] });
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri).badge, '💡');
   vscode.visibleChanged();
   assert.equal(painted.filter(isLightbulb).length, 2);
   assert.equal(typeof commands[APPLY_COMMAND], 'function');

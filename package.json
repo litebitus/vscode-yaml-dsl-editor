@@ -171,6 +171,16 @@
     },
     "colors": [
       {
+        "id": "yamlDslEditor.warningForeground",
+        "description": "Name of a file holding a warning, and of every folder above it.",
+        "defaults": {
+          "dark": "#ECE200",
+          "light": "#ECE200",
+          "highContrast": "#ECE200",
+          "highContrastLight": "#ECE200"
+        }
+      },
+      {
         "id": "yamlDslEditor.overlayDiff.difference1",
         "description": "Background of a difference in an overlay diff, first color of the palette.",
         "defaults": {
