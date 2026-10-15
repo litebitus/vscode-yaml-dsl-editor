@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.3 - 2026-10-14
 
 - Overlay diff: the diff button shows on every DSL file, and with nothing selected diffs the key on the cursor's line.
 - Overlay diff: fixed choosing overlays opening a second diff view; it now updates the open one.
