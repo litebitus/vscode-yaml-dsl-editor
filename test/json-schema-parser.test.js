@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { JSON_SCHEMA_DRAFTS, draftOfSchema, unreadDraftProblem, schemaParserFor } = require('../lib/json-schema-core');
+const { JSON_SCHEMA_DRAFTS, draftOfSchema, unreadDraftProblem, schemaParserFor } = require('../lib/json-schema');
 const { createSchemaChecks } = require('../lib/schema-checks');
 
 const DRAFT_07_URI = 'http://json-schema.org/draft-07/schema#';

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { FAILURE_KINDS, NODE_STATES, createSchemaChecks } = require('../lib/schema-checks');
-const { schemaParserFor } = require('../lib/json-schema-core');
+const { schemaParserFor } = require('../lib/json-schema');
 
 const schemaNodeAt = (root, path) => schemaParserFor(root).nodeAt(path);
 

@@ -1411,3 +1411,4 @@ dsls:
 - A move turns list and map differences into locals, and on a tie the common layer declares a list's local as `[]` and a map's as `{}`.
 - `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.
 - Find All References on a declaration lists every reference to it across the common layer and each overlay.
+- The formatter, as designed under Formatting.
