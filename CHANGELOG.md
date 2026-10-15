@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Overlay diff: the diff button shows on every DSL file, and with nothing selected diffs the key on the cursor's line.
+- Overlay diff: fixed choosing overlays opening a second diff view; it now updates the open one.
+
 ## 0.5.2 - 2026-10-14
 
 - Suggestions: undoing a move that created a common layer file no longer tries to save the removed file.

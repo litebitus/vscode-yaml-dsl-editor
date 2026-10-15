@@ -46,9 +46,9 @@ const queueDiff = [
 ].join('\n');
 
 suite('overlay diff', () => {
-  test('the title-bar button shows while lines are selected and opens the diff at once', async () => {
+  test('the title-bar button shows on every DSL file on disk and opens the diff at once', async () => {
     const button = contributes.menus['editor/title'].find((item) => item.command === DIFF_COMMAND);
-    assert.equal(button.when, 'yamlDslEditor.dslFileHasSelection');
+    assert.equal(button.when, 'resourceLangId == yaml-dsl && resourceScheme == file');
     assert.equal(contributes.commands.find((command) => command.command === DIFF_COMMAND).icon, '$(diff)');
     const editor = await shownDocument(concernPath('diff-group', 'overlay-1', 'diffed', 'mock.yml'));
     editor.selection = new vscode.Selection(1, 0, 5, 0);
@@ -58,6 +58,20 @@ suite('overlay diff', () => {
     assert.equal(diffEditor.document.languageId, 'yaml-dsl-overlay-diff');
     await new Promise((resolve) => { setTimeout(resolve, 300); });
     assert.deepEqual(vscode.languages.getDiagnostics(diffEditor.document.uri), []);
+  });
+
+  test('the title-bar button with nothing selected diffs the key on the cursor\'s line', async () => {
+    const editor = await shownDocument(concernPath('diff-group', 'overlay-1', 'diffed', 'mock.yml'));
+    editor.selection = new vscode.Selection(2, 4, 2, 4);
+    await vscode.commands.executeCommand(DIFF_COMMAND, editor.document.uri);
+    await diffEditorShowing([
+      '# overlay-1, overlay-2: 1 difference',
+      'mocktype:',
+      '  queue:',
+      '    size: 10  # overlay-1',
+      '    size: 20  # overlay-2',
+      '',
+    ].join('\n'));
   });
 
   test('the context menu entry diffs the selected key of the file it was opened on', async () => {
@@ -96,17 +110,25 @@ suite('overlay diff', () => {
     ].join('\n'));
   });
 
-  test('the diff tab\'s button chooses overlays and renders the same diff with them', async () => {
+  test('the diff tab\'s button, clicked in the focused view, renders the same view again in place', async () => {
     const button = contributes.menus['editor/title'].find((item) => item.command === CHOOSE_COMMAND);
     assert.equal(button.when, 'resourceScheme == yaml-dsl-overlay-diff');
     const editor = await shownDocument(concernPath('diff-group', 'overlay-1', 'diffed', 'mock.yml'));
     editor.selection = new vscode.Selection(1, 0, 5, 0);
     await vscode.commands.executeCommand(DIFF_COMMAND, editor.document.uri);
     const diffEditor = await diffEditorShowing(queueDiff);
-    const choosing = vscode.commands.executeCommand(CHOOSE_COMMAND, diffEditor.document.uri);
+    const focusedDiff = await vscode.window.showTextDocument(diffEditor.document, diffEditor.viewColumn);
+    const groupCount = vscode.window.tabGroups.all.length;
+    const choosing = vscode.commands.executeCommand(CHOOSE_COMMAND, focusedDiff.document.uri);
     await new Promise((resolve) => { setTimeout(resolve, 300); });
     await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
     await choosing;
     await diffEditorShowing(queueDiff);
+    await new Promise((resolve) => { setTimeout(resolve, 300); });
+    const diffTabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs)
+      .filter((tab) => tab.input && tab.input.uri && tab.input.uri.scheme === DIFF_SCHEME);
+    assert.equal(vscode.window.tabGroups.all.length, groupCount);
+    assert.equal(diffTabs.length, 1);
+    assert.equal(diffTabs[0].group.viewColumn, focusedDiff.viewColumn);
   });
 });

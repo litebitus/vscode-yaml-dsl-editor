@@ -87,7 +87,7 @@ A block the overlays repeat moves into the common layer in one click, its differ
 
 ### Overlay diff
 
-Select lines, then open the diff with any of:
+Select lines, or put the cursor on one, then open the diff with any of:
 
 - the diff button <img src="media/diff-button.png" alt="diff button" height="16"> in the editor's title bar
 - `Diff across overlays` in the right-click menu
@@ -97,7 +97,7 @@ One view beside the file shows how every overlay configures them, each differing
 
 Narrow the view to the overlays you check with either:
 
-- the button in the view's title bar
+- the filter button <img src="media/filter-button.png" alt="filter button" height="16"> in the view's title bar, which shows once you click in the view
 - `YAML DSL: Choose overlays to diff` in the Command Palette
 
 The colors are theme colors you can override with `workbench.colorCustomizations`.
@@ -182,4 +182,4 @@ To retry a single store for the current version: `make publish-ovsx` / `make pub
 
 ## Footnotes
 
-The diff button image is the `diff` icon from [Codicons](https://github.com/microsoft/vscode-codicons), © Microsoft, CC BY 4.0.
+The diff and filter button images are the `diff` and `filter` icons from [Codicons](https://github.com/microsoft/vscode-codicons), © Microsoft, CC BY 4.0.

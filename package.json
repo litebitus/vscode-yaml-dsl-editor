@@ -142,7 +142,7 @@
       "editor/title": [
         {
           "command": "yaml-dsl-editor.diffAcrossOverlays",
-          "when": "yamlDslEditor.dslFileHasSelection",
+          "when": "resourceLangId == yaml-dsl && resourceScheme == file",
           "group": "navigation"
         },
         {
@@ -161,7 +161,7 @@
       "commandPalette": [
         {
           "command": "yaml-dsl-editor.diffAcrossOverlays",
-          "when": "yamlDslEditor.dslFileHasSelection"
+          "when": "resourceLangId == yaml-dsl && resourceScheme == file"
         },
         {
           "command": "yaml-dsl-editor.chooseDiffOverlays",

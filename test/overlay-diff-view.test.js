@@ -1,7 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  DSL_SELECTION_CONTEXT_KEY,
   OVERLAY_DIFF_COLOR_IDS,
   OVERLAY_DIFF_SCHEME,
   createOverlayDiffViews,
@@ -158,7 +157,7 @@ test('a menu click hands the file\'s uri, and the diff takes that editor\'s sele
   assert.equal(client.requests.length, 2);
 });
 
-test('the diff tab\'s button chooses overlays, the current ones checked, and renders the same diff with them', async () => {
+test('the diff tab\'s button chooses overlays, the current ones checked, and renders the same view again with them', async () => {
   const vscode = fakeVscode({ picks: (items) => items.filter((item) => item.label !== 'overlay-2') });
   const client = fakeClient({ 'yaml-dsl/overlayDiffStack': stack, 'yaml-dsl/overlayDiff': diff });
   const views = createOverlayDiffViews(vscode, client);
@@ -168,7 +167,7 @@ test('the diff tab\'s button chooses overlays, the current ones checked, and ren
   assert.deepEqual(vscode.quickPicks[0].items, overlayNames.map((label) => ({ label, picked: true })));
   assert.equal(vscode.quickPicks[0].options.canPickMany, true);
   assert.deepEqual(client.requests.at(-1).params, { ...target, overlayNames: ['overlay-1', 'overlay-3'] });
-  assert.equal(vscode.shown.at(-1).doc.uri.toString(), doc.uri.toString());
+  assert.equal(vscode.shown.length, 1);
   vscode.window.activeTextEditor = vscode.window.visibleTextEditors.at(-1);
   await views.chooseDiffOverlays();
   assert.deepEqual(vscode.quickPicks[1].items.map((item) => item.picked), [true, false, true]);
@@ -237,32 +236,6 @@ test('a stack with no overlays opens nothing, and a failing request is shown as 
     'yaml-dsl/overlayDiffStack': new Error('mock server stopped'),
   })).diffAcrossOverlays(target);
   assert.deepEqual(failing.warnings, ['Diff across overlays: mock server stopped']);
-});
-
-test('the diff button\'s context key follows whether the active editor is a DSL file on disk with a selection', async () => {
-  const vscode = fakeVscode();
-  const views = createOverlayDiffViews(vscode, fakeClient({}));
-  const editorOf = (languageId, scheme, isEmpty) => ({
-    document: { languageId, uri: { scheme } },
-    selection: { isEmpty },
-  });
-  const setContexts = () => vscode.executed.filter(([command]) => command === 'setContext');
-  await views.selectionContextChanged();
-  vscode.window.activeTextEditor = editorOf('yaml-dsl', 'file', false);
-  await views.selectionContextChanged();
-  await views.selectionContextChanged();
-  vscode.window.activeTextEditor = editorOf('yaml-dsl', 'file', true);
-  await views.selectionContextChanged();
-  vscode.window.activeTextEditor = editorOf('yaml', 'file', false);
-  await views.selectionContextChanged();
-  vscode.window.activeTextEditor = editorOf('yaml-dsl', 'yaml-dsl-fold', false);
-  await views.selectionContextChanged();
-  assert.deepEqual(setContexts(), [
-    ['setContext', DSL_SELECTION_CONTEXT_KEY, false],
-    ['setContext', DSL_SELECTION_CONTEXT_KEY, true],
-    ['setContext', DSL_SELECTION_CONTEXT_KEY, false],
-  ]);
-  assert.equal(DSL_SELECTION_CONTEXT_KEY, require('../package.json').contributes.menus['editor/title'][0].when);
 });
 
 function fakeTimers() {
