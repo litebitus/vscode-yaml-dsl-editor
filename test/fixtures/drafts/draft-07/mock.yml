@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=./mock.schema.json
+mocktype:
+  pair:
+    - first
+    - 2
+  named:
+    label: mock
+  old: mock

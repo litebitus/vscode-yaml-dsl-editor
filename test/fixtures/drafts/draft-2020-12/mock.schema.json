@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "mocktype": {
+      "properties": {
+        "pair": {
+          "prefixItems": [
+            {
+              "description": "the first of the pair"
+            }
+          ],
+          "items": {
+            "description": "every later item"
+          }
+        },
+        "named": {
+          "$dynamicRef": "#mock-node"
+        },
+        "old": {
+          "description": "use pair",
+          "deprecated": true
+        }
+      }
+    }
+  },
+  "$defs": {
+    "node": {
+      "$dynamicAnchor": "mock-node",
+      "properties": {
+        "label": {
+          "description": "the named label"
+        }
+      }
+    }
+  }
+}

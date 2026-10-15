@@ -181,7 +181,7 @@ A field's value `$ref`s a composite such as `string_or_ref` or `string_list_or_r
 
 A schema for this kind of value is built this way.
 
-This extension reads the schema document as authored. Hover walks the YAML path through `properties`, then `patternProperties`, then `additionalProperties`. On an object that carries both a `$ref` and a `description`, it keeps that `description`, then follows the `$ref` only to keep walking. The tooltip is the description kept at the field, requirement marker included (`[required]`, `[~required]`, `[optional]`). The composite's description is the value shape and is not the tooltip.
+This extension reads the schema document as authored. Hover walks the YAML path through `properties`, then `patternProperties`, then what the schema's draft reads for a key `properties` does not list. On an object that carries both a `$ref` and a `description`, it keeps that `description`, then follows the `$ref` only to keep walking. The tooltip is the description kept at the field, requirement marker included (`[required]`, `[~required]`, `[optional]`). The composite's description is the value shape and is not the tooltip.
 
 A requirement marker is the extension's standard for saying whether a key must be present. A field's `description` opens with it: `[required]`, the key is present in every folded document; `[~required]`, present under a condition the schema does not state; `[optional]`, the key may be absent. A marker states the field author's intent beside the field itself, so where a field carries one, the marker decides and its parent's `required` array is not read for that key. A field without a marker is required when its parent's `required` array lists it. Every schema check the extension runs reads requiredness this way.
 
@@ -194,6 +194,47 @@ DSL-level behavior is configured in `yaml-dsl.yml`: which files, the scopes, the
 The schema is how the editor understands a field and the shape of an object: which keys exist, what value shape a key takes, and the field's own description, including the text beside a `$ref`. It is read as published. If that is not enough to understand a field or a shape, the schema gains an extension point and the grammar publishes it. The extension does not grow a special case for that object. No such point is added before a field or a shape actually requires one.
 
 The schema is not the engine's checks. The editor handles everything about authoring the DSL files, and those checks are a separate pass. A check can require a group of fields only when another field has a certain value, allow a field for only one mode, or allow exactly one of two fields. The published schema has no such table. A field may be filled from the common layer, and the editor is looking at one file, so a `required` array on the resource alone does not say whether the folded document is complete. The common layer merged under the overlay remains. An extension point is not a transcription of these checks.
+
+## JSON Schema drafts
+
+The editor reads:
+
+- draft-07
+- draft 2019-09
+- draft 2020-12
+
+A schema's draft:
+
+- is the one its root `$schema` names;
+- is draft-07 when it names none or an older draft;
+- is not read when it names any other draft: the modeline line gets an info problem naming the URI and the drafts the editor reads, and field hovers stay empty.
+
+### Parsers
+
+Each draft has a parser named after it, over one shared core. The core:
+
+- picks the parser from `$schema`;
+- resolves references;
+- merges the schemas an applicator combines;
+- finds the node at a document path, and a node's fields.
+
+A parser states what its draft's keywords mean:
+
+| | draft-07 | draft 2019-09 | draft 2020-12 |
+|---|---|---|---|
+| list items | `items`, `additionalItems` after a tuple | `items`, `additionalItems` after a tuple | `prefixItems`, then `items` |
+| references | `$ref`, `$id` plain-name fragment | `$ref`, `$anchor`, `$recursiveRef` | `$ref`, `$anchor`, `$dynamicAnchor`, `$dynamicRef` |
+| a key `properties` does not list | `additionalProperties` | `additionalProperties`, then `unevaluatedProperties` | `additionalProperties`, then `unevaluatedProperties` |
+| merged as `allOf` merges | `allOf` | `allOf`, `dependentSchemas` | `allOf`, `dependentSchemas` |
+| `deprecated` | not read | read | read |
+| opt-out validator | draft-07 | draft 2019-09 | draft 2020-12 |
+
+### Deprecated fields
+
+In a draft that reads `deprecated`, a field whose schema node, or a node its references reach, holds `deprecated: true`:
+
+- has its key struck through;
+- hovers as `deprecated: ` followed by its description.
 
 ## Diffing across overlays
 

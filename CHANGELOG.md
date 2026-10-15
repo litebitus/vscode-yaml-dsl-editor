@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Schemas: JSON Schema draft-07, draft 2019-09 and draft 2020-12 are read, each by a parser named after it; a schema declaring no draft or an older one is read as draft-07, and one declaring any other draft is an info problem.
+- Schemas: a deprecated field's key is struck through and its hover starts with `deprecated:`, in the drafts that define `deprecated`.
+
 ## 0.5.3 - 2026-10-14
 
 - Overlay diff: the diff button shows on every DSL file, and with nothing selected diffs the key on the cursor's line.

@@ -1,6 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { analyzeDocument, hoverAt, definitionAt, linksFor, pathToUri, uriToPath } = require('../lib/analyze');
+const {
+  analyzeDocument,
+  hoverAt,
+  deprecatedKeyRanges,
+  definitionAt,
+  linksFor,
+  pathToUri,
+  uriToPath,
+} = require('../lib/analyze');
 
 function rangeOf(text, needle) {
   const index = text.indexOf(needle);
@@ -30,6 +38,26 @@ test('hover and definition outside a reference or a field are empty', () => {
     properties: { name: { description: 'the name' } },
   });
   assert.equal(described.contents.value, 'the name');
+});
+
+test('a deprecated field\'s hover starts with deprecated, and its keys are listed for striking through', () => {
+  const text = 'mocktype:\n  old: 1\n  plain: 2\n  bare: 3\n';
+  const doc = analyzeDocument(text, '/repo/a.yml', { symbols: [], references: [] });
+  const stack = { symbols: [], common: '/repo/a.yml' };
+  const fields = {
+    old: { description: 'use plain', deprecated: true },
+    plain: { description: 'the plain field' },
+    bare: { deprecated: true },
+  };
+  const schemaOf = (draftUri) => ({ $schema: draftUri, properties: { mocktype: { properties: fields } } });
+  const draft2020 = schemaOf('https://json-schema.org/draft/2020-12/schema');
+  assert.equal(hoverAt(doc, { line: 1, character: 2 }, stack, draft2020).contents.value, 'deprecated: use plain');
+  assert.equal(hoverAt(doc, { line: 2, character: 2 }, stack, draft2020).contents.value, 'the plain field');
+  assert.equal(hoverAt(doc, { line: 3, character: 2 }, stack, draft2020).contents.value, 'deprecated');
+  assert.deepEqual(deprecatedKeyRanges(doc, draft2020), [rangeOf(text, 'old'), rangeOf(text, 'bare')]);
+  const draft07 = schemaOf('http://json-schema.org/draft-07/schema#');
+  assert.equal(hoverAt(doc, { line: 1, character: 2 }, stack, draft07).contents.value, 'use plain');
+  assert.deepEqual(deprecatedKeyRanges(doc, draft07), []);
 });
 
 const refRule = {

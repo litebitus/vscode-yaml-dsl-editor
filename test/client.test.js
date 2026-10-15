@@ -568,6 +568,7 @@ function referenceMarks() {
     error: { kind: 'error' },
     info: { kind: 'info' },
     unclassified: { kind: 'unclassified' },
+    deprecated: { kind: 'deprecated' },
   };
 }
 
@@ -643,7 +644,20 @@ test('references are painted by the class the server gives them', async () => {
   assert.deepEqual(covered('error'), ['ref five.six']);
   assert.deepEqual(covered('unclassified'), []);
   assert.deepEqual(client.sent.at(-1), { method: 'yaml-dsl/decorations', params: { uri: 'file:///repo/mock.yml' } });
-  assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0, 0]);
+  assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0, 0, 0]);
+});
+
+test('the deprecated keys the server names are struck through', async () => {
+  const text = 'mocktype:\n  old: 1\n';
+  const painted = [];
+  const doc = documentOf(text);
+  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  const client = fakeClient({ decorations: { references: [], problems: [], deprecatedKeys: [rangeOf(1, 2, 5)] } });
+  await paintUnderlines(vscode, client, referenceMarks(), []);
+  assert.deepEqual(lastPaint(painted, 'deprecated').ranges.map((range) => doc.getText(range)), ['old']);
+  const activated = fakeVscode({ documents: [] });
+  await activatedFully(activated, { subscriptions: [] }, () => fakeClient());
+  assert.ok(activated.decorations.some((decoration) => decoration.options.textDecoration === 'line-through'));
 });
 
 test('a classified ref takes its class underline whole, placeholders inside it included', async () => {

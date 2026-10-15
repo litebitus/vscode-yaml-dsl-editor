@@ -67,7 +67,13 @@ layers:
 
 ### Schema hover
 
-Hover reads the schema as authored, so a field shows the description written beside its `$ref`, not the shared composite's.
+Hover reads the schema as authored, so a field shows the description written beside its `$ref`, not the shared composite's. A deprecated field is struck through, and its hover says so.
+
+The JSON Schema drafts read, each by its own parser:
+
+- draft 2020-12
+- draft 2019-09
+- draft-07 (assumed when `$schema` is missing or names an older draft)
 
 ### Navigation and completion
 
