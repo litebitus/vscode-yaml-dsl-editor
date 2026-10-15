@@ -104,7 +104,7 @@ test('hover on a local shows its resolved value', () => {
   assert.match(hover.contents.value, /```yaml-dsl/);
   assert.match(hover.contents.value.split('\n')[0], /mock\.yml:3/);
   assert.equal(hoverAt(stack.files.get(common), { line: 4, character: 6 }, { ...stack, files: null }, null)
-    .contents.value, 'mock-bucket');
+    .contents.value, 'mock\\-bucket');
 });
 
 test('without a locals block there are no local values and no names known by them', () => {

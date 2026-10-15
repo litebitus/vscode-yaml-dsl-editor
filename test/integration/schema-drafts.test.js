@@ -18,8 +18,7 @@ function hoverTextOf(hovers) {
   return (hovers || [])
     .flatMap((hover) => hover.contents)
     .map((content) => (typeof content === 'string' ? content : content.value))
-    .join('\n')
-    .replaceAll('&nbsp;', ' ');
+    .join('\n');
 }
 
 async function hoverTextAt(doc, needle) {

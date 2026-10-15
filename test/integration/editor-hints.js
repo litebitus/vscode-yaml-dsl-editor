@@ -70,8 +70,7 @@ async function hoverTextOf(doc, position) {
   return hovers
     .flatMap((hover) => hover.contents)
     .map((content) => (typeof content === 'string' ? content : content.value))
-    .join('\n')
-    .replaceAll('&nbsp;', ' ');
+    .join('\n');
 }
 
 async function hoverTextBecomes(doc, position, expected) {

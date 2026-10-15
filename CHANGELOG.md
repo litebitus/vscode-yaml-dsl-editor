@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Hover: fixed tooltips breaking lines in the middle of words.
+
 ## 0.6.0 - 2026-10-15
 
 - Schemas: JSON Schema draft-07, draft 2019-09 and draft 2020-12 are read, each by a parser named after it; a schema declaring no draft or an older one is read as draft-07, and one declaring any other draft is an info problem.

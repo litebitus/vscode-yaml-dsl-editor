@@ -130,7 +130,7 @@ test('the active file wins, then the common layer, then the first other declarat
   assert.equal(definitionAt(doc, { line: 0, character: 8 }, stackOf(withActive)).path, '/repo/two/mock.yml');
   assert.deepEqual(linksFor(doc, stackOf(symbols)), []);
   const hover = hoverAt(doc, { line: 0, character: 8 }, stackOf(symbols), null);
-  assert.match(hover.contents.value, /mocktype\.primary — \/repo\/mock\.yml/);
+  assert.equal(hover.contents.value, 'mocktype\\.primary — /repo/mock\\.yml');
   const files = (text) => new Map([['/repo/mock.yml', { text }]]);
   const sectionFiles = files('  primary:\n\n    label: 1\nnext:\n');
   const shown = hoverAt(doc, { line: 0, character: 8 }, stackOf(symbols, { files: sectionFiles }), null);
@@ -143,7 +143,7 @@ test('the active file wins, then the common layer, then the first other declarat
   assert.doesNotMatch(full.contents.value, /sibling:/);
   const missing = analyzeDocument('source: ref mocktype.missing\n', '/repo/two/mock.yml', { references: [refRule] });
   const missingHover = hoverAt(missing, { line: 0, character: 8 }, stackOf([]), null);
-  assert.equal(missingHover.contents.value, 'Invalid reference: mocktype.missing');
+  assert.equal(missingHover.contents.value, 'Invalid reference: mocktype\\.missing');
   assert.equal(definitionAt(missing, { line: 0, character: 8 }, stackOf([])), null);
   assert.deepEqual(linksFor(missing, stackOf([])), []);
   const fieldPath = 'item: ref mocktype.primary.tail\n';
@@ -177,6 +177,17 @@ test('a ref named by a local value opens the declaration in the active file firs
   assert.equal(definitionAt(doc, { line: 0, character: 12 }, withPlaceholders(unmatched)), null);
 });
 
+test('a field hover is markdown showing the description as written, its spaces kept so it wraps at words', () => {
+  const description = '[optional] A `mock_name` field_name, *one* per line.\nSecond line.';
+  const schema = { properties: { mock: { type: 'string', description } } };
+  const doc = analyzeDocument('mock: value\n', '/repo/a.yml', { symbols: [], references: [] });
+  const hover = hoverAt(doc, { line: 0, character: 1 }, { symbols: [] }, schema);
+  assert.deepEqual(hover.contents, {
+    kind: 'markdown',
+    value: '\\[optional\\] A \\`mock\\_name\\` field\\_name, \\*one\\* per line\\.  \nSecond line\\.',
+  });
+});
+
 test('a hover on a valued target shows its value, and a builtin names its scope', () => {
   const globalRule = {
     pattern: '^(?<name>[a-z]+)$',
@@ -194,8 +205,8 @@ test('a hover on a valued target shows its value, and a builtin names its scope'
   const scopes = { ...stackScopes, GLOBAL: declaredScope({ builtinNames: ['env'] }) };
   const stack = (symbols) => ({ symbols, common: '/repo/mock.yml', dsl: { ...dsl, scopes } });
   const symbol = localSymbol('db', '/repo/mock.yml', 'mock-value', { keyRange: doc.tree.range });
-  assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([symbol]), null).contents.value, 'mock-value');
-  assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([]), null).contents.value, 'Invalid reference: local.db');
+  assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([symbol]), null).contents.value, 'mock\\-value');
+  assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([]), null).contents.value, 'Invalid reference: local\\.db');
   assert.equal(hoverAt(doc, { line: 1, character: 9 }, stack([]), null).contents.value, 'GLOBAL env');
   assert.equal(definitionAt(doc, { line: 1, character: 9 }, stack([])), null);
   assert.deepEqual(linksFor(doc, stack([])), []);

@@ -134,7 +134,7 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.match(localHover.contents.value, /db:/);
   assert.equal(ws.definition('file://' + common, at(files[common], 'local.db')).path, common);
   const field = ws.hover('file://' + common, at(files[common], 'label'));
-  assert.equal(field.contents.value, '[optional] Mock label.');
+  assert.deepEqual(field.contents, { kind: 'markdown', value: '\\[optional\\] Mock label\\.' });
 
   const within = ws.hover(oneUri, at(files[one], 'local.db'));
   assert.match(within.contents.value, /mock-stack\/mock\.yml:\d+/);
@@ -153,7 +153,7 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.deepEqual(ws.links(foldUri), []);
   assert.deepEqual(ws.links('file://missing'), []);
   const foldHover = ws.hover(foldUri, at(folded, 'label'));
-  assert.equal(foldHover.contents.value, '[optional] Mock label.');
+  assert.equal(foldHover.contents.value, '\\[optional\\] Mock label\\.');
   const foldDef = ws.definition(foldUri, at(folded, 'ref mocktype.primary'));
   assert.equal(foldDef.path, common);
 
@@ -948,7 +948,7 @@ test('calls are checked against Terraform and the schema once both vocabularies 
   assert.deepEqual(loaded, ['terraform']);
   await ws.whenAnalyzed(`file://${common}`);
   assert.deepEqual(messages(), ['unknown function nope', 'a call result is not allowed as placeholder_in_text']);
-  assert.equal(ws.hover(`file://${common}`, at(text, 'ssm')).contents.value, 'ssm(parameter: text)');
+  assert.equal(ws.hover(`file://${common}`, at(text, 'ssm')).contents.value, 'ssm\\(parameter: text\\)');
   assert.equal(ws.hover(`file://${common}`, at(text, 'nope')).contents.value, 'nope');
   const callTokens = ws.semanticTokens(`file://${common}`)
     .filter((token) => token.line === 1)

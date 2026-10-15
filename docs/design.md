@@ -571,6 +571,7 @@ A schema for this kind of value is built this way. This extension reads the sche
 - Hover walks the YAML path through `properties`, then `patternProperties`, then what the schema's draft reads for a key `properties` does not list.
 - On an object that carries both a `$ref` and a `description`, it keeps that `description`, then follows the `$ref` only to keep walking.
 - The tooltip is the description kept at the field, requirement marker included. The composite's description is the value shape and is not the tooltip.
+- The tooltip shows the description's text as written, markdown characters included, and wraps at word boundaries.
 
 ### Requirement markers
 
