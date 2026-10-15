@@ -126,7 +126,15 @@ The extension's own settings live under `yaml-dsl-editor` in the editor's settin
 |---|---|---|
 | `yaml-dsl-editor.cache.schemaCapacity` | a whole number, 1 or more | Distinct schemas kept beyond those a loaded stack uses |
 | `yaml-dsl-editor.cache.stackCapacity` | a whole number, 1 or more | Stacks kept beyond the pinned ones |
-| `yaml-dsl-editor.features.suggestions` | `on`, `off` | Whether suggestions are shown |
+| `yaml-dsl-editor.suggestion.delete.enabled` | `true`, `false` | Whether delete suggestions are shown |
+| `yaml-dsl-editor.suggestion.delete.fileDecoration` | `true`, `false` | Whether a file holding a delete suggestion, and its folders, are colored |
+| `yaml-dsl-editor.suggestion.move.enabled` | `true`, `false` | Whether move suggestions are shown |
+| `yaml-dsl-editor.suggestion.move.fileDecoration` | `true`, `false` | Whether a file holding a move suggestion, and its folders, are colored |
+| `yaml-dsl-editor.suggestion.potentialMove.enabled` | `true`, `false` | Whether potential move suggestions are shown |
+| `yaml-dsl-editor.suggestion.rename.enabled` | `true`, `false` | Whether rename suggestions are shown |
+| `yaml-dsl-editor.suggestion.rename.fileDecoration` | `true`, `false` | Whether a file holding a rename suggestion, and its folders, are colored |
+| `yaml-dsl-editor.warning.deprecation.enabled` | `true`, `false` | Whether deprecation warnings are shown |
+| `yaml-dsl-editor.warning.deprecation.fileDecoration` | `true`, `false` | Whether a file holding a deprecation warning, and its folders, are colored |
 
 ## Development
 

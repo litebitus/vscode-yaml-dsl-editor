@@ -260,7 +260,7 @@ test('a move the overlays\' schemas disagree on is a potential move, offered aga
   assert.ok((await ws.applySuggestion(stackId, moveMark.suggestion.id)).edit);
 });
 
-test('one suggestion job waits per stack, a flat stack arms nothing, and an evicted stack is dropped', async () => {
+test('one suggestion job waits per stack, a flat stack arms its report too, and an evicted stack is dropped', async () => {
   const timers = fakeTimers();
   const files = { '/repo/one/flat.yml': 'a: 1\n' };
   const roots = Array.from({ length: 10 }, (_, index) => `/repo/stack${index}`);
@@ -269,7 +269,7 @@ test('one suggestion job waits per stack, a flat stack arms nothing, and an evic
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   ws.setCacheCapacities({ stackCapacity: 8, schemaCapacity: 32 });
   await ws.sync('file:///repo/one/flat.yml', '/repo/one/flat.yml', files['/repo/one/flat.yml']);
-  assert.equal(timers.pending.size, 0);
+  assert.equal(timers.pending.size, 1);
   const firstRoot = roots[0];
   await ws.sync(`file://${firstRoot}/dev/mock.yml`, `${firstRoot}/dev/mock.yml`, files[`${firstRoot}/dev/mock.yml`]);
   const waiting = ws.queueSuggestions(`${firstRoot}/mock.yml`);

@@ -40,6 +40,30 @@ async function hintLabelsBecome(doc, expected) {
   return seenLabels;
 }
 
+function positionInText(doc, needle, offset = 0) {
+  return doc.positionAt(doc.getText().indexOf(needle) + offset);
+}
+
+async function hoverTextOf(doc, position) {
+  const hovers = await vscode.commands.executeCommand('vscode.executeHoverProvider', doc.uri, position) || [];
+  return hovers
+    .flatMap((hover) => hover.contents)
+    .map((content) => (typeof content === 'string' ? content : content.value))
+    .join('\n')
+    .replaceAll('&nbsp;', ' ');
+}
+
+async function hoverTextBecomes(doc, position, expected) {
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+  let text = '';
+  while (Date.now() < deadline) {
+    text = await hoverTextOf(doc, position);
+    if (text === expected) return;
+    await new Promise((resolve) => { setTimeout(resolve, 50); });
+  }
+  assert.equal(text, expected);
+}
+
 module.exports = {
   SAME_IN_COMMON_LAYER,
   MOVE_TO_COMMON_LAYER,
@@ -47,4 +71,6 @@ module.exports = {
   shownDocument,
   hintLabelsOf,
   hintLabelsBecome,
+  positionInText,
+  hoverTextBecomes,
 };

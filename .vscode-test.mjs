@@ -18,8 +18,15 @@ mkdirSync(writableFolder);
 copyFileSync(path.join(fixturesFolder, 'yaml-dsl.yml'), path.join(writableFolder, 'yaml-dsl.yml'));
 const concernFolder = path.join(runFolder, 'concerns');
 cpSync(fileURLToPath(new URL('./test/concern-fixtures', import.meta.url)), concernFolder, { recursive: true });
+const settingsFolder = path.join(runFolder, 'settings');
+cpSync(fileURLToPath(new URL('./test/settings-fixtures', import.meta.url)), settingsFolder, { recursive: true });
 const workspaceFile = path.join(runFolder, 'integration.code-workspace');
-const workspaceFolders = [{ path: fixturesFolder }, { path: writableFolder }, { path: concernFolder }];
+const workspaceFolders = [
+  { path: fixturesFolder },
+  { path: writableFolder },
+  { path: concernFolder },
+  { path: settingsFolder },
+];
 writeFileSync(workspaceFile, JSON.stringify({ folders: workspaceFolders }));
 
 const sha256Of = (text) => createHash('sha256').update(text, 'utf8').digest('hex');

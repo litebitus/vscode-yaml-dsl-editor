@@ -561,6 +561,22 @@ function placeAt(text, offset) {
   return { line, character };
 }
 
+function paintingVscode(visibleTextEditors, settings = {}) {
+  return {
+    window: { visibleTextEditors },
+    workspace: { getConfiguration: () => ({ get: (key) => settings[key] }) },
+    Hover: class {
+      constructor(contents, range) {
+        this.contents = [contents];
+        this.range = range;
+      }
+    },
+    MarkdownString: class {
+      constructor(value) { this.value = value; }
+    },
+  };
+}
+
 function referenceMarks() {
   return {
     local: { kind: 'local' },
@@ -626,7 +642,7 @@ test('references are painted by the class the server gives them', async () => {
   const doc = documentOf('a: ref one.two\nb: ref three.four\nc: ref five.six\nd: x\n');
   const plainPainted = [];
   const plainEditor = recordingEditor({ languageId: 'yaml', uri: { scheme: 'file' } }, plainPainted);
-  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted), plainEditor, { document: null }] } };
+  const vscode = paintingVscode([recordingEditor(doc, painted), plainEditor, { document: null }]);
   const client = fakeClient({
     decorations: {
       references: [
@@ -648,14 +664,33 @@ test('references are painted by the class the server gives them', async () => {
   assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0, 0, 0, 0]);
 });
 
-test('the deprecated keys the server names are struck through', async () => {
+test('a deprecated key is struck through in yellow and its warning is the hover of its key and value, unless deprecation warnings are off', async () => {
   const text = 'mocktype:\n  old: 1\n';
+  const oldKey = rangeOf(1, 2, 5);
+  const oldField = rangeOf(1, 2, 8);
+  const message = '`old` is deprecated';
+  const deprecation = { range: oldKey, message, severity: 'warning', kind: 'deprecation' };
+  const deprecatedFields = [{ keyRange: oldKey, fieldRange: oldField, message }];
+  const client = fakeClient({ decorations: { references: [], problems: [deprecation], deprecatedFields } });
+  const doc = documentOf(text, 'deprecated.yml');
+  const schemaHover = async () => ({ contents: { value: 'the field description' } });
+  const hoverAt = (vscode, character) => editorMiddleware(vscode, () => [], clickOpenedPopup(vscode))
+    .provideHover(doc, { line: 1, character }, null, schemaHover);
+  const hoverText = (hover) => (hover.contents.value === undefined ? hover.contents[0].value : hover.contents.value);
   const painted = [];
-  const doc = documentOf(text);
-  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
-  const client = fakeClient({ decorations: { references: [], problems: [], deprecatedKeys: [rangeOf(1, 2, 5)] } });
-  await paintUnderlines(vscode, client, referenceMarks(), []);
+  const shown = paintingVscode([recordingEditor(doc, painted)]);
+  await paintUnderlines(shown, client, referenceMarks(), []);
   assert.deepEqual(lastPaint(painted, 'deprecated').ranges.map((range) => doc.getText(range)), ['old']);
+  assert.deepEqual(lastPaint(painted, 'warning').ranges.map((mark) => mark.hoverMessage), [undefined]);
+  assert.equal(hoverText(await hoverAt(shown, 3)), message);
+  assert.equal(hoverText(await hoverAt(shown, 7)), message);
+  const hiddenPainted = [];
+  const hidden = paintingVscode([recordingEditor(doc, hiddenPainted)], { 'warning.deprecation.enabled': false });
+  await paintUnderlines(hidden, client, referenceMarks(), []);
+  assert.deepEqual(lastPaint(hiddenPainted, 'deprecated').ranges, []);
+  assert.deepEqual(lastPaint(hiddenPainted, 'warning').ranges, []);
+  assert.equal(hoverText(await hoverAt(hidden, 3)), 'the field description');
+  assert.equal(hoverText(await hoverAt(hidden, 7)), 'the field description');
   const activated = fakeVscode({ documents: [] });
   await activatedFully(activated, { subscriptions: [] }, () => fakeClient());
   assert.ok(activated.decorations.some((decoration) => decoration.options.textDecoration === 'line-through #ece200'));
@@ -665,7 +700,7 @@ test('a classified ref takes its class underline whole, placeholders inside it i
   const text = 'ref redshift.\n${env}_cluster';
   const painted = [];
   const doc = documentOf(text);
-  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  const vscode = paintingVscode([recordingEditor(doc, painted)]);
   const whole = { start: { line: 0, character: 0 }, end: { line: 1, character: 14 } };
   const client = fakeClient({ decorations: { references: [{ range: whole, kind: 'external' }], problems: [] } });
   await paintUnderlines(vscode, client, referenceMarks(), []);
@@ -686,7 +721,7 @@ test('every ref is underlined from the text before the server classifies it, onc
   const painted = [];
   const doc = documentOf(text);
   const editor = recordingEditor(doc, painted);
-  const vscode = { window: { visibleTextEditors: [editor] } };
+  const vscode = paintingVscode([editor]);
   const client = fakeClient();
   client.sendRequest = async () => {
     await gate;
@@ -717,7 +752,7 @@ test('every ref is underlined from the text before the server classifies it, onc
 test('a document the server has not analyzed keeps its text-pass underlines', async () => {
   const painted = [];
   const doc = documentOf('a: ref one.two\n', 'unanalyzed.yml');
-  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  const vscode = paintingVscode([recordingEditor(doc, painted)]);
   await paintUnderlines(vscode, fakeClient(), referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
   const failing = fakeClient({ throwRequest: true });
   await paintUnderlines(vscode, failing, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
@@ -754,7 +789,7 @@ test('classes that arrive after a newer paint are dropped', async () => {
   const olderGate = new Promise((resolve) => { releaseOlder = resolve; });
   let requestCount = 0;
   const doc = documentOf('abc', 'stale.yml');
-  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  const vscode = paintingVscode([recordingEditor(doc, painted)]);
   const client = fakeClient();
   client.sendRequest = async () => {
     requestCount += 1;
@@ -778,7 +813,7 @@ test('problems are error squiggles, or warning or info underlines, with their me
   const doc = documentOf('# yaml-language-server: $schema=missing.json\nname: [\nsource: ref one.two\n');
   doc.lineCount = 4;
   doc.lineAt = (line) => ({ range: rangeOf(line, 0, doc.getText().split('\n')[line].length) });
-  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  const vscode = paintingVscode([recordingEditor(doc, painted)]);
   const client = fakeClient({
     decorations: {
       references: null,
@@ -817,9 +852,7 @@ test('a workspace config file shows its own problems and nothing else', async ()
     uri: { scheme: 'file', fsPath: '/other/yaml-dsl.yml', toString() { return 'file:///other/yaml-dsl.yml'; } },
   };
   const otherPainted = [];
-  const vscode = {
-    window: { visibleTextEditors: [recordingEditor(config, painted), recordingEditor(elsewhere, otherPainted)] },
-  };
+  const vscode = paintingVscode([recordingEditor(config, painted), recordingEditor(elsewhere, otherPainted)]);
   const client = fakeClient({ decorations: { references: null, problems: [{ range: rangeOf(0, 3, 4), message: 'bad config' }] } });
   await paintUnderlines(vscode, client, referenceMarks(), [{ text: 'dsls: [\n', dir: '/repo' }]);
   assert.deepEqual(lastPaint(painted, 'error').ranges, [{ range: rangeOf(0, 3, 4), hoverMessage: 'bad config' }]);
@@ -869,7 +902,7 @@ test('a hover colors the declaration by the declaring file\'s DSL, with no DSL s
 test('the text pass underlines placeholder references and within matches from the config', async () => {
   const painted = [];
   const doc = documentOf('a: "${local.db} ${env} ${bad}"\nb: use thing\n');
-  const vscode = { window: { visibleTextEditors: [recordingEditor(doc, painted)] } };
+  const vscode = paintingVscode([recordingEditor(doc, painted)]);
   const withinConfig = configText(referenceDsl([
     reference('use (?<name>[a-z]+)', 'local', { positions: ['anywhere_in_scalar'] }),
   ]));
@@ -878,7 +911,7 @@ test('the text pass underlines placeholder references and within matches from th
   assert.deepEqual(covered.sort(), ['local.db', 'use thing']);
   const unowned = [];
   await paintUnderlines(
-    { window: { visibleTextEditors: [recordingEditor(documentOf('a: ref x.y\n', 'elsewhere.txt'), unowned)] } },
+    paintingVscode([recordingEditor(documentOf('a: ref x.y\n', 'elsewhere.txt'), unowned)]),
     fakeClient(),
     referenceMarks(),
     [{ text: referenceConfig, dir: '/other' }],

@@ -265,3 +265,30 @@ test('a missing store file loads nothing, and one no migration reads is deleted'
   }
   assert.match(logged[0], /^yaml-dsl suggestion marks in an unreadable format could not be deleted: Error: mock locked/);
 });
+
+test('a file holding only a warning is saved and loads back holding it, and a file saved before warnings holds none', async () => {
+  const fileSystem = memoryFileSystem({ [devUri]: devText, [stagingUri]: stagingText });
+  const timers = manualTimers();
+  const store = storeOver(fileSystem, timers);
+  store.replaceStack('/repo/mock.yml', [
+    { uri: devUri, textHash: textHashOf(devText), marks: [], warning: true },
+    { uri: stagingUri, textHash: textHashOf(stagingText), marks: [], warning: false },
+  ]);
+  assert.deepEqual(store.warningUris(), [devUri]);
+  timers.fireAll();
+  await new Promise((resolve) => { setImmediate(resolve); });
+  const saved = JSON.parse(fileSystem.files.get(storePath).toString('utf8'));
+  assert.deepEqual(Object.keys(saved.files), [devUri]);
+  const reloaded = storeOver(fileSystem, manualTimers());
+  await reloaded.load();
+  assert.deepEqual(reloaded.warningUris(), [devUri]);
+  const savedBeforeWarnings = {
+    version: STORE_FORMAT_VERSION,
+    build: MOCK_BUILD_HASH,
+    files: { [stagingUri]: { stackId: '/repo/mock.yml', textHash: textHashOf(stagingText), marks: [mark] } },
+  };
+  fileSystem.files.set(storePath, Buffer.from(JSON.stringify(savedBeforeWarnings), 'utf8'));
+  const older = storeOver(fileSystem, manualTimers());
+  await older.load();
+  assert.deepEqual(older.warningUris(), []);
+});

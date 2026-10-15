@@ -3,8 +3,15 @@
 ## Unreleased
 
 - Schemas: JSON Schema draft-07, draft 2019-09 and draft 2020-12 are read, each by a parser named after it; a schema declaring no draft or an older one is read as draft-07, and one declaring any other draft is an info problem.
-- Schemas: a deprecated field is a warning, in the drafts that define `deprecated`: its key is struck through in yellow, its message is the key's hover, and its file and folders show in yellow with a `⚠` badge.
+- Schemas: a deprecated field is a warning, in the drafts that define `deprecated`: its key is struck through in yellow, its message is the hover of its key and value, and its file and folders show in yellow with a `⚠` badge, kept across restarts and reported for stacks worked out in the background.
 - Problems: a warning carries a yellow triangle in the gutter.
+- Suggestions: the folders above a file holding a suggestion show the light bulb color over source control's.
+- Settings: `warning.deprecation.enabled` and `warning.deprecation.fileDecoration` turn deprecation warnings, or only their file and folder decorations, off.
+- Settings: `suggestion.<kind>.enabled` and `suggestion.<kind>.fileDecoration` turn each kind of suggestion, or only its file and folder decorations, off.
+
+### Deprecated
+
+- Settings: `features.suggestions`; use `suggestion.<kind>.enabled`.
 
 ## 0.5.3 - 2026-10-14
 

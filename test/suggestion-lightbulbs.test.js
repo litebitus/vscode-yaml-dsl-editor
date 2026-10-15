@@ -7,6 +7,7 @@ const {
   paintScopeBorders,
   suggestionInlayHints,
   suggestionFileDecoration,
+  suggestionKindOf,
   applySuggestion,
 } = require('../lib/suggestion-lightbulbs');
 const { activateWith } = require('../lib/client');
@@ -210,7 +211,7 @@ test('each suggestion is an inlay hint at the end of its line, its tooltip the d
   assert.deepEqual(suggestionInlayHints(vscode, marksByUri, documentOf('file:///other.yml', ['a'])), []);
 });
 
-test('a file with a suggestion shows its name in the light bulb color, with a light bulb badge', () => {
+test('a file with a suggestion shows its name in the light bulb color, with a light bulb badge, and every folder above it the color', () => {
   const vscode = inlayVscode();
   const at = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
   const marksByUri = new Map([
@@ -223,6 +224,9 @@ test('a file with a suggestion shows its name in the light bulb color, with a li
   assert.equal(decoration.propagate, true);
   assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/staging/mock.yml' }), undefined);
   assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/other.yml' }), undefined);
+  const folder = suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/dev' });
+  assert.deepEqual([folder.badge, folder.color.id], [undefined, 'editorLightBulb.foreground']);
+  assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/staging' }), undefined);
 });
 
 test('a file whose only suggestions are potential moves takes no file decoration', () => {
@@ -507,6 +511,7 @@ test('activation paints the suggestions the server sends and registers the move'
   let inlayRegistrations = 0;
   let fileDecorationProvider = null;
   let suggestionsSetting = 'on';
+  const featureValues = {};
   let stackCapacitySetting = 32;
   let configurationChanged = null;
   let documentClosed = null;
@@ -534,9 +539,11 @@ test('activation paints the suggestions the server sends and registers the move'
       getConfiguration: (section) => ({
         get: (key) => {
           if (section === 'yaml-dsl-editor' && key === 'features.suggestions') return suggestionsSetting;
+          if (section === 'yaml-dsl-editor' && Object.hasOwn(featureValues, key)) return featureValues[key];
           if (section === 'yaml-dsl-editor' && key === 'cache.stackCapacity') return stackCapacitySetting;
           return section === 'yaml-dsl-editor' && key.startsWith('cache.') ? 32 : {};
         },
+        inspect: (key) => (Object.hasOwn(featureValues, key) ? { globalValue: featureValues[key] } : {}),
         update: async () => {},
       }),
       onDidChangeConfiguration(fn) {
@@ -624,20 +631,39 @@ test('activation paints the suggestions the server sends and registers the move'
   const devUri = { toString: () => 'file:///repo/dev/mock.yml' };
   assert.equal(fileDecorationChanges, 1);
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri).color.id, 'editorLightBulb.foreground');
-  notes['yaml-dsl/warnings']({ stackId: '/repo/mock.yml', uris: ['file:///repo/dev/mock.yml'] });
+  notes['yaml-dsl/suggestions']({
+    stackId: '/repo/mock.yml',
+    files: [{ uri: 'file:///repo/dev/mock.yml', warning: true, marks: [mark] }],
+  });
   assert.equal(fileDecorationChanges, 2);
   const warned = fileDecorationProvider.provideFileDecoration(devUri);
   assert.deepEqual([warned.badge, warned.color.id], ['⚠', 'yamlDslEditor.warningForeground']);
-  notes['yaml-dsl/warnings']({ stackId: '/repo/mock.yml', uris: [] });
+  featureValues['warning.deprecation.fileDecoration'] = false;
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri).badge, '💡');
+  featureValues['suggestion.move.fileDecoration'] = false;
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri), undefined);
+  featureValues['suggestion.move.fileDecoration'] = true;
+  featureValues['suggestion.move.enabled'] = false;
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri), undefined);
+  assert.deepEqual(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])), []);
+  delete featureValues['warning.deprecation.fileDecoration'];
+  delete featureValues['suggestion.move.fileDecoration'];
+  delete featureValues['suggestion.move.enabled'];
+  notes['yaml-dsl/suggestions']({
+    stackId: '/repo/mock.yml',
+    files: [{ uri: 'file:///repo/dev/mock.yml', warning: false, marks: [mark] }],
+  });
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri).badge, '💡');
+  const lightbulbPaintsBefore = painted.filter(isLightbulb).length;
   vscode.visibleChanged();
-  assert.equal(painted.filter(isLightbulb).length, 2);
+  assert.equal(painted.filter(isLightbulb).length, lightbulbPaintsBefore + 1);
   assert.equal(typeof commands[APPLY_COMMAND], 'function');
   suggestionsSetting = 'off';
+  const inlayChangesBeforeSettings = inlayChanges;
   configurationChanged({ affectsConfiguration: (setting) => setting === 'other.setting' });
-  assert.equal(inlayChanges, 1);
+  assert.equal(inlayChanges, inlayChangesBeforeSettings);
   configurationChanged({ affectsConfiguration: (setting) => setting === 'yaml-dsl-editor.features.suggestions' });
-  assert.equal(inlayChanges, 2);
+  assert.equal(inlayChanges, inlayChangesBeforeSettings + 1);
   assert.deepEqual(painted.filter(isLightbulb).at(-1).ranges, []);
   assert.deepEqual(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])), []);
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri), undefined);
@@ -715,4 +741,14 @@ test('activation paints the suggestions the server sends and registers the move'
   });
   await new Promise((resolve) => { setImmediate(resolve); });
   assert.equal(undone.saves, 1);
+});
+
+test('a suggestion\'s kind is its setting\'s kind, a move with a difference or a conditional opt-out a potential move', () => {
+  assert.equal(suggestionKindOf(moveSuggestion), 'move');
+  assert.equal(suggestionKindOf({ ...moveSuggestion, kind: 'delete' }), 'delete');
+  assert.equal(suggestionKindOf({ kind: 'rename' }), 'rename');
+  assert.equal(suggestionKindOf({ ...moveSuggestion, kind: 'potential_move' }), 'potentialMove');
+  assert.equal(suggestionKindOf(differingMove), 'potentialMove');
+  const conditional = { ...moveSuggestion, optOutConditionalFields: [{ overlay: 'dev', fields: ['mock'] }] };
+  assert.equal(suggestionKindOf(conditional), 'potentialMove');
 });

@@ -399,7 +399,6 @@ test('a layer file that changes on disk is watched and read again', async () => 
     layersChanged: async (paths) => { changed.push(['layers', paths]); },
     takeEvicted: () => [],
     takeReanalyzedUris: () => [],
-    takeWarningReports: () => [],
   };
   bind(connection, fakeDocuments(), { workspace });
   connection.handlers.initialize({
@@ -422,7 +421,6 @@ test('an open file deleted from disk is closed, as a closed tab is', async () =>
     close: async (uri) => { events.push(['close', uri]); },
     takeEvicted: () => [],
     takeReanalyzedUris: () => [],
-    takeWarningReports: () => [],
     schemaWatchTargets: () => [],
     layerWatchTargets: () => [],
   };
@@ -442,7 +440,6 @@ test('a file the editor opens is analyzed once, though the library reports the o
     sync: async (uri) => { synced.push(uri); },
     takeEvicted: () => [],
     takeReanalyzedUris: () => [],
-    takeWarningReports: () => [],
     schemaWatchTargets: () => [],
     layerWatchTargets: () => [],
   };
@@ -488,8 +485,6 @@ test('a layer no editor has open is watched while its stack is loaded, and a cha
   await workspace.whenIdle();
   assert.match(await foldOfStaging(), /size: 3/);
   assert.ok(connection.notifications.some((notification) => notification.method === 'yaml-dsl/reanalyzed'));
-  const warningReports = connection.notifications.filter((notification) => notification.method === 'yaml-dsl/warnings');
-  assert.deepEqual(warningReports.map((notification) => notification.params), [{ stackId: '/repo/app/mock.yml', uris: [] }]);
 });
 
 test('the server answers a layer file\'s overlays and the diff of a selection across them', async () => {

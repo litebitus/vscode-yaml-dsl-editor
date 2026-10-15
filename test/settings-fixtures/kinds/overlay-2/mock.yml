@@ -1,0 +1,10 @@
+mocktype:
+  common:
+    label: mock-common
+  differing:
+    label: mock-differing
+    size: 2
+  own:
+    label: mock-own-2
+  shared:
+    label: mock-shared

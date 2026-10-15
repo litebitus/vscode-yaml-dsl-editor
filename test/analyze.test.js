@@ -40,7 +40,7 @@ test('hover and definition outside a reference or a field are empty', () => {
   assert.equal(described.contents.value, 'the name');
 });
 
-test('a deprecated field leaves its hover to its warning, whose message names the key', () => {
+test('a deprecated field hovers its description, and its keys are listed with a warning message naming them', () => {
   const text = 'mocktype:\n  old: 1\n  plain: 2\n  bare: 3\n';
   const doc = analyzeDocument(text, '/repo/a.yml', { symbols: [], references: [] });
   const stack = { symbols: [], common: '/repo/a.yml' };
@@ -51,12 +51,12 @@ test('a deprecated field leaves its hover to its warning, whose message names th
   };
   const schemaOf = (draftUri) => ({ $schema: draftUri, properties: { mocktype: { properties: fields } } });
   const draft2020 = schemaOf('https://json-schema.org/draft/2020-12/schema');
-  assert.equal(hoverAt(doc, { line: 1, character: 2 }, stack, draft2020), null);
+  assert.equal(hoverAt(doc, { line: 1, character: 2 }, stack, draft2020).contents.value, 'use plain');
   assert.equal(hoverAt(doc, { line: 2, character: 2 }, stack, draft2020).contents.value, 'the plain field');
   assert.equal(hoverAt(doc, { line: 3, character: 2 }, stack, draft2020), null);
   assert.deepEqual(deprecatedFields(doc, draft2020), [
-    { range: rangeOf(text, 'old'), message: '`old` is deprecated: use plain' },
-    { range: rangeOf(text, 'bare'), message: '`bare` is deprecated' },
+    { range: rangeOf(text, 'old'), fieldRange: rangeOf(text, 'old: 1'), message: '`old` is deprecated: use plain' },
+    { range: rangeOf(text, 'bare'), fieldRange: rangeOf(text, 'bare: 3'), message: '`bare` is deprecated' },
   ]);
   const draft07 = schemaOf('http://json-schema.org/draft-07/schema#');
   assert.equal(hoverAt(doc, { line: 1, character: 2 }, stack, draft07).contents.value, 'use plain');

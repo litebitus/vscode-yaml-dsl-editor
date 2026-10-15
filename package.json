@@ -54,7 +54,53 @@
             "off"
           ],
           "default": "on",
-          "description": "Suggestions: a light bulb in the gutter and an inlay hint whose hover offers the edit."
+          "description": "Suggestions: a light bulb in the gutter and an inlay hint whose hover offers the edit.",
+          "deprecationMessage": "Deprecated: use the yaml-dsl-editor.suggestion.<kind>.enabled settings."
+        },
+        "yaml-dsl-editor.suggestion.delete.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Delete suggestions: a key an overlay holds the same as the common layer, offered for deletion."
+        },
+        "yaml-dsl-editor.suggestion.delete.fileDecoration": {
+          "type": "boolean",
+          "default": true,
+          "description": "A file holding a delete suggestion, and every folder above it, named in the light bulb color with a light bulb badge."
+        },
+        "yaml-dsl-editor.suggestion.move.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Move suggestions: a unit every overlay holds alike, offered for a move into the common layer."
+        },
+        "yaml-dsl-editor.suggestion.move.fileDecoration": {
+          "type": "boolean",
+          "default": true,
+          "description": "A file holding a move suggestion, and every folder above it, named in the light bulb color with a light bulb badge."
+        },
+        "yaml-dsl-editor.suggestion.potentialMove.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Potential move suggestions: a move whose choice is the user's, shown as information."
+        },
+        "yaml-dsl-editor.suggestion.rename.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Rename suggestions: a name edited by hand, offered for a rename across the stack."
+        },
+        "yaml-dsl-editor.suggestion.rename.fileDecoration": {
+          "type": "boolean",
+          "default": true,
+          "description": "A file holding a rename suggestion, and every folder above it, named in the light bulb color with a light bulb badge."
+        },
+        "yaml-dsl-editor.warning.deprecation.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Deprecation warnings: a field the schema marks deprecated is struck through and marked in the gutter."
+        },
+        "yaml-dsl-editor.warning.deprecation.fileDecoration": {
+          "type": "boolean",
+          "default": true,
+          "description": "A file holding a deprecation warning, and every folder above it, named in the warning color with a warning badge."
         }
       }
     },
