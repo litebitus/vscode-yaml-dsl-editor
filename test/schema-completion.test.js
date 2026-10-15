@@ -44,18 +44,9 @@ test('a key position offers the schema\'s fields, each with its marker, descript
   assert.deepEqual([items.legacy.deprecated, items.mode.deprecated], [true, false]);
 });
 
-test('a field the map already holds is offered last, its row naming the line holding it', () => {
-  const items = byLabel(completionsAfter('mocktype:\n  mode: fast\n  size: 1\n  label: mock\n  '));
-  assert.deepEqual([items.label.detail, items.label.sortText], ['[required]', '2_label']);
-  assert.equal(items.label.labelDescription, '[required] ⚠ already at line 4 · The mock label.');
-  assert.equal(items.size.labelDescription, '[optional] ⚠ already at line 3');
-  assert.deepEqual([items.enabled.sortText, items.enabled.labelDescription], ['1_enabled', '[optional] Whether the mock is on.']);
-});
-
-test('a field a parent requires is marked required and sorts first', () => {
+test('a field a parent requires is marked required', () => {
   const items = byLabel(completionsAfter('mocktype:\n  '));
-  assert.deepEqual([items.label.detail, items.label.sortText], ['[required]', '0_label']);
-  assert.deepEqual([items.mode.detail, items.mode.sortText], ['[optional]', '1_mode']);
+  assert.deepEqual([items.label.detail, items.mode.detail], ['[required]', '[optional]']);
 });
 
 test('a value position offers the field\'s enum values and booleans, replacing what is typed', () => {

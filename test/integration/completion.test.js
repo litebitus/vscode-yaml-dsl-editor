@@ -59,7 +59,7 @@ suite('completion', () => {
 });
 
 suite('schema completion', () => {
-  test('a key started in a map offers the schema\'s fields, a held one naming its line, striking a deprecated one', async () => {
+  test('a key started in a map offers the schema\'s fields, striking a deprecated one', async () => {
     const editor = await shownDocument(path.join(fixtureCopy('schema-completion'), 'mock.yml'));
     const cursor = await typedAtEnd(editor, '  se');
     const offered = await completionItemsAt(editor.document, cursor);
@@ -67,8 +67,6 @@ suite('schema completion', () => {
     const fixtureFields = ['label', 'legacy', 'mode', 'settings'];
     const offeredFields = Object.keys(items).filter((label) => fixtureFields.includes(label)).sort();
     assert.deepEqual(offeredFields, ['label', 'legacy', 'mode', 'settings']);
-    assert.match(items.label.label.detail, /⚠ already at line 3/);
-    assert.ok(items.label.sortText > items.mode.sortText);
     assert.ok(items.legacy.tags.includes(vscode.CompletionItemTag.Deprecated));
     assert.equal(items.mode.label.detail, ' [optional] The mock mode.');
     const insertedText = (item) => (typeof item.insertText === 'string' ? item.insertText : item.insertText.value);

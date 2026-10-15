@@ -520,8 +520,7 @@ The file's schema completes keys and values, read by the parser of the schema's 
 | a value after a key | the field's `enum` and `const` values, and `true` / `false` for a boolean |
 
 - A field's row shows its requirement marker and description, cut to the row's width, and the full text shows beside the list; a field the parent's `required` array lists is `[required]`.
-- `[required]` fields sort first, and a deprecated field is struck through in a draft that reads `deprecated`.
-- A field the map already holds sorts last, its row naming the line holding it, so a key can be typed anew before the old one is deleted.
+- A deprecated field is struck through in a draft that reads `deprecated`.
 - Word completion is off in DSL files, so the list holds only what the schema and the references offer; a user's own `editor.wordBasedSuggestions` for the language still wins.
 - A field's value forms are its schema with references, `allOf`, and each `anyOf` or `oneOf` alternative resolved.
 - A field whose every value form is a map or a list inserts its key and a new line indented one level; any other field inserts `key: `, and opens the list of its values when it has any.

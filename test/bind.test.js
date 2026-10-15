@@ -318,7 +318,7 @@ test('completion answers editor items that replace what was typed', async () => 
   assert.deepEqual(bare.completion('file:///repo/none.yml', { line: 0, character: 0 }), []);
 });
 
-test('a schema field completes as an editor item that inserts its key, sorts by requirement, and strikes a deprecated field', async () => {
+test('a schema field completes as an editor item that inserts its key and strikes a deprecated field', async () => {
   const connection = fakeConnection();
   const documents = fakeDocuments();
   const schemaText = JSON.stringify({
@@ -343,7 +343,7 @@ test('a schema field completes as an editor item that inserts its key, sorts by 
   });
   const byLabel = Object.fromEntries(items.map((item) => [item.label, item]));
   assert.deepEqual(byLabel.mode.textEdit.newText, 'mode: ');
-  assert.deepEqual([byLabel.mode.kind, byLabel.mode.detail, byLabel.mode.sortText], [10, '[required]', '0_mode']);
+  assert.deepEqual([byLabel.mode.kind, byLabel.mode.detail], [10, '[required]']);
   assert.deepEqual(byLabel.mode.labelDetails, { detail: ' [required] The mock mode.' });
   assert.deepEqual(byLabel.mode.command, { title: 'Suggest values', command: 'editor.action.triggerSuggest' });
   assert.deepEqual([byLabel.legacy.tags, byLabel.legacy.command], [[1], undefined]);
