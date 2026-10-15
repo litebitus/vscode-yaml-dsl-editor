@@ -6,6 +6,7 @@
 - Schemas: a deprecated field is a warning, in the drafts that define `deprecated`: its key is struck through in yellow, its message is the hover of its key and value, and its file and folders show in yellow with a `⚠` badge, kept across restarts and reported for stacks worked out in the background.
 - Completion: keys and values complete from the file's schema: a map's fields, each with its requirement marker and description, deprecated ones struck through, and a field's `enum`, `const` and boolean values.
 - Completion: word completion is off in DSL files.
+- Completion: a scalar field with a schema `default` is written with the default selected, when completed and when filled as a required field.
 - Problems: a key with no `:` yet is an error on that key once the cursor leaves its line, and the lines around it read as if it were not there.
 - Problems: a key its map holds twice is a warning on each copy naming the other's line, where it was a parse error.
 - Completion: in a DSL file, Tab and Shift+Tab move through the list, Tab accepts a lone entry, and Enter accepts.

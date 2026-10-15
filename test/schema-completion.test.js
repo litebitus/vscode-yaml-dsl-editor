@@ -44,6 +44,31 @@ test('a key position offers the schema\'s fields, each with its marker, descript
   assert.deepEqual([items.legacy.deprecated, items.mode.deprecated], [true, false]);
 });
 
+test('a scalar field with a default inserts the default selected, opening no value list', () => {
+  const defaultSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      mocktype: {
+        type: 'object',
+        properties: {
+          dry_run: { type: 'boolean', default: false },
+          retention: { $ref: '#/$defs/retention' },
+          tags: { type: 'array', default: ['mock-tag'] },
+        },
+      },
+    },
+    $defs: { retention: { type: 'integer', default: 4 } },
+  };
+  const position = { line: 1, character: 2 };
+  const items = byLabel(schemaCompletionsAt('mocktype:\n  ', position, defaultSchema));
+  assert.deepEqual(
+    [items.dry_run.insertText, items.dry_run.insertsSnippet, items.dry_run.suggestsValues],
+    ['dry_run: ${1:false}', true, false],
+  );
+  assert.equal(items.retention.insertText, 'retention: ${1:4}');
+  assert.deepEqual([items.tags.insertText, items.tags.insertsSnippet], ['tags:\n    ', false]);
+});
+
 test('a field a parent requires is marked required', () => {
   const items = byLabel(completionsAfter('mocktype:\n  '));
   assert.deepEqual([items.label.detail, items.mode.detail], ['[required]', '[optional]']);

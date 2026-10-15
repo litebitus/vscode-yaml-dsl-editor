@@ -6,6 +6,7 @@
       "properties": {
         "label": { "type": "string", "description": "[required] The mock label." },
         "mode": { "enum": ["fast", "slow"], "description": "[optional] The mock mode." },
+        "enabled": { "type": "boolean", "default": false, "description": "[optional] Whether the mock is on." },
         "legacy": { "type": "string", "deprecated": true, "description": "[optional] Use mode." },
         "settings": { "$ref": "#/$defs/settings", "description": "[optional] The mock settings." }
       }

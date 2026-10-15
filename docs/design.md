@@ -524,6 +524,7 @@ The file's schema completes keys and values, read by the parser of the schema's 
 - Word completion is off in DSL files, so the list holds only what the schema and the references offer; a user's own `editor.wordBasedSuggestions` for the language still wins.
 - A field's value forms are its schema with references, `allOf`, and each `anyOf` or `oneOf` alternative resolved.
 - A field whose every value form is a map or a list inserts its key and a new line indented one level; any other field inserts `key: `, and opens the list of its values when it has any.
+- A scalar field whose schema states a `default` inserts `key: <default>` with the default selected, and opens no list.
 - The cursor's place is read from the document with the cursor's line taken as a key, so a line still being typed is placed by its indentation; text inside a block scalar offers nothing.
 - The list opens as a key or value starts and narrows on every character, by the editor's fuzzy match.
 
@@ -534,7 +535,7 @@ Enter after a key whose map is still empty fills the map's required fields:
 - A field is required when its requirement marker is `[required]`, or when it has no marker and the parent's `required` array lists it; a `[~required]` field is not filled.
 - A field the common layer already gives the map in the stack's fold is not filled.
 - The fields are ordered by `formatter.key_sort_orders` for the map, and in the schema's written order where it does not decide.
-- A scalar field is written `key: `, its values a pick list when it has any; a map or list field is written `key:` and an indented line.
+- A scalar field is written `key: `, its values a pick list when it has any, or `key: <default>` with the default as the stop's text when its schema states a `default`; a map or list field is written `key:` and an indented line.
 - The cursor waits at the first value; the fill is one undo step, and leaves the new line.
 
 ### Keys in the list

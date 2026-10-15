@@ -8,9 +8,9 @@ const {
 
 test('the snippet places a tab stop at each value, a pick list for values, an indented line for a map, and ends after the block', () => {
   const fields = [
-    { key: 'name', valueKind: 'scalar', values: [] },
-    { key: 'mode', valueKind: 'scalar', values: ['fast', 'a,b'] },
-    { key: 'settings', valueKind: 'map', values: [] },
+    { key: 'name', valueKind: 'scalar', values: [], defaultValue: null },
+    { key: 'mode', valueKind: 'scalar', values: ['fast', 'a,b'], defaultValue: null },
+    { key: 'settings', valueKind: 'map', values: [], defaultValue: null },
   ];
   assert.equal(requiredFieldsSnippetText(fields, 2, 2), [
     '    name: $1',
@@ -18,7 +18,16 @@ test('the snippet places a tab stop at each value, a pick list for values, an in
     '    settings:',
     '      $3$0',
   ].join('\n'));
-  assert.equal(requiredFieldsSnippetText([{ key: 'cost$', valueKind: 'scalar', values: [] }], 0, 4), '    cost\\$: $1$0');
+  const cost = { key: 'cost$', valueKind: 'scalar', values: [], defaultValue: null };
+  assert.equal(requiredFieldsSnippetText([cost], 0, 4), '    cost\\$: $1$0');
+});
+
+test('a field with a default is filled with it as the tab stop\'s placeholder, over its pick list', () => {
+  const fields = [
+    { key: 'dry_run', valueKind: 'scalar', values: ['true', 'false'], defaultValue: 'false' },
+    { key: 'price', valueKind: 'scalar', values: [], defaultValue: '$5}' },
+  ];
+  assert.equal(requiredFieldsSnippetText(fields, 0, 2), '  dry_run: ${1:false}\n  price: ${2:\\$5\\}}$0');
 });
 
 function documentOf(lines) {
@@ -62,7 +71,7 @@ test('Enter after a key line asks the server and inserts the fields as one undo 
   const client = {
     sendRequest: async (method, params) => {
       asked.push([method, params]);
-      return { keyColumn: 2, fields: [{ key: 'name', valueKind: 'scalar', values: [] }] };
+      return { keyColumn: 2, fields: [{ key: 'name', valueKind: 'scalar', values: [], defaultValue: null }] };
     },
   };
   await fillRequiredFieldsAfterEnter(vscode, client, enterEvent(document));
@@ -77,7 +86,7 @@ test('Enter after a key line asks the server and inserts the fields as one undo 
 test('typing other than Enter after a key, an undo, a text changed meanwhile, or no fields inserts nothing', async () => {
   const document = documentOf(['queue:', '  alerts: mock', '    ']);
   const vscode = fillingVscode(document);
-  let answer = { keyColumn: 2, fields: [{ key: 'name', valueKind: 'scalar', values: [] }] };
+  let answer = { keyColumn: 2, fields: [{ key: 'name', valueKind: 'scalar', values: [], defaultValue: null }] };
   const client = { sendRequest: async () => answer };
   await fillRequiredFieldsAfterEnter(vscode, client, enterEvent(document));
   const keyDocument = documentOf(['queue:', '  alerts:', '    ']);

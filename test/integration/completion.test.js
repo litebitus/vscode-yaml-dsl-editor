@@ -93,6 +93,24 @@ suite('schema completion', () => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
+  test('accepting a field with a default writes the default, selected', async () => {
+    const editor = await shownDocument(path.join(fixtureCopy('schema-completion'), 'mock.yml'));
+    const cursor = await typedAtEnd(editor, '  enab');
+    editor.selection = new vscode.Selection(cursor, cursor);
+    await completionItemsAt(editor.document, cursor);
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    const typedLine = () => editor.document.lineAt(cursor.line).text;
+    while (Date.now() < deadline && typedLine() !== '  enabled: false') {
+      await vscode.commands.executeCommand('editor.action.triggerSuggest');
+      await new Promise((resolve) => { setTimeout(resolve, 300); });
+      await vscode.commands.executeCommand('acceptSelectedSuggestion');
+    }
+    assert.equal(typedLine(), '  enabled: false');
+    assert.equal(editor.document.getText(editor.selection), 'false');
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
   test('word completion is off in a DSL file', () => {
     const editorSettings = vscode.workspace.getConfiguration('editor', { languageId: 'yaml-dsl' });
     assert.equal(editorSettings.get('wordBasedSuggestions'), 'off');
@@ -125,13 +143,15 @@ suite('required fields', () => {
     assert.deepEqual(filledLines, [
       '    kms_key_arn: ',
       '    mode: fast',
-      '    name: ',
+      '    name: mock-name',
       '    settings:',
       '      ',
     ]);
     assert.deepEqual([editor.selection.active.line, editor.selection.active.character], [keyLine + 1, 17]);
     await vscode.commands.executeCommand('jumpToNextSnippetPlaceholder');
     assert.equal(doc.getText(editor.selection), 'fast');
+    await vscode.commands.executeCommand('jumpToNextSnippetPlaceholder');
+    assert.equal(doc.getText(editor.selection), 'mock-name');
     await vscode.commands.executeCommand('leaveSnippet');
     await vscode.commands.executeCommand('undo');
     assert.equal(doc.getText().includes('kms_key_arn:'), false);

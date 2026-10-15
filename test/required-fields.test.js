@@ -54,10 +54,42 @@ test('Enter after an empty resource key fills the fields marked required or list
   });
   assert.equal(filled.keyColumn, 2);
   assert.deepEqual(filled.fields, [
-    { key: 'name', valueKind: 'scalar', values: [] },
-    { key: 'mode', valueKind: 'scalar', values: ['fast', 'slow'] },
-    { key: 'kms_key_arn', valueKind: 'scalar', values: [] },
-    { key: 'settings', valueKind: 'map', values: [] },
+    { key: 'name', valueKind: 'scalar', values: [], defaultValue: null },
+    { key: 'mode', valueKind: 'scalar', values: ['fast', 'slow'], defaultValue: null },
+    { key: 'kms_key_arn', valueKind: 'scalar', values: [], defaultValue: null },
+    { key: 'settings', valueKind: 'map', values: [], defaultValue: null },
+  ]);
+});
+
+test('a filled scalar field carries its schema default, followed through a reference', () => {
+  const defaultSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      queue: {
+        type: 'object',
+        additionalProperties: {
+          type: 'object',
+          properties: {
+            dry_run: { type: 'boolean', default: false, description: '[required] Mock dry run.' },
+            retention: { $ref: '#/$defs/retention', description: '[required] Mock retention.' },
+            tags: { type: 'array', default: ['mock-tag'], description: '[required] Mock tags.' },
+          },
+        },
+      },
+    },
+    $defs: { retention: { type: 'integer', default: 4 } },
+  };
+  const filled = requiredFieldsToFill({
+    text: 'queue:\n  alerts:\n',
+    keyLine: 1,
+    schema: defaultSchema,
+    dsl: dslWith([]),
+    heldKeysAt: noHeldKeys,
+  });
+  assert.deepEqual(filled.fields.map((field) => [field.key, field.defaultValue]), [
+    ['dry_run', 'false'],
+    ['retention', '4'],
+    ['tags', null],
   ]);
 });
 

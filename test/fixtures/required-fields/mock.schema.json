@@ -11,7 +11,7 @@
       "type": "object",
       "required": ["kms_key_arn"],
       "properties": {
-        "name": { "type": "string", "description": "[required] The mock name." },
+        "name": { "type": "string", "default": "mock-name", "description": "[required] The mock name." },
         "mode": { "enum": ["fast", "slow"], "description": "[required] The mock mode." },
         "kms_key_arn": { "type": "string" },
         "settings": { "type": "object", "description": "[required] The mock settings." },
