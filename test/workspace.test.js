@@ -227,6 +227,16 @@ test('two DSLs, a parse error, and a DSL without layers', async () => {
   assert.match(hover.contents.value, /mock-value/);
   assert.deepEqual(ws.foldsFor('/repo/note.yml'), { stackId: null, overlayNames: [] });
   assert.equal(ws.foldText('/repo/note.yml', 'one'), '');
+  await ws.sync('file:///repo/note.yml', '/repo/note.yml', 'locals:\n  db: 1\n  sc\n  db: 2\n  db: 3\n');
+  const keyProblems = ws.problems('file:///repo/note.yml').filter((problem) => problem.kind);
+  assert.deepEqual(keyProblems.map(({ message, severity, kind }) => [message, severity, kind]), [
+    ['`sc` needs a `:`', 'error', 'unfinishedKey'],
+    ['`db` is also at lines 4, 5', 'warning', 'duplicateKey'],
+    ['`db` is also at lines 2, 5', 'warning', 'duplicateKey'],
+    ['`db` is also at lines 2, 4', 'warning', 'duplicateKey'],
+  ]);
+  await ws.sync('file:///repo/note.yml', '/repo/note.yml', 'locals:\n  db: 1\n  db: 2\n');
+  assert.equal(ws.problems('file:///repo/note.yml')[0].message, '`db` is also at line 3');
   await ws.sync('file:///repo/note.yml', '/repo/note.yml', 'locals: [\n');
   assert.ok(ws.problems('file:///repo/note.yml').length > 0);
   await ws.setActive(null);
@@ -500,7 +510,7 @@ test('completion offers what the file\'s fold sees, written as each reference ru
   assert.deepEqual(labels(one, oneText, '${local.d').sort(), ['${env}', '${local.db}']);
   const builtin = ws.completion(`file://${one}`, after(oneText, '${local.d')).find((entry) => entry.label === '${env}');
   assert.deepEqual([builtin.kind, builtin.detail, builtin.documentation], ['builtin', 'GLOBAL scope', '']);
-  assert.deepEqual(labels(one, oneText, 'key_being_typed'), []);
+  assert.deepEqual(labels(one, oneText, 'key_being_typed').sort(), ['label', 'source']);
   const item = ws.completion(`file://${one}`, after(oneText, 'source: ref '))
     .find((entry) => entry.label === 'ref mocktype.primary');
   assert.deepEqual(item.range.start, after(oneText, 'source: '));

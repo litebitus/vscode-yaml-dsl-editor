@@ -59,14 +59,16 @@ suite('completion', () => {
 });
 
 suite('schema completion', () => {
-  test('a key started in a map offers the schema\'s fields the map does not hold, striking a deprecated one', async () => {
+  test('a key started in a map offers the schema\'s fields, a held one naming its line, striking a deprecated one', async () => {
     const editor = await shownDocument(path.join(fixtureCopy('schema-completion'), 'mock.yml'));
     const cursor = await typedAtEnd(editor, '  se');
     const offered = await completionItemsAt(editor.document, cursor);
     const items = Object.fromEntries(offered.map((item) => [labelOf(item), item]));
     const fixtureFields = ['label', 'legacy', 'mode', 'settings'];
     const offeredFields = Object.keys(items).filter((label) => fixtureFields.includes(label)).sort();
-    assert.deepEqual(offeredFields, ['legacy', 'mode', 'settings']);
+    assert.deepEqual(offeredFields, ['label', 'legacy', 'mode', 'settings']);
+    assert.match(items.label.label.detail, /⚠ already at line 3/);
+    assert.ok(items.label.sortText > items.mode.sortText);
     assert.ok(items.legacy.tags.includes(vscode.CompletionItemTag.Deprecated));
     assert.equal(items.mode.label.detail, ' [optional] The mock mode.');
     const insertedText = (item) => (typeof item.insertText === 'string' ? item.insertText : item.insertText.value);
@@ -74,6 +76,28 @@ suite('schema completion', () => {
     assert.equal(insertedText(items.mode), 'mode: ');
     await vscode.commands.executeCommand('workbench.action.files.revert');
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
+  test('the lone-entry Tab command accepts the entry the list holds', async () => {
+    const editor = await shownDocument(path.join(fixtureCopy('schema-completion'), 'mock.yml'));
+    const cursor = await typedAtEnd(editor, '  mode: fa');
+    editor.selection = new vscode.Selection(cursor, cursor);
+    await completionItemsAt(editor.document, cursor);
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    const typedLine = () => editor.document.lineAt(cursor.line).text;
+    while (Date.now() < deadline && typedLine() !== '  mode: fast') {
+      await vscode.commands.executeCommand('editor.action.triggerSuggest');
+      await new Promise((resolve) => { setTimeout(resolve, 300); });
+      await vscode.commands.executeCommand('yaml-dsl-editor.acceptLoneSuggestion');
+    }
+    assert.equal(typedLine(), '  mode: fast');
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
+  test('word completion is off in a DSL file', () => {
+    const editorSettings = vscode.workspace.getConfiguration('editor', { languageId: 'yaml-dsl' });
+    assert.equal(editorSettings.get('wordBasedSuggestions'), 'off');
   });
 
   test('a value after a key offers the field\'s enum values', async () => {

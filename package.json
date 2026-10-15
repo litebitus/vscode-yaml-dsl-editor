@@ -111,7 +111,8 @@
         "editor.quickSuggestions": {
           "strings": "on"
         },
-        "editor.semanticHighlighting.enabled": true
+        "editor.semanticHighlighting.enabled": true,
+        "editor.wordBasedSuggestions": "off"
       }
     },
     "semanticTokenScopes": [
@@ -192,7 +193,7 @@
       },
       {
         "key": "tab",
-        "command": "acceptSelectedSuggestion",
+        "command": "yaml-dsl-editor.acceptLoneSuggestion",
         "when": "editorLangId == yaml-dsl && suggestWidgetVisible && !suggestWidgetMultipleSuggestions && suggestWidgetHasFocusedSuggestion && textInputFocus"
       },
       {

@@ -29,3 +29,38 @@ test('aliases resolve and a broken document reports an error', () => {
   assert.equal(parseYaml('').tree, null);
   assert.equal(parseYaml('').value, null);
 });
+
+test('a key typed without its colon is an unfinished key on its own line, wherever it stands in its map', () => {
+  const keyOn = (text) => {
+    const parsed = parseYaml(text);
+    return { errors: parsed.errors, unfinishedKeys: parsed.unfinishedKeys };
+  };
+  const middle = { key: 'sc', range: { start: { line: 2, character: 2 }, end: { line: 2, character: 4 } } };
+  assert.deepEqual(keyOn('a:\n  b: 1\n  sc\n  c: 2\n'), { errors: [], unfinishedKeys: [middle] });
+  assert.deepEqual(keyOn('a:\n  b: 1\n  sc\nd: 3\n'), { errors: [], unfinishedKeys: [middle] });
+  assert.deepEqual(keyOn('a:\n  b: 1\n  sc'), { errors: [], unfinishedKeys: [middle] });
+  const top = { key: 'sc', range: { start: { line: 0, character: 0 }, end: { line: 0, character: 2 } } };
+  assert.deepEqual(keyOn('sc\na: 1\n'), { errors: [], unfinishedKeys: [top] });
+  const item = { key: 'sc', range: { start: { line: 2, character: 4 }, end: { line: 2, character: 6 } } };
+  assert.deepEqual(keyOn('a:\n  - x: 1\n    sc\n'), { errors: [], unfinishedKeys: [item] });
+  assert.deepEqual(parseYaml('a:\n  - sc\n  - b\n').unfinishedKeys, []);
+  assert.deepEqual(parseYaml('a: 1\nb: c: d\n').unfinishedKeys, []);
+});
+
+test('a key a map holds twice is a duplicate on each copy, naming the lines of the others', () => {
+  const parsed = parseYaml('a:\n  b: 1\n  c: 2\n  b: 3\n  b: 4\nb: 5\n');
+  assert.deepEqual(parsed.errors, []);
+  assert.deepEqual(parsed.duplicateKeys, [
+    { key: 'b', range: { start: { line: 1, character: 2 }, end: { line: 1, character: 3 } }, otherLines: [3, 4] },
+    { key: 'b', range: { start: { line: 3, character: 2 }, end: { line: 3, character: 3 } }, otherLines: [1, 4] },
+    { key: 'b', range: { start: { line: 4, character: 2 }, end: { line: 4, character: 3 } }, otherLines: [1, 3] },
+  ]);
+  assert.deepEqual(parseYaml('- a: 1\n  a: 2\n').duplicateKeys.map((duplicate) => duplicate.otherLines), [[1], [0]]);
+});
+
+test('the lines around an unfinished key parse as if it were not there', () => {
+  const parsed = parseYaml('a:\n  sc\n  de\n  b: 1\n');
+  assert.deepEqual(parsed.unfinishedKeys.map((unfinishedKey) => unfinishedKey.key), ['sc', 'de']);
+  assert.deepEqual(parsed.value, { a: { b: 1 } });
+  assert.deepEqual(parsed.tree.entries[0].value.entries[0].keyRange.start, { line: 3, character: 2 });
+});

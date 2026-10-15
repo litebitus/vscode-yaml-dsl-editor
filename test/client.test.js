@@ -9,6 +9,7 @@ const {
   editorMiddleware,
   ownedFile,
   paintUnderlines,
+  repaintProblemsOnCursorMove,
 } = require('../lib/client');
 const {
   scope,
@@ -587,6 +588,7 @@ function referenceMarks() {
     info: { kind: 'info' },
     unclassified: { kind: 'unclassified' },
     deprecated: { kind: 'deprecated' },
+    duplicateKey: { kind: 'duplicateKey' },
   };
 }
 
@@ -662,7 +664,7 @@ test('references are painted by the class the server gives them', async () => {
   assert.deepEqual(covered('error'), ['ref five.six']);
   assert.deepEqual(covered('unclassified'), []);
   assert.deepEqual(client.sent.at(-1), { method: 'yaml-dsl/decorations', params: { uri: 'file:///repo/mock.yml' } });
-  assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0, 0, 0, 0, 0]);
 });
 
 test('a deprecated key is struck through in yellow and its warning is the hover of its key and value, unless deprecation warnings are off', async () => {
@@ -695,6 +697,36 @@ test('a deprecated key is struck through in yellow and its warning is the hover 
   const activated = fakeVscode({ documents: [] });
   await activatedFully(activated, { subscriptions: [] }, () => fakeClient());
   assert.ok(activated.decorations.some((decoration) => decoration.options.textDecoration === 'line-through #ece200'));
+});
+
+test('an unfinished key is no error while the cursor is on its line, and is one once the cursor leaves it', async () => {
+  const unfinishedKey = { range: rangeOf(1, 2, 4), message: '`sc` needs a `:`', severity: 'error', kind: 'unfinishedKey' };
+  const duplicateKey = { range: rangeOf(2, 2, 3), message: '`b` is also at line 4', severity: 'warning', kind: 'duplicateKey' };
+  const client = fakeClient({ decorations: { references: [], problems: [unfinishedKey, duplicateKey] } });
+  const doc = documentOf('a:\n  sc\n  b: 1\n  b: 2\n', 'typed.yml');
+  const painted = [];
+  const editor = { ...recordingEditor(doc, painted), selection: { active: { line: 1, character: 4 } } };
+  const marks = referenceMarks();
+  const vscode = paintingVscode([editor]);
+  await paintUnderlines(vscode, client, marks, []);
+  const messages = (kind) => lastPaint(painted, kind).ranges.map((mark) => mark.hoverMessage);
+  assert.deepEqual(messages('error'), []);
+  assert.deepEqual(messages('warning'), ['`b` is also at line 4']);
+  assert.deepEqual(lastPaint(painted, 'duplicateKey').ranges.map((range) => doc.getText(range)), ['b']);
+  const paintCount = painted.length;
+  editor.selection = { active: { line: 1, character: 2 } };
+  repaintProblemsOnCursorMove(vscode, marks, editor);
+  assert.equal(painted.length, paintCount);
+  editor.selection = { active: { line: 2, character: 0 } };
+  repaintProblemsOnCursorMove(vscode, marks, editor);
+  assert.deepEqual(messages('error'), ['`sc` needs a `:`']);
+  editor.selection = { active: { line: 3, character: 0 } };
+  repaintProblemsOnCursorMove(vscode, marks, editor);
+  assert.equal(painted.length, paintCount + 4);
+  editor.selection = { active: { line: 1, character: 0 } };
+  repaintProblemsOnCursorMove(vscode, marks, editor);
+  assert.deepEqual(messages('error'), []);
+  repaintProblemsOnCursorMove(vscode, marks, { document: doc, selection: { active: { line: 0, character: 0 } } });
 });
 
 test('a classified ref takes its class underline whole, placeholders inside it included', async () => {

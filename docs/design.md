@@ -55,6 +55,16 @@ A problem has a severity, drawn in the color the DevOps tools print it in:
 - The gutter marks share one size.
 - An info problem is a schema the file names that cannot be loaded.
 
+Keys:
+
+| Problem | Severity | Message |
+|---|---|---|
+| a key with no `:` yet | error, on that key only | `` `<key>` needs a `:` `` |
+| a key its map holds more than once | warning, every copy's key underlined in yellow | `` `<key>` is also at line <n> `` |
+
+- A key with no `:` is no error while the cursor is on its line; the error shows once the cursor leaves it.
+- The lines around a key with no `:` are read as if the key were not there.
+
 ### Startup
 
 The extension is an editor first, and nothing it does holds back the file. On startup, and for every newly opened file:
@@ -505,12 +515,14 @@ The file's schema completes keys and values, read by the parser of the schema's 
 
 | Where | The list holds |
 |---|---|
-| a key in a map | the fields the schema lists for the map, minus the keys the map holds |
+| a key in a map | the fields the schema lists for the map |
 | a list item | the fields of the item schema, or its values |
 | a value after a key | the field's `enum` and `const` values, and `true` / `false` for a boolean |
 
 - A field's row shows its requirement marker and description, cut to the row's width, and the full text shows beside the list; a field the parent's `required` array lists is `[required]`.
 - `[required]` fields sort first, and a deprecated field is struck through in a draft that reads `deprecated`.
+- A field the map already holds sorts last, its row naming the line holding it, so a key can be typed anew before the old one is deleted.
+- Word completion is off in DSL files, so the list holds only what the schema and the references offer; a user's own `editor.wordBasedSuggestions` for the language still wins.
 - A field's value forms are its schema with references, `allOf`, and each `anyOf` or `oneOf` alternative resolved.
 - A field whose every value form is a map or a list inserts its key and a new line indented one level; any other field inserts `key: `, and opens the list of its values when it has any.
 - The cursor's place is read from the document with the cursor's line taken as a key, so a line still being typed is placed by its indentation; text inside a block scalar offers nothing.

@@ -30,9 +30,9 @@ function completionsAfter(text) {
 
 const byLabel = (items) => Object.fromEntries(items.map((item) => [item.label, item]));
 
-test('a key position offers the schema\'s fields the map does not hold yet, each with its marker, description and insertion', () => {
+test('a key position offers the schema\'s fields, each with its marker, description and insertion', () => {
   const items = byLabel(completionsAfter('mocktype:\n  label: mock\n  se'));
-  assert.deepEqual(Object.keys(items).sort(), ['enabled', 'legacy', 'mode', 'settings', 'size', 'tags']);
+  assert.deepEqual(Object.keys(items).sort(), ['enabled', 'label', 'legacy', 'mode', 'settings', 'size', 'tags']);
   assert.deepEqual(items.settings.range, { start: { line: 2, character: 2 }, end: { line: 2, character: 4 } });
   assert.deepEqual([items.settings.detail, items.settings.documentation], ['[~required]', 'The mock settings.']);
   assert.equal(items.settings.labelDescription, '[~required] The mock settings.');
@@ -42,6 +42,14 @@ test('a key position offers the schema\'s fields the map does not hold yet, each
   assert.deepEqual([items.mode.insertText, items.mode.suggestsValues], ['mode: ', true]);
   assert.deepEqual([items.size.insertText, items.size.suggestsValues], ['size: ', false]);
   assert.deepEqual([items.legacy.deprecated, items.mode.deprecated], [true, false]);
+});
+
+test('a field the map already holds is offered last, its row naming the line holding it', () => {
+  const items = byLabel(completionsAfter('mocktype:\n  mode: fast\n  size: 1\n  label: mock\n  '));
+  assert.deepEqual([items.label.detail, items.label.sortText], ['[required]', '2_label']);
+  assert.equal(items.label.labelDescription, '[required] ⚠ already at line 4 · The mock label.');
+  assert.equal(items.size.labelDescription, '[optional] ⚠ already at line 3');
+  assert.deepEqual([items.enabled.sortText, items.enabled.labelDescription], ['1_enabled', '[optional] Whether the mock is on.']);
 });
 
 test('a field a parent requires is marked required and sorts first', () => {
