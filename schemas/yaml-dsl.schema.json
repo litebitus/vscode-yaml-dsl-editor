@@ -54,6 +54,7 @@
         "placeholder": { "$ref": "#/$defs/placeholder" },
         "function": { "$ref": "#/$defs/function" },
         "locals": { "$ref": "#/$defs/locals" },
+        "validator": { "$ref": "#/$defs/validator" },
         "key_sort_orders": {
           "type": "array",
           "items": { "$ref": "#/$defs/key_sort_order" },
@@ -174,6 +175,35 @@
           "type": "string",
           "minLength": 1,
           "description": "The scope, declared under scopes, whose declarations are the locals."
+        }
+      }
+    },
+    "validator": {
+      "type": "object",
+      "description": "How a document is read before it is validated against its schema. Left out for a DSL whose documents are validated as written.",
+      "required": ["merge_base_keys", "child_values_from_parent_key"],
+      "additionalProperties": false,
+      "properties": {
+        "merge_base_keys": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Keys whose value is the merge base of each sibling entry."
+        },
+        "child_values_from_parent_key": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["pattern"],
+            "additionalProperties": false,
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "pattern": "\\(\\?<field>[\\s\\S]*\\(\\?<value>|\\(\\?<value>[\\s\\S]*\\(\\?<field>",
+                "description": "Regular expression of a key that sets a field of its own entry, with (?<field>...) and (?<value>...) groups."
+              }
+            }
+          },
+          "description": "Keys that set a field of the entry they key."
         }
       }
     },

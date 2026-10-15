@@ -101,6 +101,22 @@
           "type": "boolean",
           "default": true,
           "description": "A file holding a deprecation warning, and every folder above it, named in the warning color with a warning badge."
+        },
+        "yaml-dsl-editor.validator.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validation: each document is checked against its schema, and each validation error is a problem."
+        },
+        "yaml-dsl-editor.validator.errorSeverity": {
+          "type": "string",
+          "enum": ["error", "warning", "info"],
+          "default": "warning",
+          "description": "The severity a validation error is shown with."
+        },
+        "yaml-dsl-editor.validator.fileDecoration": {
+          "type": "boolean",
+          "default": false,
+          "description": "A file holding a validation error, and every folder above it, named in the color of the error's severity with its badge."
         }
       }
     },
@@ -234,6 +250,26 @@
       ]
     },
     "colors": [
+      {
+        "id": "yamlDslEditor.errorForeground",
+        "description": "Name of a file holding an error, and of every folder above it.",
+        "defaults": {
+          "dark": "#DC7975",
+          "light": "#DC7975",
+          "highContrast": "#DC7975",
+          "highContrastLight": "#DC7975"
+        }
+      },
+      {
+        "id": "yamlDslEditor.infoForeground",
+        "description": "Name of a file holding an info problem, and of every folder above it.",
+        "defaults": {
+          "dark": "#A6ABF2",
+          "light": "#A6ABF2",
+          "highContrast": "#A6ABF2",
+          "highContrastLight": "#A6ABF2"
+        }
+      },
       {
         "id": "yamlDslEditor.warningForeground",
         "description": "Name of a file holding a warning, and of every folder above it.",

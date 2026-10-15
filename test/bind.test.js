@@ -83,6 +83,7 @@ test('a link carries its target count', async () => {
     onKeptSchemasChanged() {},
     onVocabularyLoaded() {},
     links: () => [
+      { range: targetRange, target: 'file:///repo/mock.schema.json', targets: [] },
       {
         range: linkRange,
         targets: [
@@ -94,7 +95,10 @@ test('a link carries its target count', async () => {
   };
   bind(connection, fakeDocuments(), { workspace });
   const links = await connection.handlers.links({ textDocument: { uri: 'file:///repo/mock.yml' } });
-  assert.deepEqual(links, [{ range: linkRange, data: { targetCount: 2 } }]);
+  assert.deepEqual(links, [
+    { range: targetRange, target: 'file:///repo/mock.schema.json', tooltip: 'Open the schema' },
+    { range: linkRange, data: { targetCount: 2 } },
+  ]);
 });
 
 test('rename answers the name to edit and the edit, and a refusal is an error the editor shows', async () => {

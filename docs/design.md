@@ -54,6 +54,8 @@ A problem has a severity, drawn in the color the DevOps tools print it in:
 - An empty range covers its whole line.
 - The gutter marks share one size.
 - An info problem is a schema the file names that cannot be loaded.
+- A validation error takes the severity its setting names.
+- Every warning but a deprecation is underlined in yellow.
 
 Keys:
 
@@ -581,6 +583,7 @@ A requirement marker is the extension's standard for saying whether a key must b
 
 - A marker states the field author's intent beside the field itself, so where a field carries one, the marker decides and its parent's `required` array is not read for that key.
 - A field without a marker is required when its parent's `required` array lists it.
+- A `required` array inside `not` or `if` is a condition, not a requirement, and markers leave it as written.
 - Every schema check the extension runs reads requiredness this way.
 
 ### Finding the schema
@@ -592,6 +595,7 @@ A requirement marker is the extension's standard for saying whether a key must b
 
 - A modeline points at the schema shipped with the grammar version the stack has initialized: an overlay names `.schema/sample.schema.json`, and a common layer names it through the overlay directory that initialized the stack, such as `one/.schema/sample.schema.json`.
 - A URL in a path is fetched. The search does not override a modeline that resolves.
+- The modeline's path is a link that opens the schema it names.
 - The extension embeds no schema.
 - When neither source resolves, the file's modeline line gets a problem, or its first line when it has no modeline, and field hovers stay empty. Navigation, other problems and suggestions still run.
 
@@ -599,6 +603,7 @@ A requirement marker is the extension's standard for saying whether a key must b
 
 - DSL-level behavior is configured in `yaml-dsl.yml`: which files, the scopes, the syntax of declarations, references, placeholders and calls, how layers are grouped. The concepts are the editor's, the syntax is the DSL's, and that syntax does not move into the schema.
 - The schema is how the editor understands a field and the shape of an object: which keys exist, what value shape a key takes, and the field's own description, the text beside a `$ref` included. It is read as published.
+- The schema is what a document is validated against; a document that breaks it holds a validation error.
 - When the schema is not enough to understand a field or a shape, the schema gains an extension point and the grammar publishes it; the extension does not grow a special case for that object. No such point is added before a field or a shape requires one.
 - The schema is not the engine's checks, which are a separate pass. A check can require a group of fields only when another field has a certain value, allow a field for only one mode, or allow exactly one of two fields; the published schema has no such table, and an extension point is not a transcription of these checks.
 - A field may be filled from the common layer while the editor looks at one file, so a `required` array on the resource alone does not say whether the folded document is complete.
@@ -619,7 +624,7 @@ A schema's draft:
 
 ### Parsers
 
-Each draft has a parser named after it, over one shared core. The core:
+Each draft has a parser and a validator named after it, over one shared core each. The parser's core:
 
 - picks the parser from `$schema`;
 - resolves references;
@@ -635,7 +640,33 @@ A parser states what its draft's keywords mean:
 | a key `properties` does not list | `additionalProperties` | `additionalProperties`, then `unevaluatedProperties` | `additionalProperties`, then `unevaluatedProperties` |
 | merged as `allOf` merges | `allOf` | `allOf`, `dependentSchemas` | `allOf`, `dependentSchemas` |
 | `deprecated` | not read | read | read |
-| opt-out validator | draft-07 | draft 2019-09 | draft 2020-12 |
+| validator | Ajv's draft-07 | Ajv's draft 2019-09 | Ajv's draft 2020-12 |
+
+The validator's core compiles each schema once with its draft's validator, and reports each failure at its document path; an alternative none of whose branches holds is one failure, without the branches' own.
+
+### Validation
+
+Each document is validated against its schema, with the requirement markers deciding which fields are required:
+
+| File | Validated |
+|---|---|
+| an overlay | its fold, the common layer merged with it, against the overlay's schema |
+| the common layer | through each overlay's fold |
+| a file outside layers | alone, against its own schema |
+
+- An error is marked on the key of the value it is about, in the file that wrote that value. In the common layer, its message names the overlays whose folds it fails in.
+- A missing required field is marked on its map's key, and an unknown field on its own key.
+- A fold holding a file with a YAML error is not validated.
+- The error's message names the field and what it must be. A field whose allowed forms are a described definition reads as that description's first sentence, and any other reads that it matches none of its allowed forms.
+
+A DSL's `validator` block states how a document is read before it is validated, and only validation reads it:
+
+| Field | What it states |
+|---|---|
+| `merge_base_keys` | keys whose value, wherever they appear, is the merge base of each sibling entry: the sibling merges over it with the layers' merge. Nothing under a merge base is required, and an error a base passes to its siblings is marked once, at the base |
+| `child_values_from_parent_key` | patterns of a key that sets a field of the entry it keys, with `field` and `value` groups. A field the entry writes itself stays as written |
+
+The `validator.*` settings show validation errors at a chosen severity, turn them off, and color the files holding them in the Explorer.
 
 ### Deprecated fields
 
@@ -1101,6 +1132,10 @@ dsls:
         calls_without_name_allowed: true
     locals:
       scope_name: local
+    validator:
+      merge_base_keys: [defaults]
+      child_values_from_parent_key:
+        - pattern: '^(?<field>[a-z][a-z0-9_]*) (?<value>[a-z0-9-]+)$'
     formatter:
       indent_spaces: 2
       list_items_indented: true

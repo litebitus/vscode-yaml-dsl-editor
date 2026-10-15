@@ -227,3 +227,115 @@ test('a conditionally required field is reported, not failed, and its marker cou
   assert.notEqual(plain.fingerprint, conditional.fingerprint);
   assert.deepEqual(checks.nodeCheck(null, ['resource']).conditionallyRequiredFields(), []);
 });
+
+const validatedSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  additionalProperties: false,
+  $defs: {
+    number_or_ref: {
+      description: 'A literal number, or a `ref` resolving to one. More words.',
+      oneOf: [{ type: 'number' }, { type: 'string', pattern: '^ref ' }],
+    },
+  },
+  properties: {
+    mocktype: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        required: ['legacy_listed', 'listed'],
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string', description: '[required] The mock name.' },
+          listed: { type: 'string' },
+          legacy_listed: { type: 'string', description: '[optional] Listed, marked optional.' },
+          mode: { enum: ['fast', 'slow'] },
+          size: { $ref: '#/$defs/number_or_ref' },
+          count: { anyOf: [{ type: 'integer' }, { type: 'string', pattern: '^ref ' }] },
+          enabled: { type: 'boolean' },
+          tags: { type: 'array', items: { type: 'string' } },
+          ratio: { type: 'number', minimum: 1 },
+        },
+      },
+    },
+  },
+};
+
+function documentMessages(value) {
+  const checks = createSchemaChecks((schemaHash) => (schemaHash === 'mock-validated' ? validatedSchema : null));
+  return checks.documentProblems('mock-validated', value).map(({ path, message }) => [path, message]);
+}
+
+test('a document\'s validation errors are worded by field, the markers deciding which fields are required', () => {
+  assert.deepEqual(documentMessages({ mocktype: { primary: {} } }), [
+    [['mocktype', 'primary'], '`listed` is required'],
+    [['mocktype', 'primary'], '`name` is required'],
+  ]);
+  const primary = {
+    name: 'mock',
+    listed: 'mock',
+    mode: 'medium',
+    size: 'large',
+    count: 'many',
+    enabled: null,
+    tags: ['mock-tag', 2],
+    ratio: 0,
+    mock_field: 1,
+  };
+  assert.deepEqual(documentMessages({ mocktype: { primary }, other: 1 }), [
+    [['other'], '`other` is not a field of the document'],
+    [['mocktype', 'primary', 'mock_field'], '`mock_field` is not a field of `primary`'],
+    [['mocktype', 'primary', 'mode'], '`mode` must be one of `"fast"`, `"slow"`'],
+    [['mocktype', 'primary', 'size'], '`size` must be a literal number, or a `ref` resolving to one'],
+    [['mocktype', 'primary', 'count'], '`count` matches none of its allowed forms'],
+    [['mocktype', 'primary', 'enabled'], '`enabled` must be boolean'],
+    [['mocktype', 'primary', 'tags', 1], '`tags[1]` must be string'],
+    [['mocktype', 'primary', 'ratio'], '`ratio` must be >= 1'],
+  ]);
+  assert.deepEqual(createSchemaChecks(() => null).documentProblems(null, {}), []);
+});
+
+test('a key failing its map\'s key schema is marked on the key, and one message repeated on a path is reported once', () => {
+  const keyedSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      mocktype: { type: 'object', propertyNames: { pattern: '^[a-z_]+$' } },
+      settings: {
+        type: 'object',
+        allOf: [
+          { if: { required: ['mode'] }, then: { not: { required: ['size'] } } },
+          { if: { required: ['mode'] }, then: { not: { required: ['size'] } } },
+        ],
+      },
+    },
+  };
+  const checks = createSchemaChecks(() => keyedSchema);
+  const messages = checks.documentProblems('mock-keyed', {
+    mocktype: { 'mock-bad': {} },
+    settings: { mode: 'fast', size: 1 },
+  }).map(({ path, message }) => [path, message]);
+  assert.deepEqual(messages, [
+    [['mocktype', 'mock-bad'], '`mock-bad` is not a valid key of `mocktype`'],
+    [['settings'], '`settings` must NOT be valid'],
+  ]);
+});
+
+test('a required list inside not or if is a condition the markers leave as written', () => {
+  const conditionSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      group: {
+        type: 'object',
+        properties: {
+          node_type: { type: 'string' },
+          count: { type: 'integer', description: '[optional] Mock count.' },
+        },
+        allOf: [{ if: { properties: { node_type: { const: 'master' } } }, then: { not: { required: ['count'] } } }],
+      },
+    },
+  };
+  const checks = createSchemaChecks(() => conditionSchema);
+  assert.deepEqual(checks.documentProblems('mock-condition', { group: { node_type: 'master' } }), []);
+  const counted = checks.documentProblems('mock-condition', { group: { node_type: 'master', count: 1 } });
+  assert.deepEqual(counted.map(({ path, message }) => [path, message]), [[['group'], '`group` must NOT be valid']]);
+});

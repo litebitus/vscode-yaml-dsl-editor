@@ -56,6 +56,10 @@ dsls:
         calls_without_name_allowed: true
     locals:
       scope_name: local
+    validator:
+      merge_base_keys: [defaults]
+      child_values_from_parent_key:
+        - pattern: '^(?<field>[a-z_]+) (?<value>[a-z0-9-]+)$'
     key_sort_orders:
       - path: "$.locals"
         skip_keys: []
@@ -174,6 +178,10 @@ test('a complete config states every field and keeps them', () => {
     callsWithoutNameAllowed: true,
   });
   assert.deepEqual(resources.locals, { scopeName: 'local' });
+  assert.deepEqual(resources.validator, {
+    mergeBaseKeys: ['defaults'],
+    childValuesFromParentKey: [{ pattern: '^(?<field>[a-z_]+) (?<value>[a-z0-9-]+)$' }],
+  });
   assert.deepEqual(resources.scopes.GLOBAL, {
     regions: [[]],
     laterItemsOfDeclaringList: false,
@@ -224,7 +232,40 @@ test('a block the config leaves out is a feature the DSL does not have', () => {
   assert.equal(flat.layers, null);
   assert.equal(flat.placeholder, null);
   assert.equal(flat.locals, null);
+  assert.equal(flat.validator, null);
   assert.equal(flat.function.markerFunction, null);
+});
+
+test('the validator block states its merge base keys and child value patterns, each pattern naming field and value', () => {
+  const withValidator = (validatorLines) => parseConfig([
+    'version: "1"',
+    'dsls:',
+    '  - id: mock',
+    '    file_includes: ["**/mock.yml"]',
+    '    file_excludes: []',
+    '    schema_search_paths: []',
+    '    key_sort_orders: []',
+    '    scopes: {}',
+    '    declarations: []',
+    '    references: []',
+    ...validatorLines.map((line) => `    ${line}`),
+    '',
+  ].join('\n'));
+  assert.match(withValidator(['validator: []']).error, /mock\.validator must be a mapping/);
+  assert.match(withValidator(['validator: {}']).error, /\.merge_base_keys is required/);
+  assert.match(withValidator(['validator: {}']).error, /\.child_values_from_parent_key is required/);
+  const unnamed = withValidator([
+    'validator:',
+    '  merge_base_keys: []',
+    '  child_values_from_parent_key:',
+    "    - pattern: '^(?<field>[a-z]+) (.+)$'",
+    '    - pattern: "("',
+    '    - mock',
+  ]);
+  assert.match(unnamed.error, /child_values_from_parent_key\[0\]\.pattern must name the child field and its value/);
+  assert.match(unnamed.error, /child_values_from_parent_key\[1\]\.pattern is required/);
+  assert.match(unnamed.error, /child_values_from_parent_key\[2\] must be a mapping with pattern/);
+  assert.deepEqual(unnamed.dsls[0].validator, { mergeBaseKeys: [], childValuesFromParentKey: [] });
 });
 
 test('the duplicate check states its depth and the keys it passes over', () => {

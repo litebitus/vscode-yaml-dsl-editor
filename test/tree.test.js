@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseYaml } = require('../lib/tree');
+const { parseYaml, keyRangeAt } = require('../lib/tree');
 
 test('a document becomes a tree of maps, sequences, and scalars', () => {
   const parsed = parseYaml('name: primary\nitems:\n  - 1\n  - two\n');
@@ -63,4 +63,15 @@ test('the lines around an unfinished key parse as if it were not there', () => {
   assert.deepEqual(parsed.unfinishedKeys.map((unfinishedKey) => unfinishedKey.key), ['sc', 'de']);
   assert.deepEqual(parsed.value, { a: { b: 1 } });
   assert.deepEqual(parsed.tree.entries[0].value.entries[0].keyRange.start, { line: 3, character: 2 });
+});
+
+test('the key range at a path is the last key of that name, or an item\'s range, and nothing for a path not held', () => {
+  const { tree } = parseYaml('a:\n  b: 1\n  b: 2\n  list:\n    - x\n    -\n');
+  assert.deepEqual(keyRangeAt(tree, ['a', 'b']), { start: { line: 2, character: 2 }, end: { line: 2, character: 3 } });
+  assert.deepEqual(keyRangeAt(tree, ['a', 'list', 0]).start, { line: 4, character: 6 });
+  assert.deepEqual(keyRangeAt(tree, ['a', 'list', 1]).start, { line: 5, character: 5 });
+  assert.equal(keyRangeAt(tree, ['a', 'list', 2]), null);
+  assert.equal(keyRangeAt(tree, ['a', 'missing']), null);
+  assert.equal(keyRangeAt(tree, ['a', 'b', 'deeper']), null);
+  assert.equal(keyRangeAt(tree, []), null);
 });

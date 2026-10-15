@@ -293,6 +293,33 @@ test('a file holding only a warning is saved and loads back holding it, and a fi
   assert.deepEqual(older.warningUris(), []);
 });
 
+test('a file holding only a validation error is saved and loads back holding it, and an older file holds none', async () => {
+  const fileSystem = memoryFileSystem({ [devUri]: devText, [stagingUri]: stagingText });
+  const timers = manualTimers();
+  const store = storeOver(fileSystem, timers);
+  store.replaceStack('/repo/mock.yml', [
+    { uri: devUri, textHash: textHashOf(devText), marks: [], validationError: true },
+    { uri: stagingUri, textHash: textHashOf(stagingText), marks: [], validationError: false },
+  ]);
+  assert.deepEqual([store.validationErrorUris(), store.warningUris()], [[devUri], []]);
+  timers.fireAll();
+  await new Promise((resolve) => { setImmediate(resolve); });
+  const saved = JSON.parse(fileSystem.files.get(storePath).toString('utf8'));
+  assert.deepEqual(Object.keys(saved.files), [devUri]);
+  const reloaded = storeOver(fileSystem, manualTimers());
+  await reloaded.load();
+  assert.deepEqual(reloaded.validationErrorUris(), [devUri]);
+  const savedBeforeValidation = {
+    version: STORE_FORMAT_VERSION,
+    build: MOCK_BUILD_HASH,
+    files: { [stagingUri]: { stackId: '/repo/mock.yml', textHash: textHashOf(stagingText), marks: [mark] } },
+  };
+  fileSystem.files.set(storePath, Buffer.from(JSON.stringify(savedBeforeValidation), 'utf8'));
+  const older = storeOver(fileSystem, manualTimers());
+  await older.load();
+  assert.deepEqual(older.validationErrorUris(), []);
+});
+
 test('each kept file\'s schema hash is saved and loads back, and a file saved before schema hashes holds none', async () => {
   const fileSystem = memoryFileSystem({ [devUri]: devText });
   const timers = manualTimers();

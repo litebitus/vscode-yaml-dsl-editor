@@ -348,6 +348,84 @@ test('a line edit re-parses that file and leaves the rest of the stack', async (
   await raced;
 });
 
+const validatedStackSchema = JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  properties: {
+    mocktype: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string', description: '[required] Mock name.' },
+          size: { type: 'integer', description: '[required] Mock size.' },
+          mode: { enum: ['fast', 'slow'], description: '[optional] Mock mode.' },
+        },
+      },
+    },
+  },
+});
+
+const validatorRules = {
+  merge_base_keys: ['defaults'],
+  child_values_from_parent_key: [{ pattern: '^(?<field>[a-z]+) (?<value>[a-z0-9-]+)$' }],
+};
+
+function validationMessages(ws, filePath) {
+  return ws.problems(`file://${filePath}`)
+    .filter((problem) => problem.kind === 'validationError')
+    .map((problem) => [problem.range.start.line, problem.message]);
+}
+
+test('each overlay\'s fold is validated, each error placed in the file that wrote the value', async () => {
+  const modeline = (schemaPath) => `# yaml-language-server: $schema=${schemaPath}\n`;
+  const files = {
+    [`${root}/schema.json`]: validatedStackSchema,
+    [common]: `${modeline('schema.json')}mocktype:\n  defaults:\n    size: 1\n  name mock-shared:\n    mode: medium\n`,
+    [one]: `${modeline('../schema.json')}mocktype:\n  name mock-one:\n    size: large\n  extra: {}\n`,
+    [two]: `${modeline('../schema.json')}mocktype:\n  name mock-shared:\n    size: 2\n`,
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: configText(resourcesEntry({ validator: validatorRules })), dir: '/repo' }]);
+  for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  await visitStack(ws, one);
+  assert.deepEqual(validationMessages(ws, one), [
+    [3, '`size` must be integer'],
+    [4, '`name` is required'],
+  ]);
+  assert.deepEqual(validationMessages(ws, two), []);
+  assert.deepEqual(validationMessages(ws, common), [[5, '`mode` must be one of `"fast"`, `"slow"` (one, two)']]);
+  await ws.sync(`file://${one}`, one, `${files[one]}  broken: [\n`);
+  assert.deepEqual(validationMessages(ws, one), []);
+  const unruled = workspace(files);
+  await unruled.setConfigs([{ text: configText(resourcesEntry()), dir: '/repo' }]);
+  for (const filePath of [common, one, two]) await unruled.sync(`file://${filePath}`, filePath, files[filePath]);
+  await visitStack(unruled, two);
+  assert.deepEqual(validationMessages(unruled, two), [[2, '`name` is required']]);
+});
+
+test('the modeline\'s schema path links to the schema it names, a path from the file\'s folder or a URL as written', async () => {
+  const urlModeline = '# yaml-language-server: $schema=https://example.test/mock.schema.json\n';
+  const files = {
+    [`${root}/schema.json`]: validatedStackSchema,
+    [common]: 'mocktype: {}\n',
+    [one]: '# yaml-language-server: $schema=../schema.json\nmocktype: {}\n',
+    [two]: `${urlModeline}mocktype: {}\n`,
+  };
+  const ws = workspace(files, async () => validatedStackSchema);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  const schemaLinkOf = (filePath) => ws.links(`file://${filePath}`).find((link) => link.target);
+  const linked = schemaLinkOf(one);
+  assert.deepEqual([linked.target, linked.range], [
+    `file://${root}/schema.json`,
+    { start: { line: 0, character: 32 }, end: { line: 0, character: 46 } },
+  ]);
+  assert.equal(schemaLinkOf(two).target, 'https://example.test/mock.schema.json');
+  assert.equal(schemaLinkOf(common), undefined);
+});
+
 test('a schema written after the file opened replaces the missing one, and a new version replaces it again', async () => {
   const layered = configText(dslEntry('resources', {
     schema_search_paths: ['.schema/mock.schema.json', 'one/.schema/mock.schema.json'],

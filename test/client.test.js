@@ -588,7 +588,7 @@ function referenceMarks() {
     info: { kind: 'info' },
     unclassified: { kind: 'unclassified' },
     deprecated: { kind: 'deprecated' },
-    duplicateKey: { kind: 'duplicateKey' },
+    warningUnderline: { kind: 'warningUnderline' },
   };
 }
 
@@ -699,6 +699,29 @@ test('a deprecated key is struck through in yellow and its warning is the hover 
   assert.ok(activated.decorations.some((decoration) => decoration.options.textDecoration === 'line-through #ece200'));
 });
 
+test('a validation error takes the severity its setting names, every warning but a deprecation is underlined, and none shows when off', async () => {
+  const validationError = { range: rangeOf(1, 2, 6), message: '`size` must be integer', severity: 'error', kind: 'validationError' };
+  const duplicateKey = { range: rangeOf(2, 2, 6), message: '`mode` is also at line 4', severity: 'warning', kind: 'duplicateKey' };
+  const client = fakeClient({ decorations: { references: [], problems: [validationError, duplicateKey] } });
+  const doc = documentOf('a:\n  size: big\n  mode: fast\n  mode: slow\n', 'validated.yml');
+  const paintedWith = async (settings) => {
+    const painted = [];
+    await paintUnderlines(paintingVscode([recordingEditor(doc, painted)], settings), client, referenceMarks(), []);
+    const shown = (kind) => lastPaint(painted, kind).ranges.map((mark) => doc.getText(mark.range || mark));
+    return { error: shown('error'), warning: shown('warning'), info: shown('info'), underline: shown('warningUnderline') };
+  };
+  assert.deepEqual(await paintedWith({ 'validator.errorSeverity': 'warning' }), {
+    error: [],
+    warning: ['size', 'mode'],
+    info: [],
+    underline: ['size', 'mode'],
+  });
+  assert.deepEqual((await paintedWith({ 'validator.errorSeverity': 'info' })).info, ['size']);
+  assert.deepEqual((await paintedWith({ 'validator.errorSeverity': 'error' })).error, ['size']);
+  const off = await paintedWith({ 'validator.enabled': false, 'validator.errorSeverity': 'error' });
+  assert.deepEqual([off.error, off.warning], [[], ['mode']]);
+});
+
 test('an unfinished key is no error while the cursor is on its line, and is one once the cursor leaves it', async () => {
   const unfinishedKey = { range: rangeOf(1, 2, 4), message: '`sc` needs a `:`', severity: 'error', kind: 'unfinishedKey' };
   const duplicateKey = { range: rangeOf(2, 2, 3), message: '`b` is also at line 4', severity: 'warning', kind: 'duplicateKey' };
@@ -712,7 +735,7 @@ test('an unfinished key is no error while the cursor is on its line, and is one 
   const messages = (kind) => lastPaint(painted, kind).ranges.map((mark) => mark.hoverMessage);
   assert.deepEqual(messages('error'), []);
   assert.deepEqual(messages('warning'), ['`b` is also at line 4']);
-  assert.deepEqual(lastPaint(painted, 'duplicateKey').ranges.map((range) => doc.getText(range)), ['b']);
+  assert.deepEqual(lastPaint(painted, 'warningUnderline').ranges.map((range) => doc.getText(range)), ['b']);
   const paintCount = painted.length;
   editor.selection = { active: { line: 1, character: 2 } };
   repaintProblemsOnCursorMove(vscode, marks, editor);

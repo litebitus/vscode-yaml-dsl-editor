@@ -111,6 +111,21 @@ suite('schema completion', () => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
+  test('the modeline\'s schema path is a link that opens the schema', async () => {
+    const fixture = fixtureCopy('schema-completion');
+    const editor = await shownDocument(path.join(fixture, 'mock.yml'));
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    let schemaLink = null;
+    while (!schemaLink && Date.now() < deadline) {
+      const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', editor.document.uri) || [];
+      schemaLink = links.find((link) => link.target && link.target.fsPath === path.join(fixture, 'mock.schema.json'));
+      if (!schemaLink) await new Promise((resolve) => { setTimeout(resolve, 50); });
+    }
+    assert.ok(schemaLink);
+    assert.equal(editor.document.getText(schemaLink.range), './mock.schema.json');
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
   test('word completion is off in a DSL file', () => {
     const editorSettings = vscode.workspace.getConfiguration('editor', { languageId: 'yaml-dsl' });
     assert.equal(editorSettings.get('wordBasedSuggestions'), 'off');

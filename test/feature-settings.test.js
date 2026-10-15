@@ -1,12 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { featureSettingsOf, featureSettingsAffected } = require('../lib/feature-settings');
+const { contributes } = require('../package.json');
+
+const SETTING_DEFAULTS = Object.fromEntries(Object.entries(contributes.configuration.properties)
+  .map(([key, setting]) => [key.replace(/^yaml-dsl-editor\./, ''), setting.default]));
 
 function vscodeWith(values, explicitKeys = Object.keys(values)) {
   return {
     workspace: {
       getConfiguration: () => ({
-        get: (key) => values[key],
+        get: (key) => (Object.hasOwn(values, key) ? values[key] : SETTING_DEFAULTS[key]),
         inspect: (key) => (explicitKeys.includes(key) ? { globalValue: values[key] } : {}),
       }),
     },
@@ -21,6 +25,7 @@ const ALL_ON = {
     rename: { enabled: true, fileDecoration: true },
   },
   warning: { deprecation: { enabled: true, fileDecoration: true } },
+  validator: { enabled: true, errorSeverity: 'warning', fileDecoration: false },
 };
 
 test('every feature and its file decoration are on by default, and a potential move has no file decoration', () => {
@@ -53,7 +58,15 @@ test('a file decoration turns off on its own', () => {
       rename: { enabled: true, fileDecoration: false },
     },
     warning: { deprecation: { enabled: true, fileDecoration: false } },
+    validator: { enabled: true, errorSeverity: 'warning', fileDecoration: false },
   });
+});
+
+test('validation errors take their severity from the setting, and validation turned off takes its file decoration', () => {
+  const shown = featureSettingsOf(vscodeWith({ 'validator.errorSeverity': 'error', 'validator.fileDecoration': true }));
+  assert.deepEqual(shown.validator, { enabled: true, errorSeverity: 'error', fileDecoration: true });
+  const off = featureSettingsOf(vscodeWith({ 'validator.enabled': false, 'validator.fileDecoration': true }));
+  assert.deepEqual([off.validator.enabled, off.validator.fileDecoration], [false, false]);
 });
 
 test('deprecation warnings turned off take their file decoration with them', () => {
@@ -82,6 +95,7 @@ test('a change to either group or the deprecated key affects the feature setting
   const changed = (setting) => ({ affectsConfiguration: (section) => section === setting });
   assert.equal(featureSettingsAffected(changed('yaml-dsl-editor.suggestion')), true);
   assert.equal(featureSettingsAffected(changed('yaml-dsl-editor.warning')), true);
+  assert.equal(featureSettingsAffected(changed('yaml-dsl-editor.validator')), true);
   assert.equal(featureSettingsAffected(changed('yaml-dsl-editor.features.suggestions')), true);
   assert.equal(featureSettingsAffected(changed('yaml-dsl-editor.cache')), false);
 });

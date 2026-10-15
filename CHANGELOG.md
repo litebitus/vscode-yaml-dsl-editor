@@ -5,6 +5,11 @@
 - Schemas: JSON Schema draft-07, draft 2019-09 and draft 2020-12 are read, each by a parser named after it; a schema declaring no draft or an older one is read as draft-07, and one declaring any other draft is an info problem.
 - Schemas: a deprecated field is a warning, in the drafts that define `deprecated`: its key is struck through in yellow, its message is the hover of its key and value, and its file and folders show in yellow with a `⚠` badge, kept across restarts and reported for stacks worked out in the background.
 - Completion: keys and values complete from the file's schema: a map's fields, each with its requirement marker and description, deprecated ones struck through, and a field's `enum`, `const` and boolean values.
+- Validation: each document is validated against its schema, an overlay as its fold, with the requirement markers deciding which fields are required, and each validation error marked on the key that wrote it.
+- Config: a DSL's `validator` block states its `merge_base_keys` and `child_values_from_parent_key`, read only by validation.
+- Settings: `validator.enabled`, `validator.errorSeverity` and `validator.fileDecoration` turn validation errors off, set their severity, and color their files.
+- Problems: every warning but a deprecation is underlined in yellow.
+- Schemas: the schema path in a file's modeline is a link that opens the schema.
 - Completion: word completion is off in DSL files.
 - Completion: a scalar field with a schema `default` is written with the default selected, when completed and when filled as a required field.
 - Problems: a key with no `:` yet is an error on that key once the cursor leaves its line, and the lines around it read as if it were not there.

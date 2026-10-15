@@ -69,7 +69,9 @@ layers:
 
 Hover reads the schema as authored, so a field shows the description written beside its `$ref`, not the shared composite's. A deprecated field is a warning: struck through, marked in the gutter, and its file and folders shown in yellow.
 
-The JSON Schema drafts read, each by its own parser:
+Each document is validated against its schema, an overlay as the common layer merged with it, and every validation error is marked on the key that wrote it.
+
+The JSON Schema drafts read, each by its own parser and validator:
 
 - draft 2020-12
 - draft 2019-09
@@ -137,6 +139,9 @@ The extension's own settings live under `yaml-dsl-editor` in the editor's settin
 | `yaml-dsl-editor.suggestion.potentialMove.enabled` | `true`, `false` | Whether potential move suggestions are shown |
 | `yaml-dsl-editor.suggestion.rename.enabled` | `true`, `false` | Whether rename suggestions are shown |
 | `yaml-dsl-editor.suggestion.rename.fileDecoration` | `true`, `false` | Whether a file holding a rename suggestion, and its folders, are colored |
+| `yaml-dsl-editor.validator.enabled` | `true`, `false` | Whether validation errors are shown |
+| `yaml-dsl-editor.validator.errorSeverity` | `error`, `warning`, `info` | The severity a validation error is shown with |
+| `yaml-dsl-editor.validator.fileDecoration` | `true`, `false` | Whether a file holding a validation error, and its folders, are colored |
 | `yaml-dsl-editor.warning.deprecation.enabled` | `true`, `false` | Whether deprecation warnings are shown |
 | `yaml-dsl-editor.warning.deprecation.fileDecoration` | `true`, `false` | Whether a file holding a deprecation warning, and its folders, are colored |
 
