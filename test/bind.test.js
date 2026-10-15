@@ -316,6 +316,38 @@ test('completion answers editor items that replace what was typed', async () => 
   assert.deepEqual(bare.completion('file:///repo/none.yml', { line: 0, character: 0 }), []);
 });
 
+test('a schema field completes as an editor item that inserts its key, sorts by requirement, and strikes a deprecated field', async () => {
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const schemaText = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      mode: { enum: ['fast', 'slow'], description: '[required] The mock mode.' },
+      legacy: { type: 'string', deprecated: true, description: '[optional] Use mode.' },
+    },
+  });
+  const workspace = bind(connection, documents, {
+    readFile: async (filePath) => (filePath === '/repo/mock.schema.json' ? schemaText : null),
+    fetchText: async () => null,
+  });
+  const config = configText(dslEntry('note', { file_includes: ['**/note.yml'] }));
+  await connection.handlers['yaml-dsl/config']({ entries: [{ text: config, dir: '/repo' }] });
+  const note = '# yaml-language-server: $schema=mock.schema.json\nmo';
+  documents.handlers.open({ document: { uri: 'file:///repo/note.yml', getText: () => note } });
+  await workspace.whenIdle();
+  const items = await connection.handlers.completion({
+    textDocument: { uri: 'file:///repo/note.yml' },
+    position: { line: 1, character: 2 },
+  });
+  const byLabel = Object.fromEntries(items.map((item) => [item.label, item]));
+  assert.deepEqual(byLabel.mode.textEdit.newText, 'mode: ');
+  assert.deepEqual([byLabel.mode.kind, byLabel.mode.detail, byLabel.mode.sortText], [10, '[required]', '0_mode']);
+  assert.deepEqual(byLabel.mode.labelDetails, { detail: ' [required] The mock mode.' });
+  assert.deepEqual(byLabel.mode.command, { title: 'Suggest values', command: 'editor.action.triggerSuggest' });
+  assert.deepEqual([byLabel.legacy.tags, byLabel.legacy.command], [[1], undefined]);
+  assert.equal(byLabel.mode.tags, undefined);
+});
+
 test('semantic tokens are encoded with the legend, and a config change asks the editor to refresh them', async () => {
   const connection = fakeConnection();
   const documents = fakeDocuments();

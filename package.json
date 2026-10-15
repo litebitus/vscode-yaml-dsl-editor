@@ -184,6 +184,18 @@
         "icon": "$(filter)"
       }
     ],
+    "keybindings": [
+      {
+        "key": "tab",
+        "command": "selectNextSuggestion",
+        "when": "editorLangId == yaml-dsl && suggestWidgetVisible && textInputFocus"
+      },
+      {
+        "key": "shift+tab",
+        "command": "selectPrevSuggestion",
+        "when": "editorLangId == yaml-dsl && suggestWidgetVisible && textInputFocus"
+      }
+    ],
     "menus": {
       "editor/title": [
         {

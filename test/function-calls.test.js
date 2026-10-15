@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const Ajv2020 = require('ajv/dist/2020');
 const { analyzeDocument } = require('../lib/analyze');
 const { parseAt } = require('../lib/document-path');
 const {
@@ -182,8 +183,10 @@ test('a schema publishes a function table at a pointer, held to the documented f
   );
 });
 
-test('the shipped schema of the table states the argument types the editor checks', () => {
+test('the shipped schema of the table is a draft 2020-12 schema stating the argument types the editor checks', () => {
   const shipped = require('../schemas/x-yaml-dsl-functions.schema.json');
+  assert.equal(shipped.$schema, 'https://json-schema.org/draft/2020-12/schema');
+  assert.doesNotThrow(() => new Ajv2020({ strict: false, strictSchema: true }).compile(shipped));
   assert.deepEqual(shipped.additionalProperties.items.properties.type.enum, ARGUMENT_TYPES);
 });
 

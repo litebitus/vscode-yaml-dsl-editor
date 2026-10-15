@@ -417,6 +417,33 @@ The list holds what the file's fold sees and what is visible from the cursor:
 - The list opens as the reference starts and narrows on every character, by the editor's fuzzy match against everything typed since the reference began.
 - Each entry names the declaring file and shows the declaration as authored.
 
+### Schema fields and values
+
+The file's schema completes keys and values, read by the parser of the schema's draft:
+
+| Where | The list holds |
+|---|---|
+| a key in a map | the fields the schema lists for the map, minus the keys the map holds |
+| a list item | the fields of the item schema, or its values |
+| a value after a key | the field's `enum` and `const` values, and `true` / `false` for a boolean |
+
+- A field's row shows its requirement marker and description, cut to the row's width, and the full text shows beside the list; a field the parent's `required` array lists is `[required]`.
+- `[required]` fields sort first, and a deprecated field is struck through in a draft that reads `deprecated`.
+- A field's value forms are its schema with references, `allOf`, and each `anyOf` or `oneOf` alternative resolved.
+- A field whose every value form is a map or a list inserts its key and a new line indented one level; any other field inserts `key: `, and opens the list of its values when it has any.
+- The cursor's place is read from the document with the cursor's line taken as a key, so a line still being typed is placed by its indentation; text inside a block scalar offers nothing.
+- The list opens as a key or value starts and narrows on every character, by the editor's fuzzy match.
+
+### Keys in the list
+
+In a DSL file, while the list is open:
+
+| Key | Does |
+|---|---|
+| Tab | highlights the next entry, wrapping |
+| Shift+Tab | highlights the previous entry, wrapping |
+| Enter | accepts the highlighted entry |
+
 ## Hover documentation
 
 The Red Hat YAML extension is not used: it resolves a field to the schema node a draft-07 validator sees, and for these DSLs that node is a shared value definition.

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "mocktype": {
+      "type": "object",
+      "properties": {
+        "label": { "type": "string", "description": "[required] The mock label." },
+        "mode": { "enum": ["fast", "slow"], "description": "[optional] The mock mode." },
+        "legacy": { "type": "string", "deprecated": true, "description": "[optional] Use mode." },
+        "settings": { "$ref": "#/$defs/settings", "description": "[optional] The mock settings." }
+      }
+    }
+  },
+  "$defs": {
+    "settings": { "type": "object", "properties": { "depth": { "type": "integer" } } }
+  }
+}

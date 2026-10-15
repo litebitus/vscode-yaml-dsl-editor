@@ -4,6 +4,9 @@
 
 - Schemas: JSON Schema draft-07, draft 2019-09 and draft 2020-12 are read, each by a parser named after it; a schema declaring no draft or an older one is read as draft-07, and one declaring any other draft is an info problem.
 - Schemas: a deprecated field is a warning, in the drafts that define `deprecated`: its key is struck through in yellow, its message is the hover of its key and value, and its file and folders show in yellow with a `⚠` badge, kept across restarts and reported for stacks worked out in the background.
+- Completion: keys and values complete from the file's schema: the fields a map does not hold yet, each with its requirement marker and description, deprecated ones struck through, and a field's `enum`, `const` and boolean values.
+- Completion: in a DSL file, Tab and Shift+Tab move through the list and Enter accepts.
+- Schemas: the shipped `yaml-dsl.schema.json` and `x-yaml-dsl-functions.schema.json` are draft 2020-12.
 - Problems: a warning carries a yellow triangle in the gutter.
 - Suggestions: the folders above a file holding a suggestion show the light bulb color over source control's.
 - Settings: `warning.deprecation.enabled` and `warning.deprecation.fileDecoration` turn deprecation warnings, or only their file and folder decorations, off.

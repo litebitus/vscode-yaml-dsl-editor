@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://open-vsx.org/extension/lite2073/yaml-dsl-editor/yaml-dsl.schema.json",
   "title": "yaml-dsl.yml",
   "description": "The workspace's YAML DSLs: which files each one owns and the syntax of its names, references, placeholders and calls.",
@@ -14,10 +14,10 @@
     "dsls": {
       "type": "array",
       "description": "One entry per DSL.",
-      "items": { "$ref": "#/definitions/dsl" }
+      "items": { "$ref": "#/$defs/dsl" }
     }
   },
-  "definitions": {
+  "$defs": {
     "dsl": {
       "type": "object",
       "required": [
@@ -38,11 +38,11 @@
           "description": "Name of the DSL."
         },
         "file_includes": {
-          "$ref": "#/definitions/globs",
+          "$ref": "#/$defs/globs",
           "description": "Globs of the files the DSL owns."
         },
         "file_excludes": {
-          "$ref": "#/definitions/globs",
+          "$ref": "#/$defs/globs",
           "description": "Globs of files the DSL does not own, even when file_includes matches them."
         },
         "schema_search_paths": {
@@ -50,24 +50,24 @@
           "items": { "type": "string", "minLength": 1 },
           "description": "Schemas tried in order when a file names none, or the one it names is not on disk. Each path is relative to the file; a URL is fetched."
         },
-        "layers": { "$ref": "#/definitions/layers" },
-        "placeholder": { "$ref": "#/definitions/placeholder" },
-        "function": { "$ref": "#/definitions/function" },
-        "locals": { "$ref": "#/definitions/locals" },
+        "layers": { "$ref": "#/$defs/layers" },
+        "placeholder": { "$ref": "#/$defs/placeholder" },
+        "function": { "$ref": "#/$defs/function" },
+        "locals": { "$ref": "#/$defs/locals" },
         "key_sort_orders": {
           "type": "array",
-          "items": { "$ref": "#/definitions/key_sort_order" },
+          "items": { "$ref": "#/$defs/key_sort_order" },
           "description": "Where an edit places a new key in each map. The first entry whose path covers the map applies."
         },
-        "scopes": { "$ref": "#/definitions/scopes" },
+        "scopes": { "$ref": "#/$defs/scopes" },
         "declarations": {
           "type": "array",
-          "items": { "$ref": "#/definitions/declaration" },
+          "items": { "$ref": "#/$defs/declaration" },
           "description": "Where names are declared."
         },
         "references": {
           "type": "array",
-          "items": { "$ref": "#/definitions/reference" },
+          "items": { "$ref": "#/$defs/reference" },
           "description": "How names are referenced. Rules reading the same text are tried in order."
         }
       }
@@ -135,7 +135,7 @@
         },
         "unscanned_paths": {
           "type": "array",
-          "items": { "$ref": "#/definitions/path_entry" },
+          "items": { "$ref": "#/$defs/path_entry" },
           "description": "Paths whose text is another language's and is not read for placeholders."
         }
       }
@@ -153,15 +153,15 @@
           "description": "Sources of the function table, merged in order."
         },
         "call_result_reference_positions": {
-          "$ref": "#/definitions/positions",
+          "$ref": "#/$defs/positions",
           "description": "Positions from which a name a call declares may be referenced."
         },
         "calls_not_allowed_at": {
           "type": "array",
-          "items": { "$ref": "#/definitions/path_entry" },
+          "items": { "$ref": "#/$defs/path_entry" },
           "description": "Paths where a call is a problem."
         },
-        "marker_function": { "$ref": "#/definitions/marker_function" }
+        "marker_function": { "$ref": "#/$defs/marker_function" }
       }
     },
     "locals": {
@@ -203,11 +203,11 @@
       "type": "object",
       "description": "The DSL's scopes. A name in capitals is a logical scope; any other name is the DSL's own word.",
       "patternProperties": {
-        "^[A-Z][A-Z0-9_]*$": { "$ref": "#/definitions/scope" }
+        "^[A-Z][A-Z0-9_]*$": { "$ref": "#/$defs/scope" }
       },
       "additionalProperties": {
         "allOf": [
-          { "$ref": "#/definitions/scope" },
+          { "$ref": "#/$defs/scope" },
           {
             "properties": {
               "named_by_parent_key": { "const": false },
@@ -224,7 +224,7 @@
       "properties": {
         "regions": {
           "type": "array",
-          "items": { "$ref": "#/definitions/path" },
+          "items": { "$ref": "#/$defs/path" },
           "description": "Paths whose subtree in any file of the fold sees the scope's names; $ is the whole fold."
         },
         "later_items_of_declaring_list": {
@@ -259,7 +259,7 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "path": { "$ref": "#/definitions/path" },
+        "path": { "$ref": "#/$defs/path" },
         "skip_keys": {
           "type": "array",
           "items": { "type": "string" },
@@ -326,7 +326,7 @@
           "description": "Regular expression of a reference, with named groups."
         },
         "positions": {
-          "$ref": "#/definitions/positions",
+          "$ref": "#/$defs/positions",
           "description": "Positions the reference may stand in."
         },
         "text_after_name_allowed": {
@@ -360,7 +360,7 @@
       "required": ["path", "skip_keys", "order", "first_keys", "last_keys"],
       "additionalProperties": false,
       "properties": {
-        "path": { "$ref": "#/definitions/path" },
+        "path": { "$ref": "#/$defs/path" },
         "skip_keys": {
           "type": "array",
           "items": { "type": "string" },
@@ -389,7 +389,7 @@
       "required": ["path", "skip_keys"],
       "additionalProperties": false,
       "properties": {
-        "path": { "$ref": "#/definitions/path" },
+        "path": { "$ref": "#/$defs/path" },
         "skip_keys": {
           "type": "array",
           "items": { "type": "string" },
@@ -398,7 +398,7 @@
         "includes_subtree": {
           "type": "boolean",
           "description": "Deprecated: list the path ending in ..* as its own entry instead.",
-          "deprecationMessage": "Deprecated: list the path ending in ..* as its own entry instead."
+          "deprecated": true
         }
       }
     },

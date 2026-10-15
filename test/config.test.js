@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const Ajv2020 = require('ajv/dist/2020');
 const {
   COMMON_LAYER_DISCOVERIES,
   CONFIG_VERSIONS,
@@ -567,9 +568,11 @@ test('file_includes and file_excludes decide the files a DSL owns, and two owner
   assert.equal(claimFile('/repo/readme.md', [{ ...shared, dir: '/repo' }]).status, 'none');
 });
 
-test('the shipped schema of the config states the values the reader accepts', () => {
+test('the shipped schema of the config is a draft 2020-12 schema stating the values the reader accepts', () => {
   const shipped = require('../schemas/yaml-dsl.schema.json');
-  const { definitions } = shipped;
+  assert.equal(shipped.$schema, 'https://json-schema.org/draft/2020-12/schema');
+  assert.doesNotThrow(() => new Ajv2020({ strict: false, strictSchema: true }).compile(shipped));
+  const definitions = shipped.$defs;
   assert.deepEqual(shipped.properties.version.enum, CONFIG_VERSIONS);
   assert.deepEqual(definitions.layers.properties.common_layer_discovery.enum, COMMON_LAYER_DISCOVERIES);
   assert.deepEqual(definitions.function.properties.definitions.items.enum, FUNCTION_DEFINITIONS);
