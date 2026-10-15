@@ -8,22 +8,13 @@ const {
   WAIT_DEADLINE_MILLISECONDS,
   shownDocument,
   hintLabelsBecome,
+  hintTooltipOf,
+  applyArgumentIn,
 } = require('./editor-hints');
 const { APPLY_COMMAND } = require('../../lib/suggestion-lightbulbs');
 
 function concernPath(...segments) {
   return path.join(vscode.workspace.workspaceFolders[2].uri.fsPath, ...segments);
-}
-
-async function hintTooltipOf(doc) {
-  const range = new vscode.Range(0, 0, doc.lineCount, 0);
-  const hints = await vscode.commands.executeCommand('vscode.executeInlayHintProvider', doc.uri, range) || [];
-  return hints[0].label[0].tooltip.value;
-}
-
-function applyArgumentIn(tooltip) {
-  const encoded = new RegExp(`\\(command:${APPLY_COMMAND.replace('.', '\\.')}\\?([^)]+)\\)`).exec(tooltip)[1];
-  return JSON.parse(decodeURIComponent(encoded));
 }
 
 const UNDO_RECORDED_WAIT_MILLISECONDS = 1000;

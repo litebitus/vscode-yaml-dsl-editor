@@ -11,6 +11,7 @@ const {
 } = require('./editor-hints');
 
 const SHARED_BLOCK = 'mocktype:\n  shared:\n    size: 1\n';
+const SAVED_FILE_SETTLE_MILLISECONDS = 1000;
 
 function writtenStack(name) {
   const root = path.join(vscode.workspace.workspaceFolders[1].uri.fsPath, name);
@@ -56,7 +57,7 @@ suite('layer files changing on disk', () => {
     await overlayEditor.edit((builder) => builder.insert(new vscode.Position(3, 0), '# mock comment\n'));
     await hintLabelsBecome(overlay, [SAME_IN_COMMON_LAYER]);
     await overlay.save();
-    await new Promise((resolve) => { setTimeout(resolve, 2000); });
+    await new Promise((resolve) => { setTimeout(resolve, SAVED_FILE_SETTLE_MILLISECONDS); });
     assert.deepEqual(await hintLabelsOf(overlay), [SAME_IN_COMMON_LAYER]);
   });
 });

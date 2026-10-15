@@ -1,16 +1,7 @@
 const assert = require('assert');
-const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
-const { WAIT_DEADLINE_MILLISECONDS, shownDocument } = require('./editor-hints');
-
-function fixtureCopy(fixtureFolder) {
-  const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
-  const copyName = `completion-${fixtureFolder}-${vscode.version}`;
-  const copy = path.join(vscode.workspace.workspaceFolders[1].uri.fsPath, copyName);
-  fs.cpSync(path.join(fixtures, fixtureFolder), copy, { recursive: true });
-  return copy;
-}
+const { WAIT_DEADLINE_MILLISECONDS, shownDocument, fixtureCopy } = require('./editor-hints');
 
 function stackCopy() {
   return fixtureCopy('stack');
@@ -90,6 +81,40 @@ suite('schema completion', () => {
     const cursor = await typedAtEnd(editor, '  mode: ');
     const labels = await completionLabelsAt(editor.document, cursor);
     assert.ok(labels.includes('fast') && labels.includes('slow'), JSON.stringify(labels));
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+});
+
+suite('required fields', () => {
+  test('Enter after an empty resource key fills its required fields, the cursor at the first value, undone in one step', async () => {
+    const editor = await shownDocument(path.join(fixtureCopy('required-fields'), 'mock.yml'));
+    const doc = editor.document;
+    const keyLine = doc.getText().split('\n').indexOf('  alerts:');
+    const keyEnd = doc.lineAt(keyLine).range.end;
+    editor.selection = new vscode.Selection(keyEnd, keyEnd);
+    const textBefore = doc.getText();
+    await vscode.commands.executeCommand('type', { text: '\n' });
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    while (!doc.getText().includes('kms_key_arn:') && Date.now() < deadline) {
+      await new Promise((resolve) => { setTimeout(resolve, 50); });
+    }
+    const filledLines = doc.getText().split('\n').slice(keyLine + 1, keyLine + 6);
+    assert.deepEqual(filledLines, [
+      '    kms_key_arn: ',
+      '    mode: fast',
+      '    name: ',
+      '    settings:',
+      '      ',
+    ]);
+    assert.deepEqual([editor.selection.active.line, editor.selection.active.character], [keyLine + 1, 17]);
+    await vscode.commands.executeCommand('jumpToNextSnippetPlaceholder');
+    assert.equal(doc.getText(editor.selection), 'fast');
+    await vscode.commands.executeCommand('leaveSnippet');
+    await vscode.commands.executeCommand('undo');
+    assert.equal(doc.getText().includes('kms_key_arn:'), false);
+    const throughKeyLine = textBefore.slice(0, textBefore.indexOf('  alerts:') + '  alerts:\n'.length);
+    assert.equal(doc.getText().startsWith(throughKeyLine), true);
     await vscode.commands.executeCommand('workbench.action.files.revert');
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });

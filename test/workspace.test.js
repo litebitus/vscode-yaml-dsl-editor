@@ -988,7 +988,10 @@ test('a name edited by hand gets a hint renaming it everywhere until it is chang
     files: [{ label: 'common layer', count: 3 }],
   });
   const applied = await ws.applySuggestion(common, hint.suggestion.id);
+  const handEdited = applied.edit.documentChanges.find((change) => change.textDocument.uri === `file://${one}`);
+  assert.deepEqual(handEdited.edits.map((edit) => edit.newText), ['store']);
   const texts = textsAfter({ ...renameFiles, [one]: typed('store') }, applied.edit);
+  assert.equal(texts[one], typed('store'));
   assert.match(texts[common], /^ {2}store: mock-value$/m);
   assert.match(texts[common], /\$\{local\.store\}/);
   await ws.sync(`file://${one}`, one, typed('db'));

@@ -188,12 +188,17 @@
       {
         "key": "tab",
         "command": "selectNextSuggestion",
-        "when": "editorLangId == yaml-dsl && suggestWidgetVisible && textInputFocus"
+        "when": "editorLangId == yaml-dsl && suggestWidgetVisible && suggestWidgetMultipleSuggestions && textInputFocus"
+      },
+      {
+        "key": "tab",
+        "command": "acceptSelectedSuggestion",
+        "when": "editorLangId == yaml-dsl && suggestWidgetVisible && !suggestWidgetMultipleSuggestions && suggestWidgetHasFocusedSuggestion && textInputFocus"
       },
       {
         "key": "shift+tab",
         "command": "selectPrevSuggestion",
-        "when": "editorLangId == yaml-dsl && suggestWidgetVisible && textInputFocus"
+        "when": "editorLangId == yaml-dsl && suggestWidgetVisible && suggestWidgetMultipleSuggestions && textInputFocus"
       }
     ],
     "menus": {

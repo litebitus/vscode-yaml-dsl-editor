@@ -251,7 +251,41 @@ A DSL with both takes this config, since `ancestor` also reaches a concern above
 
 ## Formatting
 
-Claimed files have a document formatter. It changes indentation and whitespace. Comments, key order, and the spelling of scalars stay, so a format pass does not rewrite a `ref`, a `local`, or a `${...}` placeholder into a different string.
+The formatter is the editor's document formatter for every DSL file, and writes the canonical form the DSL's `formatter` block states.
+
+| Trigger | Formats |
+|---|---|
+| Format Document, and format on save when the user's `editor.formatOnSave` is on | the whole file |
+| Format Selection | the entries the selection touches, and the blank lines around them |
+| a move or a delete | each block it writes, and the blank lines around it |
+
+| `formatter` field | States |
+|---|---|
+| `indent_spaces` | spaces per nesting level |
+| `list_items_indented` | whether a list's `- ` items sit one level under their key, or level with it |
+| `flow_list_max_items` | a list of scalars with at most this many items is written in flow style, `[a, b]`; a longer one in block style |
+| `flow_map_max_items` | the same for a map of scalars |
+| `flow_max_line_length` | a list or map within its item count is written in block style when its line, indentation and key included, would be longer |
+| `inline_comment_spaces` | spaces between a value and its `#` comment |
+| `key_sort_orders` | the order of a map's keys, by path |
+| `list_sort_orders` | the order of a list's items, by path |
+| `blank_lines_between_entries` | blank lines between a map's entries or a list's items, by path |
+
+Each path entry has `path`, `skip_keys` and its value, and the first entry whose path selects a map or list decides. A map or list no entry covers keeps its order and its blank lines.
+
+| `key_sort_orders` `order` | A map's keys |
+|---|---|
+| `alphabetical` | sorted |
+| `significance` | the keys `first_keys` lists, in its order; every other key in the schema's written order, then the keys the schema does not list, in their written order; then the keys `last_keys` lists, in its order |
+
+| `list_sort_orders` `order` | A list's items |
+|---|---|
+| `alphabetical` | sorted by their text; a list of maps by each item's text, written in flow style |
+
+- A key moves with its value, its nested lines, and the comment lines directly above it; blank lines go above the comment.
+- The spelling and quoting of a scalar stay, so a format never rewrites a `ref`, a `local` or a `${...}` placeholder; long lines stay unfolded.
+- A list of maps is always in block style, and an empty list or map is `[]` or `{}`.
+- The formatted text parses to the same value as the text before it; when it does not, nothing is written and the reason is shown.
 
 ## Paths
 
@@ -394,6 +428,7 @@ A declaration whose name is edited by hand, while other declarations or referenc
 
 - The name it had is the one the rest of the stack last used, so a rename that leaves nothing using that name forgets it.
 - Declarations renamed by hand from one name to the same new name are copies of one rename, not a clash.
+- The suggestion's edit also takes in each declaration renamed by hand, its text unchanged, so undoing the rename in any file it touched undoes it in every file; the hand edit stays, and the suggestion comes back.
 
 ## Completion
 
@@ -434,15 +469,27 @@ The file's schema completes keys and values, read by the parser of the schema's 
 - The cursor's place is read from the document with the cursor's line taken as a key, so a line still being typed is placed by its indentation; text inside a block scalar offers nothing.
 - The list opens as a key or value starts and narrows on every character, by the editor's fuzzy match.
 
+### Required fields
+
+Enter after a key whose map is still empty fills the map's required fields:
+
+- A field is required when its requirement marker is `[required]`, or when it has no marker and the parent's `required` array lists it; a `[~required]` field is not filled.
+- A field the common layer already gives the map in the stack's fold is not filled.
+- The fields are ordered by `formatter.key_sort_orders` for the map, and in the schema's written order where it does not decide.
+- A scalar field is written `key: `, its values a pick list when it has any; a map or list field is written `key:` and an indented line.
+- The cursor waits at the first value; the fill is one undo step, and leaves the new line.
+
 ### Keys in the list
 
-In a DSL file, while the list is open:
+In a DSL file:
 
-| Key | Does |
-|---|---|
-| Tab | highlights the next entry, wrapping |
-| Shift+Tab | highlights the previous entry, wrapping |
-| Enter | accepts the highlighted entry |
+| Key | While the list is open | While filling required fields |
+|---|---|---|
+| Tab | highlights the next entry, wrapping; accepts the entry when it is the only one | moves to the next field's value, and past the last to the end of the block |
+| Shift+Tab | highlights the previous entry, wrapping | moves to the previous field's value |
+| Enter | accepts the highlighted entry | |
+
+The list takes the keys while it is open, required fields being filled or not.
 
 ## Hover documentation
 
@@ -835,7 +882,7 @@ A key's comment is the comment lines directly above it, at its indentation. A cl
 - Deleting a key deletes its comment.
 - A key written from another file, or a map a move opens in the common layer, takes the comment it has there.
 
-A new key goes where `key_sort_orders` says for the map it lands in. Each entry names a path and an `order`, and the first entry whose path selects the map applies, so specific paths come first.
+A new key goes where `formatter.key_sort_orders` says for the map it lands in, and the click then formats each block it writes. Each entry names a path and an `order`, and the first entry whose path selects the map applies, so specific paths come first.
 
 | `order` | Places a new key |
 |---|---|
@@ -997,22 +1044,52 @@ dsls:
         calls_without_name_allowed: true
     locals:
       scope_name: local
-    key_sort_orders:
-      - path: "$.locals"
-        skip_keys: []
-        order: alphabetical
-        first_keys: []
-        last_keys: []
-      - path: "$..*"
-        skip_keys: [locals]
-        order: significance
-        first_keys: []
-        last_keys: []
-      - path: "$"
-        skip_keys: []
-        order: significance
-        first_keys: [schema_version, env, locals]
-        last_keys: [data_source, outputs]
+    formatter:
+      indent_spaces: 2
+      list_items_indented: true
+      flow_list_max_items: 2
+      flow_map_max_items: 0
+      flow_max_line_length: 80
+      inline_comment_spaces: 2
+      key_sort_orders:
+        - path: "$.locals"
+          skip_keys: []
+          order: alphabetical
+          first_keys: []
+          last_keys: []
+        - path: "$.*.*"
+          skip_keys: [cloud, locals, outputs]
+          order: significance
+          first_keys: [name]
+          last_keys: []
+        - path: "$..*"
+          skip_keys: [locals]
+          order: significance
+          first_keys: []
+          last_keys: []
+        - path: "$"
+          skip_keys: []
+          order: significance
+          first_keys:
+            - schema_version
+            - env
+            - cloud
+            - locals
+          last_keys: [data_source, outputs]
+      list_sort_orders:
+        - path: "$..*"
+          skip_keys: []
+          order: alphabetical
+      blank_lines_between_entries:
+        - path: "$"
+          skip_keys: []
+          blank_lines: 1
+        - path: "$.*"
+          skip_keys: [cloud, data_source, locals, outputs]
+          blank_lines: 1
+        - path: "$..*"
+          skip_keys: []
+          blank_lines: 0
     scopes:
       GLOBAL:
         regions: ["$"]
@@ -1077,7 +1154,16 @@ dsls:
       unscanned_paths:
         - { path: "$.build", skip_keys: [] }
         - { path: "$.build..*", skip_keys: [] }
-    key_sort_orders: []
+    formatter:
+      indent_spaces: 2
+      list_items_indented: true
+      flow_list_max_items: 2
+      flow_map_max_items: 0
+      flow_max_line_length: 80
+      inline_comment_spaces: 2
+      key_sort_orders: []
+      list_sort_orders: []
+      blank_lines_between_entries: []
     scopes:
       BRANCH:
         regions: ["$.branches.deployment_target_env"]
@@ -1131,7 +1217,16 @@ dsls:
         calls_without_name_allowed: false
     locals:
       scope_name: local
-    key_sort_orders: []
+    formatter:
+      indent_spaces: 2
+      list_items_indented: true
+      flow_list_max_items: 2
+      flow_map_max_items: 0
+      flow_max_line_length: 80
+      inline_comment_spaces: 2
+      key_sort_orders: []
+      list_sort_orders: []
+      blank_lines_between_entries: []
     scopes:
       GLOBAL:
         regions: ["$"]
@@ -1257,6 +1352,5 @@ dsls:
 ## TODO
 
 - A move turns list and map differences into locals, and on a tie the common layer declares a list's local as `[]` and a map's as `{}`.
-- A local renamed in an overlay or the common layer, once the edit is done, gets a suggestion to rename it in every other file that declares or references it, as one multi-file edit.
 - `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.
 - Find All References on a declaration lists every reference to it across the common layer and each overlay.

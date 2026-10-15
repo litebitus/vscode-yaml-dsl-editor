@@ -1,5 +1,8 @@
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const vscode = require('vscode');
+const { APPLY_COMMAND } = require('../../lib/suggestion-lightbulbs');
 
 const SAME_IN_COMMON_LAYER = '💡 same in common layer';
 const MOVE_TO_COMMON_LAYER = '💡 move to common layer';
@@ -40,6 +43,24 @@ async function hintLabelsBecome(doc, expected) {
   return seenLabels;
 }
 
+function fixtureCopy(fixtureFolder, copyLabel = fixtureFolder) {
+  const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+  const copy = path.join(vscode.workspace.workspaceFolders[1].uri.fsPath, `${copyLabel}-copy-${vscode.version}`);
+  fs.cpSync(path.join(fixtures, fixtureFolder), copy, { recursive: true });
+  return copy;
+}
+
+async function hintTooltipOf(doc) {
+  const range = new vscode.Range(0, 0, doc.lineCount, 0);
+  const hints = await vscode.commands.executeCommand('vscode.executeInlayHintProvider', doc.uri, range) || [];
+  return hints[0].label[0].tooltip.value;
+}
+
+function applyArgumentIn(tooltip) {
+  const encoded = new RegExp(`\\(command:${APPLY_COMMAND.replace('.', '\\.')}\\?([^)]+)\\)`).exec(tooltip)[1];
+  return JSON.parse(decodeURIComponent(encoded));
+}
+
 function positionInText(doc, needle, offset = 0) {
   return doc.positionAt(doc.getText().indexOf(needle) + offset);
 }
@@ -71,6 +92,9 @@ module.exports = {
   shownDocument,
   hintLabelsOf,
   hintLabelsBecome,
+  fixtureCopy,
+  hintTooltipOf,
+  applyArgumentIn,
   positionInText,
   hoverTextBecomes,
 };
