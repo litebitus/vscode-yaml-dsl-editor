@@ -657,6 +657,7 @@ Each document is validated against its schema, with the requirement markers deci
 - An error is marked on the key of the value it is about, in the file that wrote that value. In the common layer, its message names the overlays whose folds it fails in.
 - A missing required field is marked on its map's key, and an unknown field on its own key.
 - A fold holding a file with a YAML error is not validated.
+- An overlay's `{}` or `[]` at a key the common layer holds is an opt-out, and the fold is validated without that key; at a key the common layer does not hold, it is content and is validated as written.
 - A key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode`, supplies that field, so the field is not reported missing.
 - The error's message names the field and what it must be. A field whose allowed forms are a described definition reads as that description's first sentence, and any other reads that it matches none of its allowed forms.
 
@@ -1448,3 +1449,5 @@ dsls:
 - `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.
 - Find All References on a declaration lists every reference to it across the common layer and each overlay.
 - The formatter, as designed under Formatting.
+- Hover on a key that sets a field of its entry, by the `validator`'s `child_values_from_parent_key`, shows that field's description.
+- One undo after "rename everywhere" on an unsaved hand rename takes every overlay back every time; in about one Antigravity integration run in four, the overlay still holds the new name after the undo.

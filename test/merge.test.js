@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { deepMerge, keepsBaseAt } = require('../lib/merge');
+const { deepMerge, keepsBaseAt, removeOptOuts } = require('../lib/merge');
 
 const BASE_MARKER = 'mock-base-value';
 
@@ -89,4 +89,12 @@ test('a non-object base or overlay does not merge', () => {
   assert.deepEqual(deepMerge({ a: 1 }, null), { a: 1 });
   assert.deepEqual(deepMerge({ a: 1 }, [1]), { a: 1 });
   assert.deepEqual(deepMerge({ a: { b: [1, { c: 2 }] } }, { a: { b: [3] } }).a.b, [3]);
+});
+
+test('an empty map or list an overlay writes where the base holds a value opts out of it, at any depth', () => {
+  const base = { data: { alb: { type: 'mock' }, tags: ['mock-tag'], kept: { type: 'mock' } } };
+  const overlay = { data: { alb: {}, tags: [], added: {}, kept: { size: 1 } }, top: {} };
+  const fold = removeOptOuts(deepMerge(base, overlay), base, overlay);
+  assert.deepEqual(fold, { data: { added: {}, kept: { type: 'mock', size: 1 } }, top: {} });
+  assert.equal(removeOptOuts(null, base, overlay), null);
 });

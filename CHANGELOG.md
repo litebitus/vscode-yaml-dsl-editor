@@ -8,6 +8,7 @@
 - Validation: each document is validated against its schema, an overlay as its fold, with the requirement markers deciding which fields are required, and each validation error marked on the key that wrote it.
 - Config: a DSL's `validator` block states its `merge_base_keys` and `child_values_from_parent_key`, read only by validation.
 - Validation: a field a call key of the DSL's `marker_function` supplies is not reported missing.
+- Validation: an overlay's `{}` or `[]` opting out of a common layer key leaves that key out of the validated fold.
 - Settings: `validator.enabled`, `validator.errorSeverity` and `validator.fileDecoration` turn validation errors off, set their severity, and color their files.
 - Problems: every warning but a deprecation is underlined in yellow.
 - Schemas: the schema path in a file's modeline is a link that opens the schema.

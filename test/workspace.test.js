@@ -382,8 +382,8 @@ test('each overlay\'s fold is validated, each error placed in the file that wrot
   const modeline = (schemaPath) => `# yaml-language-server: $schema=${schemaPath}\n`;
   const files = {
     [`${root}/schema.json`]: validatedStackSchema,
-    [common]: `${modeline('schema.json')}mocktype:\n  defaults:\n    size: 1\n  name mock-shared:\n    mode: medium\n`,
-    [one]: `${modeline('../schema.json')}mocktype:\n  name mock-one:\n    size: large\n  extra: {}\n`,
+    [common]: `${modeline('schema.json')}mocktype:\n  defaults:\n    size: 1\n  name mock-shared:\n    mode: medium\n  name mock-opted:\n    size: 2\n`,
+    [one]: `${modeline('../schema.json')}mocktype:\n  name mock-one:\n    size: large\n  extra: {}\n  name mock-opted: {}\n`,
     [two]: `${modeline('../schema.json')}mocktype:\n  name mock-shared:\n    size: 2\n`,
   };
   const ws = workspace(files);
