@@ -474,7 +474,8 @@ A declaration whose name is edited by hand, while other declarations or referenc
 
 - The name it had is the one the rest of the stack last used, so a rename that leaves nothing using that name forgets it.
 - Declarations renamed by hand from one name to the same new name are copies of one rename, not a clash.
-- The suggestion's edit also takes in each declaration renamed by hand, its text unchanged, so undoing the rename in any file it touched undoes it in every file; the hand edit stays, and the suggestion comes back.
+- The click first takes the hand edit back in the active editor: an unsaved one by reverting the file, a saved one by writing the name it had back and saving.
+- It then renames the name as Rename Symbol does across every file, that one included, and saves them, so one undo takes every file back to before the hand edit.
 
 ## Completion
 
@@ -950,6 +951,7 @@ Blank lines around a new key:
 Undo:
 
 - A click is one undo step across every file it changes: the common layer and its overlays are one unit, so undoing the click in any of them undoes it in all.
+- A click saves every file it leaves unsaved, and leaves a saved file alone.
 - An undo or redo that brings one of them back to its text before or after a click saves it, so undoing a move leaves no file to save by hand.
 - Undoing a click that created a file removes the file, and nothing saves it.
 

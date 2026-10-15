@@ -33,10 +33,28 @@ suite('rename suggestions', () => {
     await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(await hintTooltipOf(commonLayer)));
     await fileTextHolds(path.join(stack, 'mock.yml'), 'label: local.store');
     await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.store');
+    await fileTextHolds(path.join(stack, 'mock.yml'), '  store: mock-value');
+    assert.equal(commonLayer.isDirty, false);
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
-  test('undoing the rename in the file renamed by hand undoes it in every file, and keeps the hand edit', async () => {
+  test('rename everywhere saves the file renamed by hand even when the click leaves its text as typed', async () => {
+    const stack = fixtureCopy('stack', 'saved-hand-rename-stack');
+    const commonPath = path.join(stack, 'mock.yml');
+    fs.writeFileSync(commonPath, fs.readFileSync(commonPath, 'utf8').replace('label: local.db', 'label: mock-label'));
+    const editor = await shownDocument(commonPath);
+    const commonLayer = editor.document;
+    const declared = commonLayer.positionAt(commonLayer.getText().indexOf('db: mock-value'));
+    await editor.edit((edit) => { edit.replace(new vscode.Range(declared, declared.translate(0, 'db'.length)), 'store'); });
+    await hintLabelsBecome(commonLayer, [RENAME_DB_TO_STORE]);
+    await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(await hintTooltipOf(commonLayer)));
+    await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.store');
+    await fileTextHolds(commonPath, '  store: mock-value');
+    assert.equal(commonLayer.isDirty, false);
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
+  test('one undo takes every file back to before an unsaved hand rename and its rename everywhere', async () => {
     const stack = fixtureCopy('stack', 'undone-rename-stack');
     const editor = await shownDocument(path.join(stack, 'mock.yml'));
     const commonLayer = editor.document;
@@ -47,13 +65,29 @@ suite('rename suggestions', () => {
     await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.store');
     await vscode.commands.executeCommand('undo');
     await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.db');
-    assert.ok(commonLayer.getText().includes('  store: mock-value'));
+    await fileTextHolds(path.join(stack, 'mock.yml'), '  db: mock-value');
     assert.ok(commonLayer.getText().includes('label: local.db'));
-    await hintLabelsBecome(commonLayer, [RENAME_DB_TO_STORE]);
-    await vscode.commands.executeCommand('undo');
-    assert.ok(commonLayer.getText().includes('  db: mock-value'));
     await hintLabelsBecome(commonLayer, []);
-    await vscode.commands.executeCommand('workbench.action.files.revert');
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  });
+
+  test('one undo takes every file back to before a saved hand rename and its rename everywhere', async () => {
+    const stack = fixtureCopy('stack', 'saved-undone-rename-stack');
+    const commonPath = path.join(stack, 'mock.yml');
+    const editor = await shownDocument(commonPath);
+    const commonLayer = editor.document;
+    const declared = commonLayer.positionAt(commonLayer.getText().indexOf('db: mock-value'));
+    await editor.edit((edit) => { edit.replace(new vscode.Range(declared, declared.translate(0, 'db'.length)), 'store'); });
+    await commonLayer.save();
+    await hintLabelsBecome(commonLayer, [RENAME_DB_TO_STORE]);
+    await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(await hintTooltipOf(commonLayer)));
+    await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.store');
+    await fileTextHolds(commonPath, '  store: mock-value');
+    await vscode.commands.executeCommand('undo');
+    await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.db');
+    await fileTextHolds(commonPath, '  db: mock-value');
+    assert.ok(commonLayer.getText().includes('label: local.db'));
+    await hintLabelsBecome(commonLayer, []);
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
@@ -69,8 +103,8 @@ suite('rename suggestions', () => {
     await shownDocument(path.join(stack, 'one', 'mock.yml'));
     await vscode.commands.executeCommand('undo');
     await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.db');
+    await fileTextHolds(path.join(stack, 'mock.yml'), '  db: mock-value');
     assert.ok(commonLayer.getText().includes('label: local.db'));
-    assert.ok(commonLayer.getText().includes('  store: mock-value'));
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
   });
 });

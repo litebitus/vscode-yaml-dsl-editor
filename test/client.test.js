@@ -191,6 +191,7 @@ test('activation finishes without waiting on analysis and searches no workspace 
   let answerDecorations = null;
   client.sendRequest = (method, params) => {
     client.sent.push({ method, params });
+    if (method !== 'yaml-dsl/decorations') return Promise.resolve(null);
     return new Promise((resolve) => { answerDecorations = resolve; });
   };
   const handle = await activateWith(vscode, { subscriptions: [] }, () => client);

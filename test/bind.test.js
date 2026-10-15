@@ -80,6 +80,7 @@ test('a link carries its target count', async () => {
   const workspace = {
     whenAnalyzed: async () => {},
     onSuggestions() {},
+    onKeptSchemasChanged() {},
     onVocabularyLoaded() {},
     links: () => [
       {
@@ -104,6 +105,7 @@ test('rename answers the name to edit and the edit, and a refusal is an error th
   const workspace = {
     whenAnalyzed: async () => {},
     onSuggestions() {},
+    onKeptSchemasChanged() {},
     onVocabularyLoaded() {},
     prepareRename: (uri) => {
       if (uri.endsWith('none.yml')) return null;
@@ -386,6 +388,7 @@ test('suggestions are sent as they arrive, and one is applied through the editor
   const workspace = {
     onVocabularyLoaded() {},
     onSuggestions(listener) { announce = listener; },
+    onKeptSchemasChanged() {},
     suggestionMarks: (stackId) => ({ stackId, files: [{ uri: 'file:///repo/dev/mock.yml', marks: [] }] }),
     applySuggestion(stackId, suggestionId) {
       if (suggestionId === 'stale') return { problem: 'the suggestion no longer applies' };
@@ -425,6 +428,7 @@ test('a layer file that changes on disk is watched and read again', async () => 
   const workspace = {
     onVocabularyLoaded() {},
     onSuggestions() {},
+    onKeptSchemasChanged() {},
     schemaWatchTargets: () => [{ base: '/repo/.schema', pattern: 'mock.json' }],
     layerWatchTargets: () => [{ base: '/repo/dev', pattern: 'mock.yml' }],
     schemasChanged: async (paths) => { changed.push(['schemas', paths]); },
@@ -450,6 +454,7 @@ test('an open file deleted from disk is closed, as a closed tab is', async () =>
   const workspace = {
     onVocabularyLoaded() {},
     onSuggestions() {},
+    onKeptSchemasChanged() {},
     close: async (uri) => { events.push(['close', uri]); },
     takeEvicted: () => [],
     takeReanalyzedUris: () => [],
@@ -469,6 +474,7 @@ test('a file the editor opens is analyzed once, though the library reports the o
   const workspace = {
     onVocabularyLoaded() {},
     onSuggestions() {},
+    onKeptSchemasChanged() {},
     sync: async (uri) => { synced.push(uri); },
     takeEvicted: () => [],
     takeReanalyzedUris: () => [],

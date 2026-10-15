@@ -292,3 +292,25 @@ test('a file holding only a warning is saved and loads back holding it, and a fi
   await older.load();
   assert.deepEqual(older.warningUris(), []);
 });
+
+test('each kept file\'s schema hash is saved and loads back, and a file saved before schema hashes holds none', async () => {
+  const fileSystem = memoryFileSystem({ [devUri]: devText });
+  const timers = manualTimers();
+  const store = storeOver(fileSystem, timers);
+  store.replaceStack('/repo/mock.yml', [{ ...reported(devUri, devText), schemaHash: 'mock-schema-hash' }]);
+  assert.deepEqual(store.keptSchemaHashes(), [{ uri: devUri, schemaHash: 'mock-schema-hash' }]);
+  timers.fireAll();
+  await new Promise((resolve) => { setImmediate(resolve); });
+  const reloaded = storeOver(fileSystem, manualTimers());
+  await reloaded.load();
+  assert.deepEqual(reloaded.keptSchemaHashes(), [{ uri: devUri, schemaHash: 'mock-schema-hash' }]);
+  const savedBeforeSchemaHashes = {
+    version: STORE_FORMAT_VERSION,
+    build: MOCK_BUILD_HASH,
+    files: { [devUri]: { stackId: '/repo/mock.yml', textHash: textHashOf(devText), marks: [mark] } },
+  };
+  fileSystem.files.set(storePath, Buffer.from(JSON.stringify(savedBeforeSchemaHashes), 'utf8'));
+  const older = storeOver(fileSystem, manualTimers());
+  await older.load();
+  assert.deepEqual(older.keptSchemaHashes(), [{ uri: devUri, schemaHash: null }]);
+});

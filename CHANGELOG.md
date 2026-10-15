@@ -9,7 +9,8 @@
 - Completion: Enter after a key whose map is empty fills the map's required fields, the cursor at the first value and Tab moving between them.
 - Schemas: the shipped `yaml-dsl.schema.json` and `x-yaml-dsl-functions.schema.json` are draft 2020-12.
 - Problems: a warning carries a yellow triangle in the gutter.
-- Renaming: undoing "rename everywhere" in the file renamed by hand undoes it in every file, not that file's hand edit.
+- Renaming: "rename everywhere" takes the hand edit back, reverting an unsaved one or undoing and saving a saved one, then renames and saves every file, so one undo takes them all back.
+- Suggestions: kept suggestions are worked out again when the schema their file reads changes, at startup and when the schema changes on disk.
 - Suggestions: the folders above a file holding a suggestion show the light bulb color over source control's.
 - Settings: `warning.deprecation.enabled` and `warning.deprecation.fileDecoration` turn deprecation warnings, or only their file and folder decorations, off.
 - Settings: `suggestion.<kind>.enabled` and `suggestion.<kind>.fileDecoration` turn each kind of suggestion, or only its file and folder decorations, off.

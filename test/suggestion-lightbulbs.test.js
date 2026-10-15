@@ -476,6 +476,7 @@ test('applying a suggestion records and saves every file it changed, and nothing
   vscode.Uri = { parse: (uri) => ({ parsed: uri }) };
   vscode.workspace = {
     openTextDocument: async (uri) => ({
+      isDirty: uri.parsed !== 'file:///repo/renamed-by-hand.yml',
       async save() {
         saved.push(uri.parsed);
         return uri.parsed !== 'file:///repo/locked.yml';
@@ -497,7 +498,11 @@ test('applying a suggestion records and saves every file it changed, and nothing
   assert.deepEqual(asked.map((item) => item.method), Array(5).fill('yaml-dsl/applySuggestion'));
   assert.deepEqual(commandsRun, Array(5).fill('editor.action.hideHover'));
   assert.deepEqual(saved, ['file:///repo/mock.yml', 'file:///repo/locked.yml']);
-  assert.deepEqual(recorded.map((file) => file.uri), ['file:///repo/mock.yml', 'file:///repo/locked.yml']);
+  assert.deepEqual(recorded.map((file) => file.uri), [
+    'file:///repo/mock.yml',
+    'file:///repo/renamed-by-hand.yml',
+    'file:///repo/locked.yml',
+  ]);
   assert.deepEqual(vscode.window.warnings, [
     'no longer applies',
     'down',
@@ -667,6 +672,15 @@ test('activation paints the suggestions the server sends and registers the move'
     files: [{ uri: 'file:///repo/dev/mock.yml', warning: false, marks: [mark] }],
   });
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri).badge, '💡');
+  const refreshesBefore = sent.filter(([method]) => method === 'yaml-dsl/refreshSuggestions').length;
+  notes['yaml-dsl/keptSchemasChanged']({ uris: ['file:///repo/dev/mock.yml'] });
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri), undefined);
+  await Promise.resolve();
+  assert.equal(sent.filter(([method]) => method === 'yaml-dsl/refreshSuggestions').length, refreshesBefore + 1);
+  notes['yaml-dsl/suggestions']({
+    stackId: '/repo/mock.yml',
+    files: [{ uri: 'file:///repo/dev/mock.yml', warning: false, marks: [mark] }],
+  });
   const lightbulbPaintsBefore = painted.filter(isLightbulb).length;
   vscode.visibleChanged();
   assert.equal(painted.filter(isLightbulb).length, lightbulbPaintsBefore + 1);

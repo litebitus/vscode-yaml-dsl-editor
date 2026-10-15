@@ -985,6 +985,7 @@ test('a name edited by hand gets a hint renaming it everywhere until it is chang
   assert.deepEqual(hint.suggestion.rename, {
     oldName: 'db',
     newName: 'store',
+    declaredAt: { uri: `file://${one}`, range: hint.range, oldWrittenName: 'db' },
     files: [{ label: 'common layer', count: 3 }],
   });
   const applied = await ws.applySuggestion(common, hint.suggestion.id);
@@ -1048,6 +1049,45 @@ test('a deprecated key is a warning problem, and the stack\'s report flags the f
   assert.deepEqual(deprecated.fieldRange, { start: { line: 1, character: 0 }, end: { line: 1, character: 6 } });
   const report = ws.suggestionMarks('/repo/warn/mock.yml');
   assert.deepEqual(report.files.map((file) => [file.uri, file.warning]), [['file:///repo/warn/mock.yml', true]]);
+});
+
+test('a report carries the hash of each file\'s schema, and a kept file whose schema hash differs is stale', async () => {
+  const files = {
+    '/repo/warn/schema.json': JSON.stringify({ properties: { kept: {} } }),
+    '/repo/warn/mock.yml': '# yaml-language-server: $schema=schema.json\nkept: 1\n',
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: configText(dslEntry('plain')), dir: '/repo' }]);
+  await ws.sync('file:///repo/warn/mock.yml', '/repo/warn/mock.yml', files['/repo/warn/mock.yml']);
+  const [file] = ws.suggestionMarks('/repo/warn/mock.yml').files;
+  assert.match(file.schemaHash, /^[0-9a-f]{64}$/);
+  const kept = (schemaHash) => [{ uri: 'file:///repo/warn/mock.yml', schemaHash }];
+  assert.deepEqual(await ws.staleKeptSchemaUris(kept(file.schemaHash)), []);
+  assert.deepEqual(await ws.staleKeptSchemaUris(kept('mock-old-schema-hash')), ['file:///repo/warn/mock.yml']);
+  assert.deepEqual(await ws.staleKeptSchemaUris([{ uri: 'file:///repo/gone/mock.yml', schemaHash: null }]), []);
+});
+
+test('a schema changing on disk under a stack no editor holds reports its kept files stale, and an unchanged one does not', async () => {
+  const schemaPath = '/repo/warn/schema.json';
+  const files = {
+    [schemaPath]: JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      properties: { old: { deprecated: true }, kept: {} },
+    }),
+    '/repo/warn/mock.yml': '# yaml-language-server: $schema=schema.json\nold: 1\n',
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: configText(dslEntry('plain')), dir: '/repo' }]);
+  const staleReports = [];
+  ws.onKeptSchemasChanged((uris) => staleReports.push(uris));
+  ws.onSuggestions(() => {});
+  await ws.refreshSuggestions(['/repo/warn/mock.yml']);
+  assert.ok(ws.schemaWatchTargets().some((watchTarget) => watchTarget.base === '/repo/warn'));
+  await ws.schemasChanged([schemaPath]);
+  assert.deepEqual(staleReports, []);
+  files[schemaPath] = JSON.stringify({ properties: { old: {}, kept: {} } });
+  await ws.schemasChanged([schemaPath]);
+  assert.deepEqual(staleReports, [['file:///repo/warn/mock.yml']]);
 });
 
 test('a stack worked out in the background reports the files holding a deprecated key', async () => {
