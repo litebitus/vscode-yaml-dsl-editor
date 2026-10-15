@@ -5,6 +5,7 @@ const vscode = require('vscode');
 const {
   SAME_IN_COMMON_LAYER,
   MOVE_TO_COMMON_LAYER,
+  WAIT_DEADLINE_MILLISECONDS,
   shownDocument,
   hintLabelsBecome,
 } = require('./editor-hints');
@@ -25,8 +26,10 @@ function applyArgumentIn(tooltip) {
   return JSON.parse(decodeURIComponent(encoded));
 }
 
+const UNDO_RECORDED_WAIT_MILLISECONDS = 1000;
+
 async function fileTextBecomes(filePath, expected) {
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
   while (Date.now() < deadline) {
     if (expected === null && !fs.existsSync(filePath)) return;
     if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === expected) return;
@@ -80,7 +83,15 @@ suite('concern common layers', () => {
       if (event.document.uri.fsPath === concernFile) concernSaves.push(event.document.getText());
     });
     try {
+      await vscode.window.showTextDocument(overlay);
+      const movedVersion = overlay.version;
       await vscode.commands.executeCommand('undo');
+      const undoDeadline = Date.now() + UNDO_RECORDED_WAIT_MILLISECONDS;
+      while (overlay.version === movedVersion && Date.now() < undoDeadline) {
+        await new Promise((resolve) => { setTimeout(resolve, 50); });
+      }
+      assert.notEqual(overlay.version, movedVersion, 'the editor recorded no undo step for the move');
+      assert.equal(overlay.getText(), overlayText);
       await fileTextBecomes(overlayPath, overlayText);
       await fileTextBecomes(concernFile, null);
       await new Promise((resolve) => { setTimeout(resolve, 500); });

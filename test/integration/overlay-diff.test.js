@@ -46,6 +46,8 @@ const queueDiff = [
 ].join('\n');
 
 suite('overlay diff', () => {
+  suiteTeardown(() => vscode.commands.executeCommand('workbench.action.closeAllEditors'));
+
   test('the title-bar button shows on every DSL file on disk and opens the diff at once', async () => {
     const button = contributes.menus['editor/title'].find((item) => item.command === DIFF_COMMAND);
     assert.equal(button.when, 'resourceLangId == yaml-dsl && resourceScheme == file');

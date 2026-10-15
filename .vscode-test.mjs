@@ -65,6 +65,8 @@ function plantedMarksStoreText() {
 
 function userDataWithPlantedMarks() {
   const userDataFolder = mkdtempSync(path.join(tmpdir(), 'yaml-dsl-ud-'));
+  mkdirSync(path.join(userDataFolder, 'User'), { recursive: true });
+  writeFileSync(path.join(userDataFolder, 'User', 'settings.json'), JSON.stringify({ 'chat.disableAIFeatures': true }));
   const extensionStorage = path.join(userDataFolder, 'User', 'globalStorage', `${pkg.publisher}.${pkg.name}`);
   const storeFolder = path.join(extensionStorage, sha256Of(`file://${workspaceFile}`));
   mkdirSync(storeFolder, { recursive: true });

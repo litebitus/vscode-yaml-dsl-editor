@@ -3,13 +3,14 @@ const vscode = require('vscode');
 
 const SAME_IN_COMMON_LAYER = '💡 same in common layer';
 const MOVE_TO_COMMON_LAYER = '💡 move to common layer';
+const WAIT_DEADLINE_MILLISECONDS = 4000;
 
 async function shownDocument(filePath) {
   await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(filePath), { preview: false });
   const editor = vscode.window.activeTextEditor;
   assert.equal(editor.document.uri.fsPath, filePath);
   const doc = editor.document;
-  const deadline = Date.now() + 8000;
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
   while (doc.languageId !== 'yaml-dsl' && Date.now() < deadline) {
     await new Promise((resolve) => { setTimeout(resolve, 50); });
   }
@@ -24,7 +25,7 @@ async function hintLabelsOf(doc) {
 }
 
 async function hintLabelsBecome(doc, expected) {
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
   const seenLabels = new Set();
   let labels = [];
   while (Date.now() < deadline) {
@@ -42,6 +43,7 @@ async function hintLabelsBecome(doc, expected) {
 module.exports = {
   SAME_IN_COMMON_LAYER,
   MOVE_TO_COMMON_LAYER,
+  WAIT_DEADLINE_MILLISECONDS,
   shownDocument,
   hintLabelsOf,
   hintLabelsBecome,

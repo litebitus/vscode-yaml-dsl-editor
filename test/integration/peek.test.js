@@ -1,5 +1,6 @@
 const assert = require('assert');
 const vscode = require('vscode');
+const { WAIT_DEADLINE_MILLISECONDS } = require('./editor-hints');
 
 function place(text, needle) {
   const index = text.indexOf(needle);
@@ -28,7 +29,7 @@ async function openOwned(relativePath) {
   const folder = vscode.workspace.workspaceFolders[0].uri;
   const doc = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(folder, ...relativePath));
   await vscode.window.showTextDocument(doc);
-  const deadline = Date.now() + 8000;
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
   while (doc.languageId !== 'yaml-dsl' && Date.now() < deadline) {
     await new Promise((resolve) => { setTimeout(resolve, 50); });
   }
