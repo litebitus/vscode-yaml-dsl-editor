@@ -320,6 +320,25 @@ test('a key failing its map\'s key schema is marked on the key, and one message 
   ]);
 });
 
+test('a value none of whose forms holds reads as the described definition its field refers to, in a schema with an $id', () => {
+  const identifiedSchema = {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    $id: 'https://example.test/mock.schema.json',
+    definitions: {
+      number_or_ref: {
+        description: 'A literal number, or a `ref` resolving to one.',
+        oneOf: [{ type: 'number' }, { type: 'string', pattern: '^ref ' }],
+      },
+    },
+    properties: {
+      threshold: { $ref: '#/definitions/number_or_ref', description: '[optional] The mock threshold.' },
+    },
+  };
+  const checks = createSchemaChecks(() => identifiedSchema);
+  const messages = checks.documentProblems('mock-identified', { threshold: 'mock-high' }).map(({ message }) => message);
+  assert.deepEqual(messages, ['`threshold` must be a literal number, or a `ref` resolving to one']);
+});
+
 test('a required list inside not or if is a condition the markers leave as written', () => {
   const conditionSchema = {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
