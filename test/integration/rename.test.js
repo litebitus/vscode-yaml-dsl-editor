@@ -56,4 +56,21 @@ suite('rename suggestions', () => {
     await vscode.commands.executeCommand('workbench.action.files.revert');
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
+
+  test('undoing the rename in an overlay undoes it in the common layer and every overlay alike', async () => {
+    const stack = fixtureCopy('stack', 'overlay-undone-rename-stack');
+    const editor = await shownDocument(path.join(stack, 'mock.yml'));
+    const commonLayer = editor.document;
+    const declared = commonLayer.positionAt(commonLayer.getText().indexOf('db: mock-value'));
+    await editor.edit((edit) => { edit.replace(new vscode.Range(declared, declared.translate(0, 'db'.length)), 'store'); });
+    await hintLabelsBecome(commonLayer, [RENAME_DB_TO_STORE]);
+    await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(await hintTooltipOf(commonLayer)));
+    await fileTextHolds(path.join(stack, 'mock.yml'), 'label: local.store');
+    await shownDocument(path.join(stack, 'one', 'mock.yml'));
+    await vscode.commands.executeCommand('undo');
+    await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.db');
+    assert.ok(commonLayer.getText().includes('label: local.db'));
+    assert.ok(commonLayer.getText().includes('  store: mock-value'));
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+  });
 });

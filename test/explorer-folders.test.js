@@ -1,13 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { folderHoldsAny, withAncestorFolders } = require('../lib/explorer-folders');
+const { withAncestorFolders, explorerUriSets } = require('../lib/explorer-folders');
 
-test('a folder holds the files below it at any depth, and never a sibling sharing its name\'s start', () => {
-  const fileUris = ['file:///repo/stack/dev/mock.yml'];
-  assert.equal(folderHoldsAny('file:///repo/stack', fileUris), true);
-  assert.equal(folderHoldsAny('file:///repo/stack/', fileUris), true);
-  assert.equal(folderHoldsAny('file:///repo/sta', fileUris), false);
-  assert.equal(folderHoldsAny('file:///repo/stack/dev/mock.yml', fileUris), false);
+test('the folder set holds every folder above a file, and never a sibling sharing its name\'s start', () => {
+  const sets = explorerUriSets(['file:///repo/stack/dev/mock.yml']);
+  assert.deepEqual([...sets.files], ['file:///repo/stack/dev/mock.yml']);
+  assert.deepEqual([...sets.folders], ['file:///repo/stack/dev', 'file:///repo/stack', 'file:///repo']);
+  assert.equal(sets.folders.has('file:///repo/sta'), false);
 });
 
 test('a changed file brings every folder above it, once', () => {

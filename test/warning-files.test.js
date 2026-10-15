@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { WARNING_BADGE, WARNING_THEME_COLOR, warningFileDecoration } = require('../lib/warning-files');
+const { explorerUriSets } = require('../lib/explorer-folders');
 
 const fakeVscode = {
   FileDecoration: class {
@@ -18,7 +19,7 @@ const fakeVscode = {
 const uriOf = (text) => ({ toString: () => text });
 
 test('a file holding a warning takes the warning color and badge, and every folder above it the warning color', () => {
-  const warningFileUris = ['file:///repo/dev/mock.yml'];
+  const warningFileUris = explorerUriSets(['file:///repo/dev/mock.yml']);
   const file = warningFileDecoration(fakeVscode, warningFileUris, uriOf('file:///repo/dev/mock.yml'));
   assert.deepEqual([file.badge, file.color.id, file.propagate], [WARNING_BADGE, WARNING_THEME_COLOR, true]);
   for (const folder of ['file:///repo/dev', 'file:///repo']) {

@@ -65,34 +65,69 @@ The extension is an editor first, and nothing it does holds back the file. On st
 
 The workspace holds many stacks. The server loads one when a file in it is first opened, and loads no other. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each overlay. Switching files inside a resident stack is a hit.
 
-### Work order
+### Processing model
 
-The file in the active editor is worked on first, ahead of all other files:
+The work splits into the foreground, the file the user is on, and the background, everything else. The foreground always comes first.
 
-1. Work on the active file's stack.
-2. The stacks of the other open files.
-3. The suggestions of the active and open stacks.
-4. Background work: the suggestions of stacks no editor has open.
-
-- Open editors always come before background work.
-- Work on the active file starts at once: a background job in progress waits at its next pause and resumes after it.
-- Only work on the same stack waits for the job holding it.
-- A request about a file is answered once that file's analysis is done.
+| | Foreground | Background |
+|---|---|---|
+| Work | the active file's stack: its analysis, and every request about the file | the other open files' stacks, then the suggestions of the active and open stacks, then the suggestions of stacks no editor has open |
+| Starts | at once | only while no foreground work waits |
+| Runs in the language server | the interactive lane | the background lane, one job at a time, highest priority first |
 
 ```mermaid
 flowchart LR
-  subgraph interactiveLane["Interactive lane: starts at once"]
-    activeAnalysis["Active stack's analysis"]
-  end
-  subgraph backgroundLane["Background lane: one job at a time, highest priority first"]
+  subgraph foreground["Foreground: the file the user is on"]
     direction TB
-    openAnalysis["1. Open stacks' analysis"] --> openSuggestions["2. Active and open stacks' suggestions"]
-    openSuggestions --> backgroundSuggestions["3. Suggestions of stacks no editor has open"]
+    activeAnalysis["Analysis of the active file's stack"] --> activeRequests["Requests about the file:<br/>hover, completion, tokens, decorations"]
   end
-  interactiveLane -- "a background job waits at its next pause;<br/>a job on the same stack waits for the other" --> backgroundLane
-  style interactiveLane fill:#FFB74D40
-  style backgroundLane fill:#6495ED33
+  subgraph background["Background: one short job at a time"]
+    direction TB
+    openAnalysis["1. Analysis of the other open files' stacks"] --> openSuggestions["2. Suggestions of the active and open stacks"]
+    openSuggestions --> unopenedSuggestions["3. Suggestions of stacks no editor has open"]
+  end
+  foreground -- "the background yields<br/>while foreground work waits" --> background
+  classDef foregroundWork fill:#FFB74D40
+  classDef backgroundWork fill:#6495ED33
+  class activeAnalysis,activeRequests foregroundWork
+  class openAnalysis,openSuggestions,unopenedSuggestions backgroundWork
 ```
+
+Interruption and refocus:
+
+- A background job is short: one stack's analysis, or one stack's suggestions.
+- Between two jobs the background lane yields, and while any foreground work waits it starts none.
+- Opening a file, or switching to one, makes its stack the foreground: work already queued for it is promoted, and its analysis starts at once.
+- Only a job holding the same stack makes the foreground wait, and only until that job ends.
+- A request about a file is answered once that file's analysis is done.
+
+```mermaid
+sequenceDiagram
+  participant Editor
+  participant Foreground as Interactive lane
+  participant Background as Background lane
+  Note over Background: suggestions of stack X, no editor open
+  Editor->>Foreground: the user opens a file of stack Y
+  Foreground->>Foreground: queue the analysis of stack Y
+  Background-->>Background: the job on stack X ends
+  Background-->>Background: foreground work waits, start nothing
+  Foreground->>Foreground: analyze stack Y
+  Editor->>Foreground: hover, completion, tokens for the file
+  Foreground-->>Editor: answers
+  Note over Foreground: no foreground work waits
+  Background->>Background: next job: suggestions of stack Z
+  Editor->>Foreground: the user switches to a file of stack Z
+  Foreground->>Foreground: promote the work queued for stack Z
+  Background-->>Background: the job on stack Z ends first, then the foreground starts
+```
+
+The staleness checks are what starts work, and nothing else does.
+
+On the client, a report costs one pass:
+
+- Applying a report to the kept suggestions rebuilds, once, the marks painted in the editors and the file and folder sets the Explorer reads.
+- The Explorer asks about every file and folder it shows, so each answer is one lookup in those sets.
+- The extension's settings are read once, and again only when they change.
 
 ### Stack cache
 
@@ -125,20 +160,31 @@ A stack's schema is the `schema.json` of the grammar version that stack initiali
 - Evicting a stack unpins the schemas only it used.
 - What the extension works out from a schema, such as the node fingerprints and validators of the schema checks, belongs to the schema's entry and goes with it.
 
-### Inputs
+### Staleness checks
 
-Every input takes effect without reloading the window:
+What the extension holds is a copy of what the files say: a resident stack's analysis, and a file's kept suggestions. Each copy is checked against its source on these triggers, every input takes effect without reloading the window, and every change to the extension keeps them:
 
-| Input | Effect |
-|---|---|
-| a `yaml-dsl.yml` saved, created or deleted; a workspace folder added or removed | the configs reload; every resident stack is analyzed again under them, and a stack they no longer claim is dropped |
-| a path a resident file's schema search reads changes | that file's schema reloads; a schema on disk changes when its stack is initialized again |
-| a layer file of a resident stack changes on disk while no editor has it open | the file is read again |
-| a layer file is deleted from disk | the file leaves the stack, even while an editor holds it with no unsaved edits, and comes back when it returns to disk |
-| a layer file's editor closes | the file is read from disk again, so discarded edits, or a file gone from disk, leave the stack with what the disk holds |
-| an extension setting changes | it applies at once |
+| Trigger | Checked | Then | Lane |
+|---|---|---|---|
+| a file of a stack that is not resident is opened, or becomes active | on the open | the stack is loaded and analyzed | foreground |
+| a layer file is edited in an editor | on the edit | the stack is analyzed again in place, its suggestions once the quiet period ends, and the file's painted marks are cleared until the next report | foreground, then background |
+| a layer file of a resident stack changes on disk while no editor has it open | on the change | the file is read again | background |
+| a layer file is deleted from disk | on the deletion | the file leaves the stack, even while an editor holds it with no unsaved edits, and comes back when it returns to disk | background |
+| a layer file's editor closes | on the close | the file is read from disk again, so discarded edits, or a file gone from disk, leave the stack with what the disk holds | background |
+| a path a resident file's schema search reads changes on disk | on the change | that file's schema reloads, and its stack is analyzed again; a schema on disk changes when its stack is initialized again | background |
+| a `yaml-dsl.yml` is saved, created or deleted, or a workspace folder is added or removed | on the change | the configs reload; every resident stack is analyzed again under them, and a stack they no longer claim is dropped | background |
+| a file's text on disk differs from the hash its kept suggestions were worked out from | at startup, and when the file changes on disk | its kept suggestions are dropped, and its stack is worked out again without entering the cache | background |
+| the schema a file reads differs from the hash its kept suggestions were worked out against | at startup, and when the schema changes on disk | its kept suggestions are dropped, and its stack is worked out again without entering the cache | background |
+| another build of the extension worked out a file's kept suggestions | at startup | they are never shown, and the stack of each such file still on disk is worked out again | background, last |
 
-Terraform's function metadata is read once per session.
+These hold through every change:
+
+- A stack never opened, and with nothing kept, is never processed.
+- A save, or a change that edits no text, keeps a file's suggestions and its painted marks.
+- An evicted stack's kept suggestions stay shown until the stack is analyzed again.
+- A click on a kept suggestion works its stack out afresh before writing anything.
+- An extension setting change applies at once, and reworks no stack.
+- Terraform's function metadata is read once per session.
 
 ### Output
 
@@ -688,13 +734,10 @@ A file's suggestions outlive its stack leaving the cache and a restart of the ed
 | | |
 |---|---|
 | where | the extension's global storage, in a folder per workspace named by the hash of the workspace file or its lone folder, so uninstalling the extension deletes them with it |
-| key | the file, with a hash of the text they were worked out from |
+| key | the file, with a hash of the text they were worked out from, and a hash of the schema it reads |
 | build | the build of the extension that worked them out, a hash of its manifest and code |
-| shown | until the stack is analyzed again; on startup as soon as they are read, their hashes checked after, in the background |
+| shown | until the stack is analyzed again; on startup as soon as they are read, their hashes checked after, in the background, as the staleness checks say |
 
-- Suggestions another build worked out are never shown; the stack of each of their files still on disk is worked out again in the background.
-- A file whose text on disk no longer matches its hash, at startup or when it changes on disk, loses its kept suggestions, and its stack is worked out again in the background without entering the cache.
-- A click on a kept suggestion loads its stack and works it out afresh before writing anything.
 - The kept file carries a format version. A breaking change to the format bumps it, and the extension migrates an older file to the current format when it loads.
 - A file no migration reads is deleted, and its suggestions come back as their stacks are analyzed; the user never sees it.
 - A field added to a suggestion reads as empty where an older file lacks it.
@@ -906,7 +949,7 @@ Blank lines around a new key:
 
 Undo:
 
-- A click is one undo step across every file it changes.
+- A click is one undo step across every file it changes: the common layer and its overlays are one unit, so undoing the click in any of them undoes it in all.
 - An undo or redo that brings one of them back to its text before or after a click saves it, so undoing a move leaves no file to save by hand.
 - Undoing a click that created a file removes the file, and nothing saves it.
 

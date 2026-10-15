@@ -7,9 +7,11 @@ const {
   paintScopeBorders,
   suggestionInlayHints,
   suggestionFileDecoration,
+  suggestionFileUrisOf,
   suggestionKindOf,
   applySuggestion,
 } = require('../lib/suggestion-lightbulbs');
+const { explorerUriSets } = require('../lib/explorer-folders');
 const { activateWith } = require('../lib/client');
 const { textHashOf } = require('../lib/text-hash');
 
@@ -211,6 +213,8 @@ test('each suggestion is an inlay hint at the end of its line, its tooltip the d
   assert.deepEqual(suggestionInlayHints(vscode, marksByUri, documentOf('file:///other.yml', ['a'])), []);
 });
 
+const suggestionUriSetsOf = (marksByUri) => explorerUriSets(suggestionFileUrisOf(marksByUri));
+
 test('a file with a suggestion shows its name in the light bulb color, with a light bulb badge, and every folder above it the color', () => {
   const vscode = inlayVscode();
   const at = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
@@ -218,15 +222,15 @@ test('a file with a suggestion shows its name in the light bulb color, with a li
     ['file:///repo/dev/mock.yml', [{ range: at, suggestion: moveSuggestion }]],
     ['file:///repo/staging/mock.yml', []],
   ]);
-  const decoration = suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/dev/mock.yml' });
+  const decoration = suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/dev/mock.yml' });
   assert.equal(decoration.badge, '💡');
   assert.equal(decoration.color.id, 'editorLightBulb.foreground');
   assert.equal(decoration.propagate, true);
-  assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/staging/mock.yml' }), undefined);
-  assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/other.yml' }), undefined);
-  const folder = suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/dev' });
+  assert.equal(suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/staging/mock.yml' }), undefined);
+  assert.equal(suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/other.yml' }), undefined);
+  const folder = suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/dev' });
   assert.deepEqual([folder.badge, folder.color.id], [undefined, 'editorLightBulb.foreground']);
-  assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/staging' }), undefined);
+  assert.equal(suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/staging' }), undefined);
 });
 
 test('a file whose only suggestions are potential moves takes no file decoration', () => {
@@ -239,9 +243,9 @@ test('a file whose only suggestions are potential moves takes no file decoration
     { range: at, suggestion: differingMove },
     { range: at, suggestion: optingOutMove },
   ]]]);
-  assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/uat/mock.yml' }), undefined);
+  assert.equal(suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/uat/mock.yml' }), undefined);
   marksByUri.get('file:///repo/uat/mock.yml').push({ range: at, suggestion: moveSuggestion });
-  assert.equal(suggestionFileDecoration(vscode, marksByUri, { toString: () => 'file:///repo/uat/mock.yml' }).badge, '💡');
+  assert.equal(suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/uat/mock.yml' }).badge, '💡');
 });
 
 const schemasDiffer = {
@@ -482,8 +486,9 @@ test('applying a suggestion records and saves every file it changed, and nothing
   const recorded = [];
   const undoSaves = { recordApply: (files) => recorded.push(...files) };
   const appliedFile = (uri) => ({ uri, textHashBefore: 'mock-before', textHashAfter: 'mock-after' });
+  const textUnchangedFile = { uri: 'file:///repo/renamed-by-hand.yml', textHashBefore: 'mock-same', textHashAfter: 'mock-same' };
   const apply = (answer, applied = argument) => applySuggestion(vscode, client(answer), applied, undoSaves);
-  await apply({ applied: true, message: null, files: [appliedFile('file:///repo/mock.yml')] });
+  await apply({ applied: true, message: null, files: [appliedFile('file:///repo/mock.yml'), textUnchangedFile] });
   await apply({ applied: false, message: 'no longer applies' });
   await apply(new Error('down'));
   await apply({ applied: true, message: null, files: [appliedFile('file:///repo/locked.yml')] });
@@ -638,17 +643,25 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.equal(fileDecorationChanges, 2);
   const warned = fileDecorationProvider.provideFileDecoration(devUri);
   assert.deepEqual([warned.badge, warned.color.id], ['⚠', 'yamlDslEditor.warningForeground']);
+  const featureSettingsChanged = () => configurationChanged({
+    affectsConfiguration: (setting) => ['yaml-dsl-editor.suggestion', 'yaml-dsl-editor.warning'].includes(setting),
+  });
   featureValues['warning.deprecation.fileDecoration'] = false;
+  assert.deepEqual([fileDecorationProvider.provideFileDecoration(devUri).badge], ['⚠']);
+  featureSettingsChanged();
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri).badge, '💡');
   featureValues['suggestion.move.fileDecoration'] = false;
+  featureSettingsChanged();
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri), undefined);
   featureValues['suggestion.move.fileDecoration'] = true;
   featureValues['suggestion.move.enabled'] = false;
+  featureSettingsChanged();
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri), undefined);
   assert.deepEqual(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])), []);
   delete featureValues['warning.deprecation.fileDecoration'];
   delete featureValues['suggestion.move.fileDecoration'];
   delete featureValues['suggestion.move.enabled'];
+  featureSettingsChanged();
   notes['yaml-dsl/suggestions']({
     stackId: '/repo/mock.yml',
     files: [{ uri: 'file:///repo/dev/mock.yml', warning: false, marks: [mark] }],
