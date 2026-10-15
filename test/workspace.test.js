@@ -428,6 +428,35 @@ test('a schema that changes on disk revalidates every file reading it, the commo
   assert.deepEqual(validationMessages(ws, one), [[4, '`size` must be string']]);
 });
 
+test('an overlay schema that changes drops that overlay from the common layer\'s error, the other overlay\'s schema kept', async () => {
+  const modeline = '# yaml-language-server: $schema=.schema/resources.schema.json\n';
+  const oneSchemaPath = `${root}/one/.schema/resources.schema.json`;
+  const twoSchemaPath = `${root}/two/.schema/resources.schema.json`;
+  const files = {
+    [oneSchemaPath]: validatedStackSchema,
+    [twoSchemaPath]: validatedStackSchema,
+    [common]: 'mocktype:\n  name mock-shared:\n    size: 1\n',
+    [one]: `${modeline}mocktype:\n  name mock-own:\n    size: 2\n    mode: fast\n`,
+    [two]: `${modeline}mocktype:\n  name mock-own:\n    size: 2\n    mode: fast\n`,
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: configText(resourcesEntry({ validator: validatorRules })), dir: '/repo' }]);
+  for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  await visitStack(ws, common);
+  assert.deepEqual(validationMessages(ws, common), []);
+  const modeRequired = JSON.parse(validatedStackSchema);
+  modeRequired.properties.mocktype.additionalProperties.properties.mode.description = '[required] Mock mode.';
+  files[oneSchemaPath] = JSON.stringify(modeRequired);
+  files[twoSchemaPath] = JSON.stringify(modeRequired);
+  await ws.schemasChanged([oneSchemaPath, twoSchemaPath]);
+  await visitStack(ws, common);
+  assert.deepEqual(validationMessages(ws, common), [[1, '`mode` is required (one, two)']]);
+  files[twoSchemaPath] = validatedStackSchema;
+  await ws.schemasChanged([twoSchemaPath]);
+  await visitStack(ws, common);
+  assert.deepEqual(validationMessages(ws, common), [[1, '`mode` is required (one)']]);
+});
+
 test('the modeline\'s schema path links to the schema it names, a path from the file\'s folder or a URL as written', async () => {
   const urlModeline = '# yaml-language-server: $schema=https://example.test/mock.schema.json\n';
   const files = {
