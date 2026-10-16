@@ -1,6 +1,7 @@
 const { unicodePatternOf } = require('./regex-patterns');
 
 const INTRINSIC_FUNCTION_REFERENCE = '#/$defs/IntrinsicFunction';
+const INTRINSIC_FUNCTION_CALL_REFERENCE = '#/$defs/IntrinsicFunctionCall';
 const PROVIDER_ONLY_KEYWORDS = new Set(['insertionOrder', 'relationshipRef', 'arrayType']);
 const DOCUMENTATION_KEYWORDS = ['title', 'description', 'default', 'deprecated'];
 const SCHEMA_LIST_KEYWORDS = ['allOf', 'anyOf', 'oneOf'];
@@ -9,6 +10,14 @@ const SCHEMA_MAP_KEYWORDS = ['definitions', '$defs'];
 
 function isSchemaObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function orIntrinsicFunction(shape) {
+  return {
+    if: { $ref: INTRINSIC_FUNCTION_CALL_REFERENCE },
+    then: { $ref: INTRINSIC_FUNCTION_REFERENCE },
+    else: shape,
+  };
 }
 
 function pointerSegmentOf(key) {
@@ -101,7 +110,7 @@ function valueSchemaOf(node, context, where) {
     if (DOCUMENTATION_KEYWORDS.includes(keyword)) documentation[keyword] = value;
     else shape[keyword] = value;
   }
-  return { ...documentation, anyOf: [shape, { $ref: INTRINSIC_FUNCTION_REFERENCE }] };
+  return { ...documentation, ...orIntrinsicFunction(shape) };
 }
 
 function resourceTypeDefinitionOf(provider, leftOutPatterns) {
@@ -142,4 +151,4 @@ function resourceTypeDefinitionOf(provider, leftOutPatterns) {
   return definition;
 }
 
-module.exports = { INTRINSIC_FUNCTION_REFERENCE, pointerSegmentOf, resourceTypeDefinitionOf };
+module.exports = { orIntrinsicFunction, pointerSegmentOf, resourceTypeDefinitionOf };

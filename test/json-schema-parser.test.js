@@ -242,3 +242,38 @@ test('a value form under a branch is one form when the document selects it and a
     [['small', 'large'], [1, 2], ['small', 'large'], [1, 2]],
   );
 });
+
+test('a field\'s children come from the alternatives whose type admits the document\'s value, '
+  + 'never their requiredness', () => {
+  const schema = {
+    $schema: DRAFT_2020_12_URI,
+    $defs: {
+      mock_key: {
+        type: 'object',
+        required: ['name'],
+        properties: { name: { type: 'string', description: 'The mock key name.' }, kind: { type: 'string' } },
+      },
+    },
+    properties: {
+      keys: {
+        oneOf: [
+          { type: 'array', items: { $ref: '#/$defs/mock_key' } },
+          { type: 'object', required: ['mode'], properties: { mode: { type: 'string' } } },
+          { required: ['untyped'], properties: { untyped: { type: 'string' } } },
+        ],
+      },
+      size: { anyOf: [{ type: 'number', properties: { mock: {} } }, { $ref: '#/$defs/mock_key' }] },
+    },
+  };
+  const listed = schemaParserForDocument(schema, { keys: [{ name: 'mock' }], size: 3 });
+  assert.deepEqual(Object.keys(listed.fieldsAt(['keys', 0])).sort(), ['kind', 'name']);
+  assert.deepEqual(listed.requiredKeysAt(['keys', 0]), ['name']);
+  assert.equal(listed.fieldDescription(['keys', 0, 'name']), 'The mock key name.');
+  assert.deepEqual(Object.keys(listed.fieldsAt(['size'])), ['mock']);
+  const mapped = schemaParserForDocument(schema, { keys: { mode: 'mock' }, size: { name: 'mock' } });
+  assert.deepEqual(Object.keys(mapped.fieldsAt(['keys'])), ['mode']);
+  assert.deepEqual(mapped.requiredKeysAt(['keys']), []);
+  assert.deepEqual(Object.keys(mapped.fieldsAt(['size'])).sort(), ['kind', 'name']);
+  assert.deepEqual(Object.keys(schemaParserForDocument(schema, { keys: 'mock' }).fieldsAt(['keys'])), []);
+  assert.deepEqual(Object.keys(schemaParserFor(schema).fieldsAt(['keys'])), []);
+});

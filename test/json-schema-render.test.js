@@ -127,6 +127,56 @@ test('a field\'s share of its parent\'s conditions names what each branch says a
   assert.deepEqual(renderer.keyConditionLinesOf(root.properties.mock, 'kind'), []);
 });
 
+test('with the document\'s value, only the branches it selects are worded, nested ones followed, '
+  + 'and a branch it cannot word left out', () => {
+  const kindIs = (kind) => ({ properties: { kind: { const: kind } }, required: ['kind'] });
+  const entry = {
+    type: 'object',
+    allOf: [
+      {
+        if: { properties: { kind: { pattern: '^mock-' } }, required: ['kind'] },
+        then: {
+          allOf: [
+            {
+              if: kindIs('mock-bucket'),
+              then: { required: ['bucket'], properties: { bucket: { $ref: '#/$defs/mock_bucket' } } },
+            },
+            { if: kindIs('mock-queue'), then: { properties: { queue: { $ref: '#/$defs/mock_queue' } } } },
+          ],
+        },
+      },
+      { if: { required: ['size'] }, then: { required: ['unit'] }, else: { required: ['count'] } },
+      { if: { $ref: '#/$defs/mock_call_form' }, then: { $ref: '#/$defs/mock_call_form' } },
+    ],
+  };
+  const root = {
+    $schema: DRAFT_2020_12,
+    $defs: { mock_call_form: { type: 'object' }, mock_bucket: { type: 'object' }, mock_queue: { type: 'object' } },
+    properties: { mock: entry },
+  };
+  const renderer = schemaRendererFor(root);
+  const holdsFor = (value) => (condition) => {
+    if (condition.$ref) return false;
+    const kind = condition.properties && condition.properties.kind;
+    if (kind && kind.const !== undefined) return value.kind === kind.const;
+    if (kind && kind.pattern) return new RegExp(kind.pattern).test(value.kind || '');
+    return condition.required.every((key) => Object.hasOwn(value, key));
+  };
+  assert.deepEqual(renderer.renderNode(entry, holdsFor({ kind: 'mock-bucket' })).conditions, [
+    '*When* `kind` is `"mock-bucket"`: `bucket` required; `bucket` is a `mock_bucket`.',
+    '*Unless* `size` is set: `count` required.',
+  ]);
+  assert.deepEqual(renderer.renderNode(entry, holdsFor({ kind: 'mock-queue', size: 1 })).conditions, [
+    '*When* `kind` is `"mock-queue"`: `queue` is a `mock_queue`.',
+    '*When* `size` is set: `unit` required.',
+  ]);
+  assert.deepEqual(renderer.keyConditionLinesOf(entry, 'bucket', holdsFor({ kind: 'mock-bucket' })), [
+    '*When* `kind` is `"mock-bucket"`: required; is a `mock_bucket`.',
+  ]);
+  assert.deepEqual(renderer.keyConditionLinesOf(entry, 'bucket', holdsFor({ kind: 'mock-queue' })), []);
+  assert.equal(renderer.renderNode(entry).conditions.length, 4);
+});
+
 test('an unread draft has no renderer, and a node allowing nothing renders as nothing', () => {
   assert.equal(schemaRendererFor({ $schema: 'https://example.test/mock-draft' }), null);
   assert.equal(renderedOf(DRAFT_2020_12, { anyOf: [false, { type: 'string' }] }).shape, 'nothing | string');

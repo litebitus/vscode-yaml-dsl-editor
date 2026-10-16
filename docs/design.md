@@ -690,13 +690,15 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 | Part | Shows |
 |---|---|
-| signature | the field's name, its effective forms after following `$ref`, `allOf` and each `anyOf`/`oneOf` alternative, each named by the definition the field refers to or by its type, and its requirement; a form adding its own type or properties to a definition is named by its type |
+| signature | the field's name, its effective forms after following `$ref`, `allOf`, each `anyOf`/`oneOf` alternative and the field's own `if` branch the value selects, each named by the definition the field refers to or by its type, and its requirement; a form adding its own type or properties to a definition is named by its type |
 | description | the description kept at the field, rendered as markdown; the composite's description is the value shape and is not shown |
 | accepts | one line per form, with its constraints, when the field has more than one form |
 | tags | one line per constraint, when it has one form: values, default, pattern, bounds, lengths, items, dependencies, deprecated |
 | conditions | each `if`/`then`/`else` on the object, as when and otherwise; and on a field, what its parent's dependencies require when it is set, and its parent's conditions that name it, cut to what they say about the field |
 
-- The draft's renderer reads its own keywords, as its parser and validator do; a part it cannot read in words names a condition the schema states.
+- With the document's value at hand, the conditions are the branches the value selects, as when or unless, each followed into the conditions it holds. A branch whose condition or consequence it cannot read in words is left out.
+- A consequence that gives a field a referenced schema reads as that field being the definition, such as `` `Properties` is a `AWS::S3::Bucket` ``.
+- The draft's renderer reads its own keywords, as its parser and validator do; without a value, a part it cannot read in words names a condition the schema states.
 - A key that sets a field of its entry, by the `validator`'s `child_values_from_parent_key`, documents its entry, then the field it sets, as that field's own tooltip would, under `*Sets* <field> *to* <value>:`. An entry that writes the field itself documents its entry alone.
 - In the common layer the tooltip documents the field in each overlay's schema; overlays whose documentation is the same share one section, headed by their names, and overlays whose schema has no such field are named last, as not a field.
 - A section's heading is its overlays' names in bold, in the theme's `overlayHeadingForeground`.
@@ -749,6 +751,7 @@ A modeline's schema URI also says what the file is, by its fragment:
 - Where a node's schema holds `if`/`then`/`else`, hover, completion and required-field filling evaluate `if` against the instance at that node, as validation does, and read `then` or `else` by the result.
 - Where the document has no instance at that node, such as completion in a common layer, which no single fold holds, they read both `then` and `else`.
 - A schema whose shape hangs on a value, such as a resource's properties on its `Type`, is documented and completed by that value.
+- Where a node's schema holds `anyOf` or `oneOf`, its children come from the alternatives whose `type`, stated on them or on the definition they refer to, admits the instance's JSON type: a list's items from an array alternative, a map's fields from an object one. An alternative adds fields, never requiredness, and without an instance, or with no alternative admitting it, no alternative adds any.
 
 ### What the schema is for
 

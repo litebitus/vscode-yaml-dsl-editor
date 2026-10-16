@@ -10,6 +10,8 @@ const { templateSchemaOf } = require('../scripts/cloudformation-schema/template-
 
 const MOCK_ZIP = path.join(__dirname, 'fixtures', 'cloudformation-schema', 'mock-providers.zip');
 const INTRINSIC_FUNCTION = { $ref: '#/$defs/IntrinsicFunction' };
+const INTRINSIC_FUNCTION_CALL = { $ref: '#/$defs/IntrinsicFunctionCall' };
+const orIntrinsicFunctionOf = (shape) => ({ if: INTRINSIC_FUNCTION_CALL, then: INTRINSIC_FUNCTION, else: shape });
 
 function mockProviders() {
   return zipEntriesOf(fs.readFileSync(MOCK_ZIP)).map((entry) => JSON.parse(entry.data.toString('utf8')));
@@ -49,35 +51,29 @@ test('a pattern the u flag reads is kept, one with identity escapes loses them, 
   assert.equal(typeof javaFlags.problem, 'string');
 });
 
-test('a resource type keeps its writable properties, each value also taking an intrinsic function', () => {
+test('a resource type keeps its writable properties, each value an intrinsic function call when it is one, '
+  + 'else its own schema', () => {
   const leftOutPatterns = [];
   const definition = resourceTypeDefinitionOf(mockProvider('AWS::Mock::Bucket'), leftOutPatterns);
   assert.deepEqual(Object.keys(definition.properties), ['BucketName', 'Rules', 'SourceArn', 'LegacyName']);
   assert.deepEqual(definition.required, ['BucketName']);
   assert.equal(definition.additionalProperties, false);
-  assert.deepEqual(definition.properties.Rules, {
-    anyOf: [
-      {
-        type: 'array',
-        items: {
-          anyOf: [{ $ref: '#/$defs/AWS::Mock::Bucket/$defs/MockRule' }, INTRINSIC_FUNCTION],
-        },
-      },
-      INTRINSIC_FUNCTION,
-    ],
-  });
+  assert.deepEqual(definition.properties.Rules, orIntrinsicFunctionOf({
+    type: 'array',
+    items: orIntrinsicFunctionOf({ $ref: '#/$defs/AWS::Mock::Bucket/$defs/MockRule' }),
+  }));
   assert.deepEqual(definition.properties.LegacyName, {
     description: 'The old mock name.',
-    anyOf: [{ type: 'string' }, INTRINSIC_FUNCTION],
+    ...orIntrinsicFunctionOf({ type: 'string' }),
     deprecated: true,
   });
   assert.deepEqual(definition.properties.SourceArn, {
     description: 'The mock ARN.',
-    anyOf: [{ type: 'string' }, INTRINSIC_FUNCTION],
+    ...orIntrinsicFunctionOf({ type: 'string' }),
   });
   assert.deepEqual(definition.$defs.MockRule.properties.Prefix, {
     description: 'The mock prefix.',
-    anyOf: [{ type: 'string', pattern: '^[a-z:]+$' }, INTRINSIC_FUNCTION],
+    ...orIntrinsicFunctionOf({ type: 'string', pattern: '^[a-z:]+$' }),
   });
   assert.deepEqual(leftOutPatterns.map(({ typeName, where, pattern }) => [typeName, where, pattern]), [
     ['AWS::Mock::Bucket', '/properties/BucketName/pattern', '(?s).+'],
@@ -116,11 +112,36 @@ test('the template schema states its source and gives each resource the properti
   }), [
     ['Resources.MockBucket.Properties', 'required'],
     ['Resources.MockBucket.Properties', 'additionalProperties'],
-    ['Resources.MockBucket.Properties.Rules', 'anyOf'],
-    ['Resources.MockQueue.Properties.DelaySeconds', 'anyOf'],
+    ['Resources.MockBucket.Properties.Rules.0', 'required'],
+    ['Resources.MockBucket.Properties.Rules.0.Days', 'minimum'],
+    ['Resources.MockQueue.Properties.DelaySeconds', 'maximum'],
     ['Resources.MockMissing.Type', 'anyOf'],
     ['Resources.MockBare', 'required'],
   ]);
+  assert.deepEqual(failureKeywordsOf(validator, {
+    Resources: { MockQueue: { Type: 'AWS::Mock::Queue', Properties: { DelaySeconds: { 'Fn::Mock': 1 } } } },
+  }), [['Resources.MockQueue.Properties.DelaySeconds', 'type']]);
+  assert.deepEqual(failureKeywordsOf(validator, {
+    Resources: { MockQueue: { Type: 'AWS::Mock::Queue', Properties: { DelaySeconds: { 'Fn::If': 'mock' } } } },
+  }), [['Resources.MockQueue.Properties.DelaySeconds.Fn::If', 'type']]);
+});
+
+test('a property under a list item or an object is documented and offered, '
+  + 'and an intrinsic function call in its place is read as one', () => {
+  const { schema } = templateSchemaOf(mockProviders(), { region: 'mock-region-1', downloadDate: '2026-01-01' });
+  const template = {
+    Resources: {
+      MockBucket: {
+        Type: 'AWS::Mock::Bucket',
+        Properties: { BucketName: { Ref: 'MockName' }, Rules: [{ Prefix: 'mock:logs' }] },
+      },
+    },
+  };
+  const parser = schemaParserForDocument(schema, template);
+  const properties = ['Resources', 'MockBucket', 'Properties'];
+  assert.deepEqual(Object.keys(parser.fieldsAt([...properties, 'Rules', 0])).sort(), ['Days', 'Prefix']);
+  assert.equal(parser.fieldDescription([...properties, 'Rules', 0, 'Prefix']), 'The mock prefix.');
+  assert.deepEqual(Object.keys(parser.fieldsAt([...properties, 'BucketName'])).includes('Ref'), true);
 });
 
 test('a resource\'s Type selects its service\'s branch and then its type\'s, for validation, fields and hover', () => {

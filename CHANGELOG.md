@@ -6,6 +6,8 @@
 - Config: a `yaml-dsl.yml` in any folder of the workspace governs the files below it, and `{config_root}/` starts a glob or schema path at its folder.
 - Config: `tag_keys` reads a YAML tag as the key it stands for, so `!Ref Mock` and `Ref: Mock` are one reference, one field and one value.
 - Hover, completion and required-field filling: a schema's `if`/`then`/`else` is read by the branch the document's value selects.
+- Hover: with the document's value, a field's conditions are the branches the value selects, and a field's own `if` branch sets its shown type.
+- Hover and completion: a field under an `anyOf` or `oneOf` is read through the alternatives whose type admits the document's value.
 - Layers: `common_layer_discovery: overlay_includes` pairs an overlay with the common layers its includes name, each merged where its include sits.
 - Paths: the JSONPath steps `['name']` and `..name`.
 - Schemas: a modeline's `#` or `#/pointer` marks a fragment, validated at the node it names with no key required.

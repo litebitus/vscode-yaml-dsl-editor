@@ -9,3 +9,11 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       VisibilityTimeout: 30
+  MockTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+        - AttributeName: !Ref MockKeyName
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5

@@ -114,7 +114,7 @@ The template schema is generated from them. The template's own sections are writ
 | every resource type | `Type` takes one of them, and one `if`/`then` per service, `AWS::<service>`, holds one per type of the service, which gives `Properties` that type's entry |
 | a read-only property | left out of `Properties`; it is an attribute, and a reference to it reads its schema in place |
 | a deprecated property | marked `deprecated` |
-| a property value | its own schema, or an intrinsic function |
+| a property value | an `if` on `IntrinsicFunctionCall`, a map of one intrinsic function's name: then an intrinsic function, else its own schema, so the document selects the branch its fields and errors come from |
 | a pattern | kept when the `u` flag reads it, else without its identity escapes; one neither reads is left out and listed when the generator runs |
 | a description | carried as written, so hover shows AWS's text |
 

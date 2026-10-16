@@ -1,4 +1,4 @@
-const { INTRINSIC_FUNCTION_REFERENCE } = require('./provider-schemas');
+const { orIntrinsicFunction } = require('./provider-schemas');
 
 const TEMPLATE_FORMAT_VERSION = '2010-09-09';
 const LOGICAL_ID_PATTERN = '^[A-Za-z0-9]+$';
@@ -7,13 +7,12 @@ const CUSTOM_RESOURCE_TYPE_PATTERN = '^Custom::[A-Za-z0-9_@-]{1,60}$';
 const REGISTRY_RESOURCE_TYPE_PATTERN = '^(?!AWS::|Alexa::)'
   + '[A-Za-z0-9]{2,64}::[A-Za-z0-9]{2,64}::[A-Za-z0-9]{2,64}(::MODULE)?$';
 
-const intrinsicFunction = { $ref: INTRINSIC_FUNCTION_REFERENCE };
 const conditionFunction = { $ref: '#/$defs/ConditionFunction' };
 const transformValue = { $ref: '#/$defs/Transform' };
 const forEachLoop = { $ref: '#/$defs/ForEach' };
 const anyValue = {};
-const stringOrFunction = { anyOf: [{ type: 'string' }, intrinsicFunction] };
-const listOrFunction = { anyOf: [{ type: 'array' }, intrinsicFunction] };
+const stringOrFunction = orIntrinsicFunction({ type: 'string' });
+const listOrFunction = orIntrinsicFunction({ type: 'array' });
 
 function exactlyOneKey(properties, description) {
   return {
@@ -181,7 +180,7 @@ const RESOURCE_ATTRIBUTES = {
   },
   DeletionPolicy: {
     description: 'What CloudFormation does with the resource when it is deleted from the stack; Delete by default.',
-    anyOf: [{ enum: ['Delete', 'Retain', 'RetainExceptOnCreate', 'Snapshot'] }, intrinsicFunction],
+    ...orIntrinsicFunction({ enum: ['Delete', 'Retain', 'RetainExceptOnCreate', 'Snapshot'] }),
   },
   DependsOn: {
     description: 'The resources created before this one.',
@@ -197,7 +196,7 @@ const RESOURCE_ATTRIBUTES = {
   },
   UpdateReplacePolicy: {
     description: 'What CloudFormation does with the old resource when an update replaces it; Delete by default.',
-    anyOf: [{ enum: ['Delete', 'Retain', 'Snapshot'] }, intrinsicFunction],
+    ...orIntrinsicFunction({ enum: ['Delete', 'Retain', 'Snapshot'] }),
   },
 };
 
@@ -389,6 +388,13 @@ function templateSectionsOf(resourceTypes) {
       Transform: TRANSFORM,
       ForEach: FOR_EACH,
       IntrinsicFunction: exactlyOneKey(INTRINSIC_FUNCTIONS, 'An intrinsic function, whose value is its arguments.'),
+      IntrinsicFunctionCall: {
+        description: 'A value written as one intrinsic function, by its name.',
+        type: 'object',
+        minProperties: 1,
+        maxProperties: 1,
+        propertyNames: { enum: Object.keys(INTRINSIC_FUNCTIONS) },
+      },
       ConditionFunction: exactlyOneKey(CONDITION_FUNCTIONS, 'A condition function, whose value is its arguments.'),
     },
   };

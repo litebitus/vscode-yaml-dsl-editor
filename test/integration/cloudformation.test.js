@@ -31,4 +31,18 @@ suite('CloudFormation templates', () => {
     await hoverTextHolds(doc, positionInText(doc, 'BucketName'), 'A name for the bucket.');
     await hoverTextHolds(doc, positionInText(doc, 'VisibilityTimeout'), 'VisibilityTimeout');
   });
+
+  test('a property under a list item, under an object, or written as an intrinsic function is documented, '
+    + 'and a resource names only the branch its Type selects', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-template.yaml'))).document;
+    await hoverTextHolds(doc, positionInText(doc, 'KeyType'), 'KeyType: string');
+    await hoverTextHolds(doc, positionInText(doc, 'ReadCapacityUnits'), 'ReadCapacityUnits');
+    await hoverTextHolds(doc, positionInText(doc, 'AttributeName'), 'AttributeName: IntrinsicFunction');
+    const resourceHover = '*When* `Type` is `"AWS::DynamoDB::Table"`: '
+      + '`Properties` required; `Properties` is a `AWS::DynamoDB::Table`.';
+    await hoverTextHolds(doc, positionInText(doc, 'MockTable'), resourceHover);
+    const repeated = await hoverTextOf(doc, positionInText(doc, 'MockTable'));
+    assert.equal(repeated.split('*When*').length, 2, repeated);
+  });
 });
