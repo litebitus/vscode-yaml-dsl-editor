@@ -72,4 +72,27 @@ suite('schema reload', () => {
     replaceSchemaFolder(path.join(stack, 'two'), 'Label of one first');
     await hoverTextBecomes(common, label, '```\nlabel: string    [optional]\n```\n\nLabel of one first');
   });
+
+  test('a common layer field hover names the overlays whose schema has no such field', async () => {
+    const stack = fixtureCopy('stack', 'overlay-schema-without-field');
+    for (const overlayName of ['one', 'two']) {
+      const overlayFolder = path.join(stack, overlayName);
+      fs.mkdirSync(overlayFolder, { recursive: true });
+      fs.writeFileSync(path.join(overlayFolder, 'mock.yml'), `${MODELINE}mocktype:\n  replica:\n    label: mock\n`);
+      writeSchemaFolder(overlayFolder, 'Label of one');
+    }
+    const closedSchema = JSON.parse(labelSchemaText('Label of two'));
+    closedSchema.properties.mocktype.additionalProperties = { type: 'object', additionalProperties: false };
+    fs.writeFileSync(
+      path.join(stack, 'two', SCHEMA_FOLDER, 'resources.schema.json'),
+      JSON.stringify(closedSchema),
+    );
+    fs.writeFileSync(path.join(stack, 'mock.yml'), 'mocktype:\n  shared:\n    label: mock\n');
+    const common = (await shownDocument(path.join(stack, 'mock.yml'))).document;
+    await hoverTextBecomes(
+      common,
+      positionInText(common, 'label: mock', 1),
+      ['`one`\n\n```\nlabel: string    [optional]\n```\n\nLabel of one', '`two`: not a field'].join('\n\n---\n\n'),
+    );
+  });
 });

@@ -491,6 +491,38 @@ test('a common layer field hover shows each overlay schema\'s documentation, the
   );
 });
 
+test('a common layer field hover names the overlays whose schema has no such field, and drops them once it does', async () => {
+  const modeline = '# yaml-language-server: $schema=.schema/resources.schema.json\n';
+  const schemaWith = (properties) => JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: { mocktype: { additionalProperties: { properties, additionalProperties: false } } },
+  });
+  const sized = schemaWith({ size: { type: 'integer', description: '[optional] Mock size.' } });
+  const twoSchemaPath = `${root}/two/.schema/resources.schema.json`;
+  const files = {
+    [`${root}/one/.schema/resources.schema.json`]: sized,
+    [twoSchemaPath]: schemaWith({}),
+    [`${root}/three/.schema/resources.schema.json`]: schemaWith({}),
+    [common]: 'mocktype:\n  shared:\n    size: 1\n',
+    [one]: `${modeline}mocktype: {}\n`,
+    [two]: `${modeline}mocktype: {}\n`,
+    [three]: `${modeline}mocktype: {}\n`,
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  for (const filePath of [common, one, two, three]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
+    '`one`\n\n```\nsize: integer    [optional]\n```\n\nMock size.',
+    '`two`, `three`: not a field',
+  ].join('\n\n---\n\n'));
+  files[twoSchemaPath] = sized;
+  await ws.schemasChanged([twoSchemaPath]);
+  assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
+    '`one`, `two`\n\n```\nsize: integer    [optional]\n```\n\nMock size.',
+    '`three`: not a field',
+  ].join('\n\n---\n\n'));
+});
+
 test('the modeline\'s schema path links to the schema it names, a path from the file\'s folder or a URL as written', async () => {
   const urlModeline = '# yaml-language-server: $schema=https://example.test/mock.schema.json\n';
   const files = {

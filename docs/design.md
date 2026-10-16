@@ -575,14 +575,14 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 | Part | Shows |
 |---|---|
-| signature | the field's name, its effective forms after following `$ref`, `allOf` and each `anyOf`/`oneOf` alternative, each named by the definition it refers to or by its type, and its requirement |
+| signature | the field's name, its effective forms after following `$ref`, `allOf` and each `anyOf`/`oneOf` alternative, each named by the definition the field refers to or by its type, and its requirement; a form adding its own type or properties to a definition is named by its type |
 | description | the description kept at the field, rendered as markdown; the composite's description is the value shape and is not shown |
 | accepts | one line per form, with its constraints, when the field has more than one form |
-| tags | one line per constraint, when it has one form: values, default, pattern, bounds, lengths, items, deprecated |
-| conditions | each `if`/`then`/`else` on the object, as when and otherwise; and on a field, its parent's that name it, cut to what they say about the field |
+| tags | one line per constraint, when it has one form: values, default, pattern, bounds, lengths, items, dependencies, deprecated |
+| conditions | each `if`/`then`/`else` on the object, as when and otherwise; and on a field, what its parent's dependencies require when it is set, and its parent's conditions that name it, cut to what they say about the field |
 
 - The draft's renderer reads its own keywords, as its parser and validator do; a part it cannot read in words names a condition the schema states.
-- In the common layer the tooltip documents the field in each overlay's schema; overlays whose documentation is the same share one section, headed by their names.
+- In the common layer the tooltip documents the field in each overlay's schema; overlays whose documentation is the same share one section, headed by their names, and overlays whose schema has no such field are named last, as not a field.
 
 ### Requirement markers
 
@@ -652,10 +652,11 @@ A parser states what its draft's keywords mean:
 | references | `$ref`, `$id` plain-name fragment | `$ref`, `$anchor`, `$recursiveRef` | `$ref`, `$anchor`, `$dynamicAnchor`, `$dynamicRef` |
 | a key `properties` does not list | `additionalProperties` | `additionalProperties`, then `unevaluatedProperties` | `additionalProperties`, then `unevaluatedProperties` |
 | merged as `allOf` merges | `allOf` | `allOf`, `dependentSchemas` | `allOf`, `dependentSchemas` |
+| what a key needs when set | `dependencies` | `dependentRequired`, `dependentSchemas` | `dependentRequired`, `dependentSchemas` |
 | `deprecated` | not read | read | read |
 | validator | Ajv's draft-07 | Ajv's draft 2019-09 | Ajv's draft 2020-12 |
 
-The validator's core compiles each schema once with its draft's validator, and reports each failure at its document path; an alternative none of whose branches holds is one failure, without the branches' own.
+The validator's core compiles each schema once with its draft's validator, and reports each failure at its document path; an alternative none of whose branches holds is one failure, without the branches' own, and so is a key's dependency it does not meet.
 
 ### Validation
 
@@ -669,6 +670,7 @@ Each document is validated against its schema, with the requirement markers deci
 
 - An error is marked on the key of the value it is about, in the file that wrote that value. In the common layer, its message names the overlays whose folds it fails in.
 - A missing required field is marked on its map's key, and an unknown field on its own key.
+- A dependency a key does not meet is marked on that key, its message naming what the key needs.
 - A fold holding a file with a YAML error is not validated.
 - An overlay's `{}` or `[]` at a key the common layer holds is an opt-out, and the fold is validated without that key; at a key the common layer does not hold, it is content and is validated as written.
 - A key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode`, supplies that field, so the field is not reported missing.

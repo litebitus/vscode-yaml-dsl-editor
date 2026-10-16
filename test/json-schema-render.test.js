@@ -36,13 +36,57 @@ test('a tuple renders by each draft\'s own keywords, the items in order and the 
 test('keys a key needs render from draft-07 dependencies and the later drafts\' dependentRequired', () => {
   const needs = { mode: ['size', 'kind'], label: { required: ['size'] } };
   assert.deepEqual(renderedOf(DRAFT_07, { type: 'object', dependencies: needs }).tags, [
-    '*Dependencies:* `mode` needs `size` and `kind`; `label` brings a condition the schema states',
+    '*Dependencies:* `mode` needs `size` and `kind`; `label` needs `size`',
   ]);
   for (const draftUri of [DRAFT_2019_09, DRAFT_2020_12]) {
     assert.deepEqual(renderedOf(draftUri, { type: 'object', dependentRequired: { mode: ['size'] } }).tags, [
       '*Dependencies:* `mode` needs `size`',
     ]);
   }
+});
+
+test('a dependent schema renders what its key needs, alternatives included', () => {
+  const dependentSchemas = { mode: { anyOf: [{ required: ['size'] }, { $ref: '#/$defs/mock_call_form' }] } };
+  for (const draftUri of [DRAFT_2019_09, DRAFT_2020_12]) {
+    assert.deepEqual(renderedOf(draftUri, { type: 'object', dependentSchemas }).tags, [
+      '*Dependencies:* `mode` needs `size`, or a `mock_call_form`',
+    ]);
+  }
+});
+
+test('a field\'s own dependencies render as what setting it requires, and as what its holder needs', () => {
+  const parent = {
+    type: 'object',
+    dependentRequired: { label: ['kind'] },
+    allOf: [{ dependentSchemas: { label: { anyOf: [{ required: ['size'] }, { $ref: '#/$defs/mock_call_form' }] } } }],
+  };
+  const root = { $schema: DRAFT_2020_12, $defs: { mock_call_form: { type: 'object' } }, properties: { mock: parent } };
+  const renderer = schemaRendererFor(root);
+  assert.deepEqual(renderer.keyDependencyLinesOf(root.properties.mock, 'label'), [
+    '*When set:* `kind` required.',
+    '*When set:* `size` required, or a `mock_call_form`.',
+  ]);
+  assert.equal(
+    renderer.dependencyTextOf(root.properties.mock, 'label'),
+    '`label` needs `kind`; `size`, or a `mock_call_form`',
+  );
+  assert.deepEqual(renderer.keyDependencyLinesOf(root.properties.mock, 'size'), []);
+  assert.equal(renderer.dependencyTextOf(root.properties.mock, 'size'), null);
+});
+
+test('a field is named by the reference it makes, and a node refining a reference by its own shape', () => {
+  const root = {
+    $schema: DRAFT_2020_12,
+    $defs: {
+      mock_fields: { patternProperties: { '^mock ': {} } },
+      mock_resource: { type: 'object', $ref: '#/$defs/mock_fields', properties: { size: { type: 'integer' } } },
+    },
+    properties: { resource: { $ref: '#/$defs/mock_resource' }, inline: { $ref: '#/$defs/mock_fields', properties: {} } },
+  };
+  const renderer = schemaRendererFor(root);
+  assert.equal(renderer.renderNode(root.properties.resource).shape, 'mock_resource');
+  assert.equal(renderer.renderNode(root.$defs.mock_resource).shape, 'object');
+  assert.equal(renderer.renderNode(root.properties.inline).shape, 'any');
 });
 
 test('a condition renders its when and otherwise, a condition it cannot read named as stated by the schema', () => {

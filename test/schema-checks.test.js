@@ -339,6 +339,41 @@ test('a value none of whose forms holds reads as the described definition its fi
   assert.deepEqual(messages, ['`threshold` must be a literal number, or a `ref` resolving to one']);
 });
 
+test('a dependency its key does not meet is marked on that key, worded as what the key needs', () => {
+  const dependentSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    $defs: {
+      mock_call_form: { type: 'object', not: { propertyNames: { not: { pattern: ' fn\\.' } } } },
+      mock_resource: {
+        type: 'object',
+        properties: {
+          queue: { type: 'string', description: '[optional] Mock queue.' },
+          role: { type: 'string', description: '[optional] Mock role.' },
+          label: { type: 'string', description: '[optional] Mock label.' },
+          size: { type: 'integer', description: '[optional] Mock size.' },
+        },
+        dependentRequired: { label: ['size'] },
+        dependentSchemas: {
+          queue: { anyOf: [{ required: ['role'] }, { $ref: '#/$defs/mock_call_form' }] },
+          role: { anyOf: [{ required: ['queue'] }, { $ref: '#/$defs/mock_call_form' }] },
+        },
+      },
+    },
+    properties: { mocktype: { type: 'object', additionalProperties: { $ref: '#/$defs/mock_resource' } } },
+  };
+  const checks = createSchemaChecks(() => dependentSchema);
+  const messagesOf = (primary) => checks.documentProblems('mock-dependent', { mocktype: { primary } })
+    .map(({ path, message }) => [path, message]);
+  assert.deepEqual(messagesOf({ queue: 'mock-queue', role: 'mock-role' }), []);
+  assert.deepEqual(messagesOf({ queue: 'mock-queue', label: 'mock' }), [
+    [['mocktype', 'primary', 'label'], '`label` needs `size`'],
+    [['mocktype', 'primary', 'queue'], '`queue` needs `role`, or a `mock_call_form`'],
+  ]);
+  assert.deepEqual(messagesOf({ role: 'mock-role' }), [
+    [['mocktype', 'primary', 'role'], '`role` needs `queue`, or a `mock_call_form`'],
+  ]);
+});
+
 test('a required list inside not or if is a condition the markers leave as written', () => {
   const conditionSchema = {
     $schema: 'https://json-schema.org/draft/2020-12/schema',

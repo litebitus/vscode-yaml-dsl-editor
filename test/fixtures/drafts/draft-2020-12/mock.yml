@@ -6,3 +6,4 @@ mocktype:
   named:
     label: mock
   old: mock
+  queue: mock-queue

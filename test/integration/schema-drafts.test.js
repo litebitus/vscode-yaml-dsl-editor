@@ -69,6 +69,14 @@ suite('JSON Schema drafts', () => {
     await hoverTextBecomes(doc, positionInText(doc, 'old: ', 'old: '.length), DEPRECATED_OLD_WARNING);
   });
 
+  test('draft 2020-12 hovers a field with what setting it requires, from its holder\'s dependentSchemas', async () => {
+    const doc = await draftDocument('draft-2020-12');
+    assert.equal(
+      await hoverTextAt(doc, 'queue'),
+      '```\nqueue: string    [optional]\n```\n\nthe mock queue\n\n*When set:* `role` required, or a `node`.',
+    );
+  });
+
   test('a schema declaring an older draft is read as draft-07', async () => {
     const doc = await draftDocument('draft-04');
     assert.equal(await hoverTextAt(doc, 'first'), FIRST_OF_PAIR);

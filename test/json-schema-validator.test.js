@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { schemaValidatorFor } = require('../lib/json-schema');
-const { SCHEMA_COMPILE_KEYWORD } = require('../lib/json-schema/validator');
+const { SCHEMA_COMPILE_KEYWORD, DEPENDENCY_KEYWORD } = require('../lib/json-schema/validator');
 
 const DRAFT_URIS = [
   'http://json-schema.org/draft-07/schema#',
@@ -70,6 +70,37 @@ test('a missing required field and an unknown field are failures of their map', 
     [['mocktype', 'primary'], 'required', { missingProperty: 'label' }],
     [['mocktype', 'primary'], 'additionalProperties', { additionalProperty: 'mock_field' }],
   ]);
+});
+
+test('a dependency its key does not meet is one failure naming the key, in each draft\'s keywords', () => {
+  const holderOf = (draftUri, dependencyKeywords) => ({
+    $schema: draftUri,
+    properties: { mocktype: { type: 'object', ...dependencyKeywords } },
+  });
+  const anyOfNeeds = { anyOf: [{ required: ['size'] }, { required: ['kind'] }] };
+  const holders = [
+    holderOf(DRAFT_URIS[0], { dependencies: { label: ['size'], mode: anyOfNeeds } }),
+    holderOf(DRAFT_URIS[1], { dependentRequired: { label: ['size'] }, dependentSchemas: { mode: anyOfNeeds } }),
+    holderOf(DRAFT_URIS[2], { dependentRequired: { label: ['size'] }, dependentSchemas: { mode: anyOfNeeds } }),
+  ];
+  for (const holder of holders) {
+    const failures = schemaValidatorFor(holder).documentFailures({ mocktype: { label: 'mock', mode: 'mock' } });
+    assert.deepEqual(failures.map(({ path, keyword, params }) => [path, keyword, params]), [
+      [['mocktype'], DEPENDENCY_KEYWORD, { property: 'label' }],
+      [['mocktype'], DEPENDENCY_KEYWORD, { property: 'mode' }],
+    ], holder.$schema);
+  }
+});
+
+test('a dependent schema\'s failure inside a field of its holder stays that field\'s own', () => {
+  const validator = schemaValidatorFor({
+    $schema: DRAFT_URIS[2],
+    properties: {
+      mocktype: { type: 'object', dependentSchemas: { label: { properties: { size: { type: 'integer' } } } } },
+    },
+  });
+  const failures = validator.documentFailures({ mocktype: { label: 'mock', size: 'mock-size' } });
+  assert.deepEqual(failures.map(({ path, keyword }) => [path, keyword]), [[['mocktype', 'size'], 'type']]);
 });
 
 test('a schema that cannot be compiled is one failure at the document, and an unread draft has no validator', () => {

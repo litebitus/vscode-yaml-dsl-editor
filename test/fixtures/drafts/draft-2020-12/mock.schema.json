@@ -2,7 +2,29 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "mocktype": {
+      "dependentSchemas": {
+        "queue": {
+          "anyOf": [
+            {
+              "required": [
+                "role"
+              ]
+            },
+            {
+              "$ref": "#/$defs/node"
+            }
+          ]
+        }
+      },
       "properties": {
+        "queue": {
+          "type": "string",
+          "description": "the mock queue"
+        },
+        "role": {
+          "type": "string",
+          "description": "the mock role"
+        },
         "pair": {
           "prefixItems": [
             {
