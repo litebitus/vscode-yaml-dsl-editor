@@ -174,6 +174,16 @@ A stack's schema is the `schema.json` of the grammar version that stack initiali
 - What the extension works out from a schema, such as the node fingerprints and validators of the schema checks, belongs to the schema's entry and goes with it.
 - A modeline's fragment names a node of the schema it reads: the schema is cached once by its text, and the fragment is kept with the reading file, never as a cache entry of its own.
 
+A DSL's `performance` block states how the editor keeps a large schema fast:
+
+| Field | What it states |
+|---|---|
+| `compiled_schema_cache` | whether the DSL's compiled schema is kept in the extension's storage and loaded in later sessions instead of compiled |
+
+- A kept compiled schema is one file per DSL entry, stating the schema's hash and the extension's build.
+- The validating worker loads it when both match. When either differs, or the file cannot be loaded, the worker compiles the schema and saves over the file.
+- The saved validator refers to the nodes of the schema the worker holds, so a failure names the same schema nodes as a fresh compile.
+
 ### Staleness checks
 
 What the extension holds is a copy of what the files say: a resident stack's analysis, and a file's kept suggestions. Each copy is checked against its source on these triggers, every input takes effect without reloading the window, and every change to the extension keeps them:
@@ -743,7 +753,7 @@ The validator's core compiles each schema once with its draft's validator, and r
 
 A `pattern` or `patternProperties` key is a regular expression built with the `u` flag, as JSON Schema says.
 
-A part of a schema is compiled on its own, its `$ref` and `$dynamicRef` starting with `#` resolving in the schema, and the schema itself is compiled at most once:
+A part of a schema is compiled on its own, with only the schema's nodes its `$ref` and `$dynamicRef` starting with `#` reach, followed through the nodes they reach; its cost follows what it reaches, never the whole schema:
 
 - a branch's `if`, so choosing a branch compiles only what the condition reaches;
 - a node's own keywords, which the schema checks validate an opt-out against.
@@ -774,6 +784,17 @@ A DSL's `validator` block states how a document is read before it is validated; 
 | `child_values_from_parent_key` | patterns of a key that sets a field of the entry it keys, with `field` and `value` groups. A field the entry writes itself stays as written |
 
 The `validator.*` settings show validation errors at a chosen severity, turn them off, and color the files holding them in the Explorer.
+
+### Validating in a worker
+
+The server validates documents in a worker thread, so a schema that takes long to compile never holds hover, completion or suggestions:
+
+- The worker holds each schema it is sent, by hash, and drops the ones the schema cache drops.
+- An answer is kept by the document's schema, fragment and value, one per file the stacks hold.
+- A file whose answer has not arrived shows its previous answer, none at first. When the answer arrives, the file's problems are published again.
+- A file has one request in flight; a newer document replaces it.
+- A request past its deadline is a problem on the modeline line until its answer arrives.
+- A worker that stops is started again and its requests sent again. A request it stops twice is a problem on the modeline line naming why.
 
 ### Deprecated fields
 
@@ -989,7 +1010,7 @@ A potential move is information: its gutter mark is the info mark, its hint star
 A block the walk finds passes two schema checks before it is offered:
 
 1. Every overlay with a file, holding the block or not, reads the node at the block's path in its own schema, and those nodes must be the same. Nodes of one schema are the same when they are one node. Nodes of different schemas are compared by a hash of each with its references resolved, its annotations (`description`, `title`, `examples`, `$comment`) set aside and its requirement marker kept, worked out when first compared and cached per schema node.
-2. Each opt-out passes the node at its own path in the schema of the overlay that takes it: `{}`, `[]` or the default, with requiredness read from the requirement markers.
+2. Each opt-out passes the node at its own path in the schema of the overlay that takes it: `{}`, `[]` or the default, with requiredness read from the requirement markers. A node's `if` is read against the opt-out, and only the branch it selects is checked.
 
 A block that fails either check is a potential move with no link:
 
@@ -1583,7 +1604,7 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 
 - The extension's own settings are VS Code settings under the extension's name, `yaml-dsl-editor`.
 - A setting is the user's choice of how the editor behaves, the same for every DSL. What a DSL is, and its syntax, lives in `yaml-dsl.yml`, never in a setting.
-- Every cache the extension keeps is bounded, and each cache's capacity is a setting.
+- Every cache the extension keeps is bounded. A cache held in memory has its capacity as a setting; the compiled schemas kept on disk are bounded by the DSL entries that opt in, one each.
 - Every behavior that nags has a setting that turns it off.
 - A change to a setting applies at once.
 - The README lists every setting.

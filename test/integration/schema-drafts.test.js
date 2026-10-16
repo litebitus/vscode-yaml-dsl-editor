@@ -7,6 +7,7 @@ const {
   hoverTextBecomes,
   WAIT_DEADLINE_MILLISECONDS,
 } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 const DEPRECATED_OLD_WARNING = '`old` is deprecated: use pair';
 
@@ -44,6 +45,8 @@ const NAMED_LABEL = '```\nlabel    [optional]\n```\n\nthe named label';
 const OLD_USE_PAIR = '```\nold    [optional]\n```\n\nuse pair';
 
 suite('JSON Schema drafts', () => {
+  isolateEachTest();
+
   test('draft-07 hovers a tuple item, its additionalItems and a plain-name $id anchor, and ignores deprecated', async () => {
     const doc = await draftDocument('draft-07');
     assert.equal(await hoverTextAt(doc, 'first'), FIRST_OF_PAIR);

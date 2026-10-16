@@ -180,6 +180,27 @@ test('a branch condition is compiled alone, so a part of the schema that cannot 
   assert.equal(validator.conditionHolds(condition, { kind: 'mock-bucket' }), true);
   assert.equal(validator.conditionHolds(condition, { kind: 'mock-queue' }), false);
   assert.deepEqual(validator.documentFailures({}).map((failure) => failure.keyword), [SCHEMA_COMPILE_KEYWORD]);
+  const unreadable = { properties: { kind: { pattern: '(' } } };
+  assert.equal(validator.conditionHolds(unreadable, { kind: 'mock-bucket' }), null);
+  assert.equal(validator.conditionHolds(true, {}), true);
+});
+
+test('a fragment whose node cannot be compiled reads as a node the schema does not have', () => {
+  const schema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: { entry: { properties: { gone: { $ref: '#/$defs/mock_missing' } } } },
+  };
+  const failures = schemaValidatorFor(schema).documentFailures({}, { fragmentPointer: '/properties/entry' });
+  assert.deepEqual(failures.map((failure) => failure.message), [
+    'the schema cannot be compiled: can\'t resolve reference #/$defs/mock_missing from id #',
+  ]);
+  const compilable = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    $defs: { mock_entry: { properties: { gone: { $ref: '#/$defs/mock_missing' } } } },
+    properties: { name: { type: 'string' } },
+  };
+  const fragment = schemaValidatorFor(compilable).documentFailures({}, { fragmentPointer: '/$defs/mock_entry' });
+  assert.deepEqual(fragment.map((failure) => failure.message), ['the schema has no node at `#/$defs/mock_entry`']);
 });
 
 test('a part of the schema compiled alone resolves its references in the schema, and data keeps its $ref keys', () => {
@@ -201,5 +222,86 @@ test('a part of the schema compiled alone resolves its references in the schema,
     assert.equal(part({ size: 2, marker: { $ref: '#/mock' } }), true, draftUri);
     assert.equal(part({ size: 0 }), false, draftUri);
     assert.equal(part({ marker: { $ref: 'yaml-dsl-editor-root#/mock' } }), false, draftUri);
+  }
+});
+
+test('a part compiled alone carries only the nodes its references reach, through lists, anchors and the root', () => {
+  const schema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    $defs: {
+      mock_name: { type: 'string', minLength: 2 },
+      mock_tagged: { $anchor: 'mock-tag', type: 'string', pattern: '^tag-' },
+      mock_broken: { type: 'string', pattern: '(' },
+      mock_chain: { $ref: '#/$defs/mock_name' },
+    },
+    allOf: [{ required: ['name'] }, { properties: { size: { type: 'integer' } } }],
+    properties: { name: { $ref: '#/$defs/mock_chain' } },
+  };
+  const validator = schemaValidatorFor(schema);
+  const chained = validator.compileRootPart({ properties: { name: { $ref: '#/$defs/mock_chain' } } });
+  assert.equal(chained({ name: 'mock-name' }), true);
+  assert.equal(chained({ name: 'm' }), false);
+  const listed = validator.compileRootPart({ properties: { size: { $ref: '#/allOf/1/properties/size' } } });
+  assert.equal(listed({ size: 1 }), true);
+  assert.equal(listed({ size: 'mock' }), false);
+  const anchored = validator.compileRootPart({ properties: { tag: { $ref: '#mock-tag' } } });
+  assert.equal(anchored({ tag: 'tag-mock' }), true);
+  assert.equal(anchored({ tag: 'mock' }), false);
+  const plain = validator.compileRootPart({ required: ['name'] });
+  assert.equal(plain({}), false);
+  assert.throws(() => validator.compileRootPart({ properties: { broken: { $ref: '#/$defs/mock_broken' } } }));
+  const whole = validator.compileRootPart({ properties: { nested: { $ref: '#' } } });
+  assert.equal(whole({ nested: { name: 'mock-name' } }), true);
+  assert.equal(whole({ nested: {} }), false);
+  assert.throws(() => validator.compileRootPart({ properties: { gone: { $ref: '#/$defs/mock_missing' } } }));
+});
+
+function memoryCompiledRootStore(savedSource = null) {
+  const store = {
+    filename: '/mock/compiled-schema.js',
+    saved: [],
+    load: () => savedSource,
+    save: (source) => store.saved.push(source),
+  };
+  return store;
+}
+
+const savedSchemaText = JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  additionalProperties: false,
+  $defs: { mock_size: { description: 'mock-unique-size-description', type: 'integer', minimum: 1 } },
+  properties: {
+    size: { $ref: '#/$defs/mock_size' },
+    mode: { anyOf: [{ type: 'string', pattern: '^mock-' }, { type: 'object', required: ['kind'] }] },
+  },
+});
+
+test('a compiled root is saved with references to the schema\'s own nodes, and a saved one is loaded instead '
+  + 'of compiled, failing the same way', () => {
+  const document = { size: 0, mode: 3, extra: true };
+  const compiling = memoryCompiledRootStore();
+  const compiled = schemaValidatorFor(JSON.parse(savedSchemaText), compiling).documentFailures(document);
+  assert.equal(compiling.saved.length, 1);
+  const [source] = compiling.saved;
+  assert.match(source, /schemaNode\("\/\$defs\/mock_size"\)/);
+  assert.doesNotMatch(source, /mock-unique-size-description/);
+  const loading = memoryCompiledRootStore(source);
+  const loaded = schemaValidatorFor(JSON.parse(savedSchemaText), loading).documentFailures(document);
+  assert.deepEqual(loaded, compiled);
+  assert.deepEqual(compiled.map(({ path, keyword }) => [path, keyword]), [
+    [[], 'additionalProperties'],
+    [['size'], 'minimum'],
+    [['mode'], 'anyOf'],
+  ]);
+  assert.equal(loading.saved.length, 0);
+});
+
+test('a saved compiled root that cannot be loaded is compiled again and saved over', () => {
+  for (const unreadable of ['this is not javascript (', '"use strict";module.exports = 1;']) {
+    const store = memoryCompiledRootStore(unreadable);
+    const failures = schemaValidatorFor(JSON.parse(savedSchemaText), store).documentFailures({ size: 0 });
+    assert.deepEqual(failures.map(({ path, keyword }) => [path, keyword]), [[['size'], 'minimum']]);
+    assert.equal(store.saved.length, 1);
   }
 });

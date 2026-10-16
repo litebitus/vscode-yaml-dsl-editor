@@ -2,6 +2,7 @@ const assert = require('assert');
 const path = require('path');
 const vscode = require('vscode');
 const { WAIT_DEADLINE_MILLISECONDS, shownDocument, positionInText, hoverTextBecomes } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 function includesFixture(...parts) {
   return path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'includes', ...parts);
@@ -18,6 +19,8 @@ async function eventually(read, matches) {
 }
 
 suite('overlay includes', () => {
+  isolateEachTest();
+
   test('a template opens its common layer from the include and resolves the names it declares', async () => {
     const template = (await shownDocument(includesFixture('mock-bucket.yaml'))).document;
     const snippetUri = vscode.Uri.file(includesFixture('snippets', 'mock-wait.yaml')).toString();

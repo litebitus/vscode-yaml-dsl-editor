@@ -9,6 +9,7 @@ const {
   writeOverlays,
   overlayHeadingOf,
 } = require('./overlay-schema-folders');
+const { isolateEachTest } = require('./test-isolation');
 
 function replaceSchemaFolder(overlayFolder, labelDescription) {
   const schemaFolder = path.join(overlayFolder, SCHEMA_FOLDER);
@@ -17,6 +18,8 @@ function replaceSchemaFolder(overlayFolder, labelDescription) {
 }
 
 suite('schema reload', () => {
+  isolateEachTest();
+
   test('an overlay schema whose folder is replaced, as initializing a stack again does, is read again', async () => {
     const stack = fixtureCopy('stack', 'reinitialized-schema');
     writeOverlays(stack, { one: 'Label of one first', two: 'Label of two first' });

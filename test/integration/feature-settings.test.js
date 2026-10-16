@@ -9,6 +9,7 @@ const {
   positionInText,
   hoverTextBecomes,
 } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 const POTENTIAL_MOVE = 'ⓘ potential move: one difference, size';
 const RENAME_EVERYWHERE = '💡 rename everywhere: shared → renamed';
@@ -29,6 +30,8 @@ async function withSetting(key, value, body) {
 }
 
 suite('feature settings', () => {
+  isolateEachTest();
+
   test('each suggestion kind is shown until its own setting turns it off', async () => {
     const overlay = (await shownDocument(settingsPath('kinds', 'overlay-1', 'mock.yml'))).document;
     await hintLabelsBecome(overlay, EVERY_KIND);
@@ -69,8 +72,6 @@ suite('feature settings', () => {
       SAME_IN_COMMON_LAYER,
       POTENTIAL_MOVE,
     ]));
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
   test('a deprecated field\'s warning is its hover until warning.deprecation.enabled turns it off', async () => {

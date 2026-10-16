@@ -8,6 +8,7 @@ const {
   fixtureCopy,
   undoInEditorOf,
 } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 function stackCopy() {
   return fixtureCopy('stack');
@@ -39,32 +40,30 @@ async function typedAtEnd(editor, text) {
 }
 
 suite('completion', () => {
+  isolateEachTest();
+
   test('a ref started in an overlay offers the common layer\'s declarations', async () => {
     const editor = await shownDocument(path.join(stackCopy(), 'one', 'mock.yml'));
     const cursor = await typedAtEnd(editor, '\n    other: ref mo');
     assert.ok((await completionLabelsAt(editor.document, cursor)).includes('ref mocktype.primary'));
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
   test('a ref started inside a quote offers the common layer\'s declarations', async () => {
     const editor = await shownDocument(path.join(stackCopy(), 'one', 'mock.yml'));
     const cursor = await typedAtEnd(editor, '\n    other: "ref mo');
     assert.ok((await completionLabelsAt(editor.document, cursor)).includes('ref mocktype.primary'));
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
   test('a local started in an overlay offers the common layer\'s locals', async () => {
     const editor = await shownDocument(path.join(stackCopy(), 'one', 'mock.yml'));
     const cursor = await typedAtEnd(editor, '\n    other: loc');
     assert.ok((await completionLabelsAt(editor.document, cursor)).includes('local.db'));
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 });
 
 suite('schema completion', () => {
+  isolateEachTest();
+
   test('a key started in a map offers the schema\'s fields, striking a deprecated one', async () => {
     const editor = await shownDocument(path.join(fixtureCopy('schema-completion'), 'mock.yml'));
     const cursor = await typedAtEnd(editor, '  se');
@@ -78,8 +77,6 @@ suite('schema completion', () => {
     const insertedText = (item) => (typeof item.insertText === 'string' ? item.insertText : item.insertText.value);
     assert.equal(insertedText(items.settings), 'settings:\n    ');
     assert.equal(insertedText(items.mode), 'mode: ');
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
   test('the lone-entry Tab command accepts the entry the list holds', async () => {
@@ -95,8 +92,6 @@ suite('schema completion', () => {
       await vscode.commands.executeCommand('yaml-dsl-editor.acceptLoneSuggestion');
     }
     assert.equal(typedLine(), '  mode: fast');
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
   test('accepting a field with a default writes the default, selected', async () => {
@@ -113,8 +108,6 @@ suite('schema completion', () => {
     }
     assert.equal(typedLine(), '  enabled: false');
     assert.equal(editor.document.getText(editor.selection), 'false');
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
   test('the modeline\'s schema path is a link that opens the schema', async () => {
@@ -129,7 +122,6 @@ suite('schema completion', () => {
     }
     assert.ok(schemaLink);
     assert.equal(editor.document.getText(schemaLink.range), './mock.schema.json');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
   test('a schema written on disk is read again, its new field offered without reopening the file', async () => {
@@ -148,8 +140,6 @@ suite('schema completion', () => {
       if (!labels.includes('mock_added')) await new Promise((resolve) => { setTimeout(resolve, 100); });
     }
     assert.ok(labels.includes('mock_added'), JSON.stringify(labels));
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
   test('word completion is off in a DSL file', () => {
@@ -162,12 +152,12 @@ suite('schema completion', () => {
     const cursor = await typedAtEnd(editor, '  mode: ');
     const labels = await completionLabelsAt(editor.document, cursor);
     assert.ok(labels.includes('fast') && labels.includes('slow'), JSON.stringify(labels));
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 });
 
 suite('required fields', () => {
+  isolateEachTest();
+
   test('Enter after an empty entry key fills its required fields, the cursor at the first value, undone in one step', async () => {
     const editor = await shownDocument(path.join(fixtureCopy('required-fields'), 'mock.yml'));
     const doc = editor.document;
@@ -198,7 +188,5 @@ suite('required fields', () => {
     assert.equal(doc.getText().includes('kms_key_arn:'), false);
     const throughKeyLine = textBefore.slice(0, textBefore.indexOf('  alerts:') + '  alerts:\n'.length);
     assert.equal(doc.getText().startsWith(throughKeyLine), true);
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 });

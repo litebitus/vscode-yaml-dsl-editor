@@ -98,6 +98,15 @@ MockQueue:
   Type: AWS::SQS::Queue
 ```
 
+### Large schemas
+
+Validation runs in a worker, so hover, completion and suggestions answer while a large schema compiles. A DSL can keep its compiled schema in the extension's storage for later sessions:
+
+```yaml
+performance:
+  compiled_schema_cache: true
+```
+
 ### Navigation and completion
 
 - References, locals, placeholders and calls go to their declaration and complete from what the file's fold sees.

@@ -1,6 +1,7 @@
 const assert = require('assert');
 const vscode = require('vscode');
 const { WAIT_DEADLINE_MILLISECONDS } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 async function openOwned(relativePath) {
   const folder = vscode.workspace.workspaceFolders[0].uri;
@@ -27,6 +28,8 @@ async function inlayHintsOf(doc) {
 }
 
 suite('common layer suggestions', () => {
+  isolateEachTest();
+
   test('a block every overlay holds shows an inlay hint at the end of its key line', async () => {
     const doc = await openOwned(['suggest', 'one', 'mock.yml']);
     const hints = await inlayHintsOf(doc);

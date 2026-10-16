@@ -37,6 +37,8 @@ dsls:
     placeholder:
       pattern: "\\$\\{(?<body>[^!}][^}]*)\\}"
       unscanned_paths: []
+    performance:
+      compiled_schema_cache: true
     key_sort_orders:
       - path: "$"
         skip_keys: []

@@ -11,6 +11,7 @@ const {
   WAIT_DEADLINE_MILLISECONDS,
 } = require('./editor-hints');
 const { writeOverlays, overlayHeadingOf } = require('./overlay-schema-folders');
+const { isolateEachTest } = require('./test-isolation');
 
 const SETTINGS_SECTION = 'yaml-dsl-editor';
 
@@ -36,6 +37,8 @@ async function editorThemeBecomes(light) {
 }
 
 suite('themes', () => {
+  isolateEachTest();
+
   setup(async () => {
     const windowSettings = vscode.workspace.getConfiguration('window');
     await windowSettings.update('autoDetectColorScheme', false, vscode.ConfigurationTarget.Global);

@@ -7,8 +7,11 @@ const {
   shownDocument,
   hintLabelsBecome,
 } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 suite('saved suggestions', () => {
+  isolateEachTest();
+
   test('suggestions another build saved never show, and the running build works their file out again', async () => {
     const writableFolder = vscode.workspace.workspaceFolders[1].uri.fsPath;
     const overlay = (await shownDocument(path.join(writableFolder, 'planted-marks', 'one', 'mock.yml'))).document;

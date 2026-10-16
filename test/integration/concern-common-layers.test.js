@@ -13,6 +13,7 @@ const {
   undoInEditorOf,
 } = require('./editor-hints');
 const { APPLY_COMMAND } = require('../../lib/suggestion-marks');
+const { isolateEachTest } = require('./test-isolation');
 
 function concernPath(...segments) {
   return path.join(vscode.workspace.workspaceFolders[2].uri.fsPath, ...segments);
@@ -31,6 +32,8 @@ async function fileTextBecomes(filePath, expected) {
 }
 
 suite('concern common layers', () => {
+  isolateEachTest();
+
   test('a concern above its overlays moves a shared block into the common layer in its own directory', async () => {
     const overlay = (await shownDocument(concernPath('concern-1', 'overlay-1', 'mock.yml'))).document;
     await hintLabelsBecome(overlay, [MOVE_TO_COMMON_LAYER]);

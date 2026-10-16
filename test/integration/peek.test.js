@@ -1,6 +1,7 @@
 const assert = require('assert');
 const vscode = require('vscode');
 const { WAIT_DEADLINE_MILLISECONDS } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 function place(text, needle) {
   const index = text.indexOf(needle);
@@ -38,6 +39,8 @@ async function openOwned(relativePath) {
 }
 
 suite('references peek regression', () => {
+  isolateEachTest();
+
   test('an out-of-file ref shows no declaration on hover and does not open the references peek', async () => {
     const doc = await openOwned(['stack', 'one', 'mock.yml']);
     const before = referencesPeekCount();

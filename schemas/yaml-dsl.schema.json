@@ -76,6 +76,7 @@
         "function": { "$ref": "#/$defs/function" },
         "locals": { "$ref": "#/$defs/locals" },
         "validator": { "$ref": "#/$defs/validator" },
+        "performance": { "$ref": "#/$defs/performance" },
         "key_sort_orders": {
           "type": "array",
           "items": { "$ref": "#/$defs/key_sort_order" },
@@ -258,6 +259,18 @@
           "type": "string",
           "minLength": 1,
           "description": "The scope, declared under scopes, whose declarations are the locals."
+        }
+      }
+    },
+    "performance": {
+      "type": "object",
+      "description": "How the editor keeps a large schema fast. Left out for a DSL that needs none of it.",
+      "required": ["compiled_schema_cache"],
+      "additionalProperties": false,
+      "properties": {
+        "compiled_schema_cache": {
+          "type": "boolean",
+          "description": "Whether the compiled schema is kept in the extension's storage and loaded in later sessions instead of compiled."
         }
       }
     },

@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { bind } = require('../lib/bind');
 const {
   scope,
@@ -18,6 +21,7 @@ function fakeConnection() {
     handlers,
     notifications: [],
     onInitialize(fn) { handlers.initialize = fn; },
+    onShutdown(fn) { handlers.shutdown = fn; },
     onHover(fn) { handlers.hover = fn; },
     onDefinition(fn) { handlers.definition = fn; },
     onPrepareRename(fn) { handlers.prepareRename = fn; },
@@ -82,6 +86,9 @@ test('a link carries its target count', async () => {
     onSuggestions() {},
     onKeptSchemasChanged() {},
     onVocabularyLoaded() {},
+    onValidationAnswered() {},
+    setCompiledSchemaFolder() {},
+    dispose() {},
     links: () => [
       { range: targetRange, target: 'file:///repo/mock.schema.json', targets: [] },
       {
@@ -111,6 +118,9 @@ test('rename answers the name to edit and the edit, and a refusal is an error th
     onSuggestions() {},
     onKeptSchemasChanged() {},
     onVocabularyLoaded() {},
+    onValidationAnswered() {},
+    setCompiledSchemaFolder() {},
+    dispose() {},
     prepareRename: (uri) => {
       if (uri.endsWith('none.yml')) return null;
       return refusing ? { problem: 'mock refusal' } : { range, placeholder: 'mock-name' };
@@ -195,6 +205,46 @@ test('document events analyze and custom requests answer', async () => {
   documents.handlers.close({ document: { uri: 'file:///repo/app/mock.yml' } });
   assert.deepEqual((await connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/app/mock.yml' })).problems, []);
   await documents.handlers.open({ document: { uri: 'yaml-dsl-fold:%2Frepo%2Fapp%2Fmock.yml/one', getText: () => 'name: plain\n' } });
+});
+
+test('the server validates in its worker, tells the editor to reread a file once answered, '
+  + 'keeps compiled schemas in the storage folder it is given, and stops the worker on shutdown', async () => {
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const storageFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-dsl-editor-mock-storage-'));
+  const files = { '/repo/schema.json': '{"type":"object","properties":{"name":{"type":"string"}}}' };
+  const workspace = bind(connection, documents, {
+    readFile: async (filePath) => files[filePath] ?? null,
+    fetchText: async () => null,
+  });
+  connection.handlers.initialize({ capabilities: {}, initializationOptions: { storageFolder } });
+  await connection.handlers['yaml-dsl/config']({
+    entries: [{
+      text: configText(dslEntry('sample', {
+        schema_search_paths: ['{config_root}/schema.json'],
+        performance: { compiled_schema_cache: true },
+      })),
+      dir: '/repo',
+    }],
+  });
+  const uri = 'file:///repo/app/mock.yml';
+  documents.handlers.open({ document: { uri, getText: () => 'name: 1\n' } });
+  await workspace.whenIdle();
+  const pending = await connection.handlers['yaml-dsl/decorations']({ uri });
+  assert.deepEqual(pending.problems, []);
+  connection.notifications.length = 0;
+  await workspace.whenValidated();
+  assert.deepEqual(connection.notifications.filter((item) => item.method === 'yaml-dsl/reanalyzed'), [
+    { method: 'yaml-dsl/reanalyzed', params: { uris: [uri] } },
+  ]);
+  const answered = await connection.handlers['yaml-dsl/decorations']({ uri });
+  assert.deepEqual(answered.problems.map((problem) => problem.message), ['`name` must be string']);
+  assert.equal(fs.readdirSync(path.join(storageFolder, 'compiled-schemas')).length, 1);
+  connection.handlers.shutdown();
+  documents.handlers.change({ document: { uri, getText: () => 'name: 2\n' } });
+  await workspace.whenIdle();
+  const afterShutdown = await connection.handlers['yaml-dsl/decorations']({ uri });
+  assert.deepEqual(afterShutdown.problems.map((problem) => problem.message), ['`name` must be string']);
 });
 
 test('the server watches each schema path it reads and reloads a schema that changes', async () => {
@@ -391,6 +441,9 @@ test('suggestions are sent as they arrive, and one is applied through the editor
   let announce = null;
   const workspace = {
     onVocabularyLoaded() {},
+    onValidationAnswered() {},
+    setCompiledSchemaFolder() {},
+    dispose() {},
     onSuggestions(listener) { announce = listener; },
     onKeptSchemasChanged() {},
     suggestionMarks: (stackId) => ({ stackId, files: [{ uri: 'file:///repo/dev/mock.yml', marks: [] }] }),
@@ -431,6 +484,9 @@ test('a layer file that changes on disk is watched and read again', async () => 
   const changed = [];
   const workspace = {
     onVocabularyLoaded() {},
+    onValidationAnswered() {},
+    setCompiledSchemaFolder() {},
+    dispose() {},
     onSuggestions() {},
     onKeptSchemasChanged() {},
     schemaWatchTargets: () => [{ base: '/repo/.schema', pattern: 'mock.json' }],
@@ -457,6 +513,9 @@ test('an open file deleted from disk is closed, as a closed tab is', async () =>
   const events = [];
   const workspace = {
     onVocabularyLoaded() {},
+    onValidationAnswered() {},
+    setCompiledSchemaFolder() {},
+    dispose() {},
     onSuggestions() {},
     onKeptSchemasChanged() {},
     close: async (uri) => { events.push(['close', uri]); },
@@ -477,6 +536,9 @@ test('a file the editor opens is analyzed once, though the library reports the o
   const synced = [];
   const workspace = {
     onVocabularyLoaded() {},
+    onValidationAnswered() {},
+    setCompiledSchemaFolder() {},
+    dispose() {},
     onSuggestions() {},
     onKeptSchemasChanged() {},
     sync: async (uri) => { synced.push(uri); },

@@ -100,6 +100,7 @@ module.exports = {
   hintTooltipOf,
   applyArgumentIn,
   positionInText,
+  hoverTextOf,
   hoverTextBecomes,
   undoInEditorOf,
 };

@@ -1,0 +1,14 @@
+version: "1"
+dsls:
+  - id: cloudformation-template
+    file_includes: ["{config_root}/*.yaml"]
+    file_excludes: []
+    schema_search_paths: ["{config_root}/../../../examples/schemas/cloudformation-2010-09-09.schema.json"]
+    tag_keys:
+      - { tag: "!Ref", key: Ref }
+    performance:
+      compiled_schema_cache: true
+    key_sort_orders: []
+    scopes: {}
+    declarations: []
+    references: []

@@ -13,6 +13,7 @@ function startClient(context, configEntries, outputChannel, declarationsPopup) {
     },
     {
       documentSelector: [{ language: 'yaml-dsl' }],
+      initializationOptions: { storageFolder: context.globalStorageUri ? context.globalStorageUri.fsPath : null },
       middleware: editorMiddleware(vscode, configEntries, declarationsPopup),
       outputChannel,
     },

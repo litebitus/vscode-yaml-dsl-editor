@@ -8,6 +8,7 @@ const {
   positionInText,
   hoverTextBecomes,
 } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 const BRANCH_FIELDS = ['BucketName', 'QueueName'];
 
@@ -26,6 +27,8 @@ async function offeredBranchFieldsBecome(doc, position, expected) {
 }
 
 suite('branches the document selects', () => {
+  isolateEachTest();
+
   test('a field is documented by the branch its entry\'s value selects', async () => {
     const doc = (await shownDocument(path.join(fixtureCopy('branched', 'branched-hover'), 'mock.yaml'))).document;
     await hoverTextBecomes(
@@ -41,7 +44,5 @@ suite('branches the document selects', () => {
     const end = doc.lineAt(doc.lineCount - 1).range.end;
     await editor.edit((edit) => { edit.insert(end, '      Na'); });
     await offeredBranchFieldsBecome(doc, doc.lineAt(doc.lineCount - 1).range.end, ['QueueName']);
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 });

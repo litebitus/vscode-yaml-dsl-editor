@@ -10,6 +10,7 @@ const {
   hintLabelsBecome,
   undoInEditorOf,
 } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 const SHARED_BLOCK = 'mocktype:\n  shared:\n    size: 1\n';
 const SAVED_FILE_SETTLE_MILLISECONDS = 1000;
@@ -25,6 +26,8 @@ function writtenStack(name) {
 }
 
 suite('layer files changing on disk', () => {
+  isolateEachTest();
+
   test('a common layer removed from disk while its tab is open leaves the stack, and comes back with the file', async () => {
     const { commonPath, overlayPath } = writtenStack('removed-while-open');
     await shownDocument(commonPath);

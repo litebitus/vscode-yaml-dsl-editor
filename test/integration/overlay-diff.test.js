@@ -8,6 +8,7 @@ const CHOOSE_COMMAND = 'yaml-dsl-editor.chooseDiffOverlays';
 const DIFF_SCHEME = 'yaml-dsl-overlay-diff';
 const WAIT_MILLISECONDS = 3000;
 const contributes = require('../../package.json').contributes;
+const { isolateEachTest } = require('./test-isolation');
 
 function concernPath(...segments) {
   return path.join(vscode.workspace.workspaceFolders[2].uri.fsPath, ...segments);
@@ -46,7 +47,7 @@ const queueDiff = [
 ].join('\n');
 
 suite('overlay diff', () => {
-  suiteTeardown(() => vscode.commands.executeCommand('workbench.action.closeAllEditors'));
+  isolateEachTest();
 
   test('the title-bar button shows on every DSL file on disk and opens the diff at once', async () => {
     const button = contributes.menus['editor/title'].find((item) => item.command === DIFF_COMMAND);

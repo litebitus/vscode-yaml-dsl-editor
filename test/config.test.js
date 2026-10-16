@@ -61,6 +61,8 @@ dsls:
       merge_base_keys: [defaults]
       child_values_from_parent_key:
         - pattern: '^(?<field>[a-z_]+) (?<value>[a-z0-9-]+)$'
+    performance:
+      compiled_schema_cache: true
     key_sort_orders:
       - path: "$.locals"
         skip_keys: []
@@ -184,6 +186,7 @@ test('a complete config states every field and keeps them', () => {
     mergeBaseKeys: ['defaults'],
     childValuesFromParentKey: [{ pattern: '^(?<field>[a-z_]+) (?<value>[a-z0-9-]+)$' }],
   });
+  assert.deepEqual(sample.performance, { compiledSchemaCache: true });
   assert.deepEqual(sample.scopes.GLOBAL, {
     regions: [[]],
     laterItemsOfDeclaringList: false,
@@ -235,7 +238,33 @@ test('a block the config leaves out is a feature the DSL does not have', () => {
   assert.equal(flat.placeholder, null);
   assert.equal(flat.locals, null);
   assert.equal(flat.validator, null);
+  assert.deepEqual(flat.performance, { compiledSchemaCache: false });
   assert.equal(flat.function.markerFunction, null);
+});
+
+test('the performance block states whether the compiled schema is kept', () => {
+  const withPerformance = (performanceLines) => parseConfig([
+    'version: "1"',
+    'dsls:',
+    '  - id: mock',
+    '    file_includes: ["**/mock.yml"]',
+    '    file_excludes: []',
+    '    schema_search_paths: []',
+    '    key_sort_orders: []',
+    '    scopes: {}',
+    '    declarations: []',
+    '    references: []',
+    ...performanceLines.map((line) => `    ${line}`),
+    '',
+  ].join('\n'));
+  const kept = withPerformance(['performance:', '  compiled_schema_cache: true']);
+  assert.equal(kept.error, null);
+  assert.deepEqual(kept.dsls[0].performance, { compiledSchemaCache: true });
+  assert.deepEqual(withPerformance(['performance: { compiled_schema_cache: false }']).dsls[0].performance, {
+    compiledSchemaCache: false,
+  });
+  assert.match(withPerformance(['performance: []']).error, /mock\.performance must be a mapping/);
+  assert.match(withPerformance(['performance: {}']).error, /mock\.performance\.compiled_schema_cache is required/);
 });
 
 test('the validator block states its merge base keys and child value patterns, each pattern naming field and value', () => {

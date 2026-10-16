@@ -2,6 +2,7 @@ const assert = require('assert');
 const path = require('path');
 const vscode = require('vscode');
 const { WAIT_DEADLINE_MILLISECONDS, shownDocument, positionInText, hoverTextBecomes } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 function taggedFixture() {
   return path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'tagged', 'mock.yaml');
@@ -20,6 +21,8 @@ async function definitionLineBecomes(doc, position, expectedLine) {
 }
 
 suite('tag keys', () => {
+  isolateEachTest();
+
   test('a reference opens its declaration in the short form and under the key its tag stands for', async () => {
     const doc = (await shownDocument(taggedFixture())).document;
     const declarationLine = positionInText(doc, 'MockBucket:').line;

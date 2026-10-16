@@ -2,6 +2,7 @@ const assert = require('assert');
 const path = require('path');
 const vscode = require('vscode');
 const { shownDocument, positionInText, hoverTextBecomes } = require('./editor-hints');
+const { isolateEachTest } = require('./test-isolation');
 
 const UNCLAIMED_WATCH_MILLISECONDS = 1000;
 
@@ -20,6 +21,8 @@ async function languageStaysOutOfDsl(filePath) {
 }
 
 suite('nested config', () => {
+  isolateEachTest();
+
   test('a yaml-dsl.yml below the workspace folder governs it, its schema found through {config_root}', async () => {
     const entry = (await shownDocument(path.join(nestedConfigFolder(), 'deep', 'entry.yaml'))).document;
     await hoverTextBecomes(

@@ -142,6 +142,30 @@ test('a node\'s own keywords resolve their references anywhere in the schema, no
   assert.deepEqual(entry.optOutFailures({ name: 1 }), [messageFailure('must be string')]);
 });
 
+test('an opt-out is checked against the branch its condition selects, the other branch never compiled', () => {
+  const schema = {
+    type: 'object',
+    properties: {
+      entry: {
+        type: 'object',
+        if: { required: ['kind'], properties: { kind: { const: 'mock-bucket' } } },
+        then: { required: ['bucket'], properties: { broken: { type: 'string', pattern: '(' } } },
+        else: { required: ['queue'] },
+      },
+      bare: { if: { required: ['kind'] }, then: { required: ['bucket'] } },
+    },
+  };
+  const checks = createSchemaChecks((schemaHash) => (schemaHash === 'mock-branches' ? schema : null));
+  const entry = checks.nodeCheck('mock-branches', ['entry']);
+  assert.deepEqual(entry.optOutFailures({}), [messageFailure("must have required property 'queue'")]);
+  assert.deepEqual(entry.optOutFailures({ kind: 'mock-bucket', bucket: 'mock' }), [
+    messageFailure('the schema cannot be compiled: Invalid regular expression: /(/u: Unterminated group'),
+  ]);
+  const bare = checks.nodeCheck('mock-branches', ['bare']);
+  assert.deepEqual(bare.optOutFailures({}), []);
+  assert.deepEqual(bare.optOutFailures({ kind: 'mock' }), [messageFailure("must have required property 'bucket'")]);
+});
+
 const alternativeSchemas = {
   'mock-alternatives': {
     type: 'object',
