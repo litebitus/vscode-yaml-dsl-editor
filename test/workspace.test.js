@@ -141,7 +141,7 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.match(within.contents.value, /mock-stack\/mock\.yml:\d+/);
   assert.match(within.contents.value, /db:/);
 
-  assert.deepEqual(ws.foldsFor(one), { stackId: common, overlayNames: ['one'] });
+  assert.deepEqual(ws.foldsFor(one), { stackId: common, overlayNames: ['one'], overlayLabels: ['one'] });
   assert.deepEqual(ws.foldsFor(common).overlayNames, ['one', 'two', 'three', 'four']);
   const folded = ws.foldText(common, 'one');
   assert.match(folded, /the one overlay/);
@@ -172,7 +172,7 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.equal(ws.hover('file://missing', { line: 0, character: 0 }), null);
   assert.equal(ws.definition('yaml-dsl-fold:nope', { line: 0, character: 0 }), null);
   assert.equal(ws.foldText('/missing', 'one'), '');
-  assert.deepEqual(ws.foldsFor('/missing'), { stackId: null, overlayNames: [] });
+  assert.deepEqual(ws.foldsFor('/missing'), { stackId: null, overlayNames: [], overlayLabels: [] });
   assert.equal(SCHEMA_UNAVAILABLE, 'schema is unavailable');
 });
 
@@ -241,7 +241,7 @@ test('two DSLs, a parse error, and a DSL without layers', async () => {
   const hover = ws.hover('file:///repo/note.yml', at('locals:\n  db: mock-value\nuse: local.db\n', 'local.db'));
   assert.match(hover.contents.value, /```yaml-dsl/);
   assert.match(hover.contents.value, /mock-value/);
-  assert.deepEqual(ws.foldsFor('/repo/note.yml'), { stackId: null, overlayNames: [] });
+  assert.deepEqual(ws.foldsFor('/repo/note.yml'), { stackId: null, overlayNames: [], overlayLabels: [] });
   assert.equal(ws.foldText('/repo/note.yml', 'one'), '');
   await ws.sync('file:///repo/note.yml', '/repo/note.yml', 'locals:\n  db: 1\n  sc\n  db: 2\n  db: 3\n');
   const keyProblems = ws.problems('file:///repo/note.yml').filter((problem) => problem.kind);
@@ -938,7 +938,11 @@ test('a file below an overlay directory takes the common layer above it, shared 
   await ws.sync(`file://${nestedOne}`, nestedOne, files[nestedOne]);
   await ws.sync(`file://${one}`, one, files[one]);
   assert.equal(ws.definition(`file://${nestedOne}`, at(files[nestedOne], 'local.db')).path, common);
-  assert.deepEqual(ws.foldsFor(nestedOne), { stackId: `${common}#config`, overlayNames: ['one'] });
+  assert.deepEqual(ws.foldsFor(nestedOne), {
+    stackId: `${common}#config`,
+    overlayNames: ['one'],
+    overlayLabels: ['one'],
+  });
   const renamed = 'locals:\n  other: mock-value\n';
   await ws.sync(`file://${common}`, common, renamed);
   assert.deepEqual(ws.references(`file://${nestedOne}`).map((reference) => reference.kind), ['error']);

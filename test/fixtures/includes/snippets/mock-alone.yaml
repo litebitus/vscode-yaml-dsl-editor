@@ -1,0 +1,5 @@
+# yaml-language-server: $schema=../includes.schema.json#/properties/Resources
+MockAlone:
+  Properties: {}
+MockBroken:
+  Type: 1

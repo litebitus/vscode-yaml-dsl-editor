@@ -177,6 +177,10 @@ test('fold paths round-trip and reject a path that is not a fold', () => {
   const parsed = parseFoldPath(uri.path);
   assert.equal(parsed.stackId, '/repo/mock.yml');
   assert.equal(parsed.overlayName, 'one');
+  const fakeUris = { Uri: { from: (parts) => parts } };
+  const labeled = foldUri(fakeUris, '/repo/snippet.yaml', '/repo/dev/mock.yaml', 'dev/mock.yaml');
+  assert.match(labeled.path, /\/dev\/mock\.yaml$/);
+  assert.deepEqual(parseFoldPath(labeled.path), { stackId: '/repo/snippet.yaml', overlayName: '/repo/dev/mock.yaml' });
 });
 
 test('activation finishes without waiting on analysis and searches no workspace files', async () => {

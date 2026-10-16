@@ -166,7 +166,8 @@ test('a template resolves its common layer\'s names, validates its fold, and ope
   assert.deepEqual(ws.problems(uri), []);
   const locationLink = ws.links(uri).find((link) => link.target === `file://${SNIPPET}`);
   assert.deepEqual(locationLink.range.start, at(bucketText, 's3://mock-bucket/snippets/mock-wait.yaml'));
-  const foldText = ws.foldText(SNIPPET, 'mock-bucket.yaml');
+  const foldText = ws.foldText(SNIPPET, BUCKET);
+  assert.match(foldText, /^# mock-bucket\.yaml — /);
   assert.match(foldText, /MockWait:\n {4}Type: Mock::Wait/);
   assert.doesNotMatch(foldText, /Fn::Transform/);
 });
@@ -184,7 +185,7 @@ test('a common layer resolves in every overlay\'s fold at its merge point, a pro
   assert.match(problems[0].message, /Type/);
   assert.match(problems[0].message, /\(mock-bucket\.yaml, mock-queue\.yaml\)$/);
   assert.deepEqual(problems[0].range.start, { line: 0, character: 0 });
-  assert.deepEqual(ws.foldsFor(SNIPPET).overlayNames, ['mock-bucket.yaml', 'mock-queue.yaml']);
+  assert.deepEqual(ws.foldsFor(SNIPPET).overlayLabels, ['mock-bucket.yaml', 'mock-queue.yaml']);
 });
 
 test('a hover in a common layer documents the field at its merge point in each overlay', async () => {
@@ -199,7 +200,7 @@ test('a common layer read before any overlay naming it is read alone, as a file 
   const ws = await includeWorkspace(stackFiles);
   await ws.sync(`file://${SNIPPET}`, SNIPPET, snippetText);
   assert.deepEqual(ws.references(`file://${SNIPPET}`).map((ref) => ref.kind), ['error']);
-  assert.deepEqual(ws.foldsFor(SNIPPET), { stackId: null, overlayNames: [] });
+  assert.deepEqual(ws.foldsFor(SNIPPET), { stackId: null, overlayNames: [], overlayLabels: [] });
 });
 
 test('an unmapped location declares every name and is an info problem; a common layer\'s include is not followed', async () => {
@@ -247,11 +248,12 @@ test('an overlay that drops its include leaves the common layer\'s stack and is 
   const files = { ...stackFiles };
   const ws = await includeWorkspace(files);
   await ws.sync(`file://${BUCKET}`, BUCKET, bucketText);
-  assert.deepEqual(ws.foldsFor(BUCKET), { stackId: SNIPPET, overlayNames: ['mock-bucket.yaml'] });
+  const bucketFolds = { stackId: SNIPPET, overlayNames: [BUCKET], overlayLabels: ['mock-bucket.yaml'] };
+  assert.deepEqual(ws.foldsFor(BUCKET), bucketFolds);
   const withoutInclude = 'Resources:\n  MockHandle:\n    Type: Mock::Handle\n';
   files[BUCKET] = withoutInclude;
   await ws.sync(`file://${BUCKET}`, BUCKET, withoutInclude);
-  assert.deepEqual(ws.foldsFor(BUCKET), { stackId: null, overlayNames: [] });
+  assert.deepEqual(ws.foldsFor(BUCKET), { stackId: null, overlayNames: [], overlayLabels: [] });
   assert.deepEqual(ws.problems(`file://${BUCKET}`), []);
 });
 
@@ -263,13 +265,14 @@ test('a template with two includes takes both common layers, and is an overlay i
   await ws.sync(`file://${BUCKET}`, BUCKET, bothText);
   assert.equal(ws.foldsFor(BUCKET).stackId, otherSnippet);
   assert.deepEqual(ws.references(`file://${BUCKET}`).map((ref) => ref.kind), ['external']);
-  const foldText = ws.foldText(otherSnippet, 'mock-bucket.yaml');
+  const foldText = ws.foldText(otherSnippet, BUCKET);
   assert.match(foldText, /Outputs:\n {2}MockOutput:/);
   assert.match(foldText, /MockWait:\n {4}Type: Mock::Wait/);
   await ws.sync(`file://${otherSnippet}`, otherSnippet, files[otherSnippet]);
   assert.deepEqual(ws.references(`file://${otherSnippet}`).map((ref) => ref.kind), ['external']);
   await ws.sync(`file://${SNIPPET}`, SNIPPET, snippetText);
-  assert.deepEqual(ws.foldsFor(SNIPPET), { stackId: SNIPPET, overlayNames: ['mock-bucket.yaml'] });
+  const snippetFolds = { stackId: SNIPPET, overlayNames: [BUCKET], overlayLabels: ['mock-bucket.yaml'] };
+  assert.deepEqual(ws.foldsFor(SNIPPET), snippetFolds);
 });
 
 test('Enter on an overlay key the common layer already fills fills nothing it holds', async () => {
@@ -291,4 +294,66 @@ test('completion in a common layer offers the schema\'s fields at its merge poin
   await ws.sync(`file://${SNIPPET}`, SNIPPET, typed);
   const labels = ws.completion(`file://${SNIPPET}`, at(typed, '  Pro', 5)).map((item) => item.label);
   assert.deepEqual(labels.sort(), ['Properties', 'Type']);
+});
+
+test('a modeline\'s fragment marks a fragment, validated at the node it names with no key required', async () => {
+  const alonePath = '/repo/snippets/mock-alone.yaml';
+  const aloneText = [
+    '# yaml-language-server: $schema=../schema.json#/properties/Resources',
+    'MockAlone:',
+    '  Properties: {}',
+    'MockBroken:',
+    '  Type: 1',
+    '',
+  ].join('\n');
+  const rootPath = '/repo/snippets/mock-root.yaml';
+  const rootText = '# yaml-language-server: $schema=../schema.json#\nResources:\n  MockAlone:\n    Properties: {}\n';
+  const fullText = rootText.replace('schema.json#', 'schema.json');
+  const fullPath = '/repo/snippets/mock-full.yaml';
+  const ws = await includeWorkspace({
+    ...stackFiles,
+    [alonePath]: aloneText,
+    [rootPath]: rootText,
+    [fullPath]: fullText,
+  });
+  for (const [filePath, text] of [[alonePath, aloneText], [rootPath, rootText], [fullPath, fullText]]) {
+    await ws.sync(`file://${filePath}`, filePath, text);
+  }
+  assert.deepEqual(ws.problems(`file://${alonePath}`).map((problem) => problem.message), ['`Type` must be string']);
+  const struck = (text) => [...text].map((character) => `${character}̶`).join('');
+  const typeHover = ws.hover(`file://${alonePath}`, at(aloneText, 'Type', 1)).contents.value;
+  assert.equal(typeHover, `\`\`\`\nType: string    ${struck('[required]')}\n\`\`\`\n\nThe resource type.`);
+  const propertiesHover = ws.hover(`file://${alonePath}`, at(aloneText, 'Properties', 1)).contents.value;
+  assert.match(propertiesHover, new RegExp(struck('[optional]').replace(/[[\]]/g, '\\$&')));
+  const fullHover = ws.hover(`file://${fullPath}`, at(fullText, 'Properties', 1)).contents.value;
+  assert.match(fullHover, /\[optional\]/);
+  const schemaLink = ws.links(`file://${alonePath}`).find((link) => link.target === `file://${SCHEMA}`);
+  assert.ok(schemaLink);
+  assert.deepEqual(ws.problems(`file://${rootPath}`), []);
+  assert.deepEqual(ws.problems(`file://${fullPath}`).map((problem) => problem.message), ['`Type` is required']);
+});
+
+test('an overlay shows its file name, its folder too where names clash, kept if labels still clash', async () => {
+  const devQueue = '/repo/dev/mock-queue.yaml';
+  const prodQueue = '/repo/prod/mock-queue.yaml';
+  const nestedDevQueue = '/repo/nested/dev/mock-queue.yaml';
+  const overlayPaths = [BUCKET, devQueue, prodQueue, nestedDevQueue];
+  const ws = await includeWorkspace({
+    ...stackFiles,
+    [devQueue]: queueText,
+    [prodQueue]: queueText,
+    [nestedDevQueue]: queueText,
+  });
+  for (const filePath of overlayPaths) {
+    await ws.sync(`file://${filePath}`, filePath, stackFiles[filePath] || queueText);
+  }
+  await ws.sync(`file://${SNIPPET}`, SNIPPET, snippetText);
+  const folds = ws.foldsFor(SNIPPET);
+  assert.deepEqual(folds.overlayNames, [devQueue, BUCKET, nestedDevQueue, prodQueue]);
+  assert.deepEqual(folds.overlayLabels, [
+    'dev/mock-queue.yaml',
+    'mock-bucket.yaml',
+    'dev/mock-queue.yaml',
+    'prod/mock-queue.yaml',
+  ]);
 });

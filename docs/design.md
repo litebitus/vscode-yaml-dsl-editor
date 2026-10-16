@@ -172,6 +172,7 @@ A stack's schema is the `schema.json` of the grammar version that stack initiali
 - A schema a resident stack uses is pinned. Capacity beyond the pins is the setting `yaml-dsl-editor.cache.schemaCapacity`; past it, the least recently used schema is dropped.
 - Evicting a stack unpins the schemas only it used.
 - What the extension works out from a schema, such as the node fingerprints and validators of the schema checks, belongs to the schema's entry and goes with it.
+- A modeline's fragment names a node of the schema it reads: the schema is cached once by its text, and the fragment is kept with the reading file, never as a cache entry of its own.
 
 ### Staleness checks
 
@@ -344,9 +345,9 @@ layers:
 - The common layer's root is the map holding the include, and its entries take the include's place there.
 - An overlay with several includes takes several common layers, and is an overlay in each of their stacks.
 - Move suggestions compare the overlays that merge a common layer at the same place, and move a unit below that place into it.
-- An overlay is labeled by its path from the config's folder, and where the doc takes overlays in `layers.overlay_folders` order, these are taken in the order of that path.
+- An overlay is its full path, and is shown by its file name, or by its folder and file name where two of the stack's overlays share a file name, such as `dev/mock-queue.yaml` and `prod/mock-queue.yaml`. Overlays whose shown names still match keep them, so the author sees the duplicate. Where the doc takes overlays in `layers.overlay_folders` order, these are taken in the order of their path from the config's folder.
 - A stack is built from its overlays: reading an overlay follows its includes, and a common layer's stack holds the overlays read so far that include it. Startup still searches nothing.
-- A common layer read before any overlay naming it is read alone. With no root it gets no schema reading, and a name it references and does not declare is unresolved, not an error.
+- A fragment, a file its modeline marks as one under "Finding the schema", is a common layer, merged into the overlays that include it. A full document included by an overlay is a common layer too, and read alone it is validated as a full document.
 - A location no mapping covers, or whose mapped file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem.
 - Command-click on a location opens the common layer.
 - A common layer's own includes are not followed, and each is a problem.
@@ -659,6 +660,7 @@ A requirement marker is the extension's standard for saying whether a key must b
 - A field without a marker is required when its parent's `required` array lists it.
 - A `required` array inside `not` or `if` is a condition, not a requirement, and markers leave it as written.
 - Every schema check the extension runs reads requiredness this way.
+- A fragment requires no key, so its hover shows each field's marker struck.
 
 ### Finding the schema
 
@@ -666,6 +668,19 @@ A requirement marker is the extension's standard for saying whether a key must b
 |---|---|
 | a `# yaml-language-server: $schema=` modeline | first; its path is relative to the file |
 | `schema_search_paths`, a list, `[]` when empty | when the file has no modeline, or the path it names is not on disk; each entry is relative to the file, or to the config's folder when it starts with `{config_root}`, and the first on disk is the schema |
+
+A modeline's schema URI also says what the file is, by its fragment:
+
+| Modeline | The file |
+|---|---|
+| `$schema=<path or URL>` | a full document, validated against the schema |
+| `$schema=<path or URL>#` | a fragment whose root is the schema's root |
+| `$schema=<path or URL>#<JSON Pointer>` | a fragment whose root is the schema node a JSON Pointer (RFC 6901) names, such as `#/properties/Resources` |
+
+- A fragment is validated against its root node with no key required at any depth. Every other check holds.
+- Hover, completion and required-field filling read a fragment from its root node.
+- A file whose schema comes from `schema_search_paths` is a full document.
+- A pointer naming no node of the schema is a problem on the modeline's line.
 
 - A modeline points at the schema shipped with the grammar version the stack has initialized: an overlay names `.schema/sample.schema.json`, and a common layer names it through the overlay directory that initialized the stack, such as `one/.schema/sample.schema.json`.
 - A URL in a path is fetched. The search does not override a modeline that resolves.

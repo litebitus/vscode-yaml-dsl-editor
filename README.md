@@ -77,6 +77,27 @@ The JSON Schema drafts read, each by its own parser, validator and renderer:
 - draft 2019-09
 - draft-07 (assumed when `$schema` is missing or names an older draft)
 
+### Fragments
+
+A modeline marks a file as a fragment by the fragment of its schema's URI. A fragment is validated from its own root with no key required, and its hover shows the requirement markers struck.
+
+A fragment shaped as the whole document:
+
+```yaml
+# yaml-language-server: $schema=../schemas/cloudformation-2010-09-09.schema.json#
+Resources:
+  MockQueue:
+    Type: AWS::SQS::Queue
+```
+
+A fragment rooted at the schema node a JSON Pointer names:
+
+```yaml
+# yaml-language-server: $schema=../schemas/cloudformation-2010-09-09.schema.json#/properties/Resources
+MockQueue:
+  Type: AWS::SQS::Queue
+```
+
 ### Navigation and completion
 
 - References, locals, placeholders and calls go to their declaration and complete from what the file's fold sees.

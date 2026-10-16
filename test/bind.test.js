@@ -556,6 +556,7 @@ test('the server answers a layer file\'s overlays and the diff of a selection ac
   assert.deepEqual(await connection.handlers['yaml-dsl/overlayDiffStack']({ uri }), {
     title: 'app',
     overlayNames: ['dev', 'staging'],
+    overlayLabels: ['dev', 'staging'],
   });
   const diff = await connection.handlers['yaml-dsl/overlayDiff']({ uri, range, overlayNames: ['dev', 'staging'] });
   assert.equal(diff.title, 'app');

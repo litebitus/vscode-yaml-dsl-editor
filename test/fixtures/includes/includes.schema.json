@@ -7,6 +7,7 @@
       "properties": { "Fn::Transform": { "type": "object" } },
       "additionalProperties": {
         "type": "object",
+        "required": ["Type"],
         "properties": {
           "Type": { "type": "string", "description": "The resource type." },
           "Properties": { "type": "object" }

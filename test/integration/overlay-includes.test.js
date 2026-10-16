@@ -40,13 +40,23 @@ suite('overlay includes', () => {
     assert.equal(target.toString(), snippetUri);
   });
 
+  test('a fragment is documented from the schema node its modeline names, its requirement marker struck', async () => {
+    const fragment = (await shownDocument(includesFixture('snippets', 'mock-alone.yaml'))).document;
+    const struckRequired = [...'[required]'].map((character) => `${character}̶`).join('');
+    await hoverTextBecomes(
+      fragment,
+      positionInText(fragment, 'Type', 1),
+      `\`\`\`\nType: string    ${struckRequired}\n\`\`\`\n\nThe resource type.`,
+    );
+  });
+
   test('a common layer documents a field at the place its overlay merges it', async () => {
     await shownDocument(includesFixture('mock-bucket.yaml'));
     const snippet = (await shownDocument(includesFixture('snippets', 'mock-wait.yaml'))).document;
     await hoverTextBecomes(
       snippet,
       positionInText(snippet, 'Type', 1),
-      '```\nType: string    [optional]\n```\n\nThe resource type.',
+      '```\nType: string    [required]\n```\n\nThe resource type.',
     );
   });
 });

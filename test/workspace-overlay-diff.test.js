@@ -42,7 +42,11 @@ test('a concern below its overlays diffs the overlays checked, folded with its o
   const overlay = '/repo/group/overlay-1/concern-1/mock.yml';
   const ws = await openedWorkspace(overlay);
   const uri = `file://${overlay}`;
-  assert.deepEqual(ws.overlayDiffStack(uri), { title: 'group/concern-1', overlayNames: ['overlay-1', 'overlay-2'] });
+  assert.deepEqual(ws.overlayDiffStack(uri), {
+    title: 'group/concern-1',
+    overlayNames: ['overlay-1', 'overlay-2'],
+    overlayLabels: ['overlay-1', 'overlay-2'],
+  });
   const diff = ws.overlayDiff(uri, selection(1, 0, 2, 11), ['overlay-2', 'overlay-1', 'overlay-3']);
   assert.equal(diff.title, 'group/concern-1');
   assert.deepEqual(diff.lines.map((line) => line.text), [
@@ -66,7 +70,11 @@ test('a concern above its overlays is titled by its full path from the workspace
   const overlay = '/repo/apps/concern-2/overlay-3/mock.yml';
   const ws = await openedWorkspace(overlay);
   const uri = `file://${overlay}`;
-  assert.deepEqual(ws.overlayDiffStack(uri), { title: 'apps/concern-2', overlayNames: ['overlay-1', 'overlay-3'] });
+  assert.deepEqual(ws.overlayDiffStack(uri), {
+    title: 'apps/concern-2',
+    overlayNames: ['overlay-1', 'overlay-3'],
+    overlayLabels: ['overlay-1', 'overlay-3'],
+  });
   const diff = ws.overlayDiff(uri, selection(2, 0, 2, 9), ['overlay-1', 'overlay-3']);
   assert.equal(diff.title, 'apps/concern-2');
   assert.deepEqual(diff.lines.map((line) => line.text), [

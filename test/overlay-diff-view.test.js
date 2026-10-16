@@ -164,7 +164,8 @@ test('the diff tab\'s button chooses overlays, the current ones checked, and ren
   await views.diffAcrossOverlays(target);
   const [{ doc }] = vscode.shown;
   await vscode.commands[CHOOSE_DIFF_OVERLAYS_COMMAND](doc.uri);
-  assert.deepEqual(vscode.quickPicks[0].items, overlayNames.map((label) => ({ label, picked: true })));
+  const pickItems = overlayNames.map((label) => ({ label, overlayName: label, picked: true }));
+  assert.deepEqual(vscode.quickPicks[0].items, pickItems);
   assert.equal(vscode.quickPicks[0].options.canPickMany, true);
   assert.deepEqual(client.requests.at(-1).params, { ...target, overlayNames: ['overlay-1', 'overlay-3'] });
   assert.equal(vscode.shown.length, 1);
@@ -334,4 +335,19 @@ test('the selection is not followed without an open diff of its stack, outside a
   views.followSelection(selectingEditor(target.uri, range));
   views.disposables.forEach((disposable) => disposable.dispose());
   assert.equal(timers.pending.size, 0);
+});
+
+test('the overlay choice shows each overlay by its label and asks for the overlays by name', async () => {
+  const vscode = fakeVscode({ picks: (items) => items.filter((item) => item.label !== 'b/mock.yaml') });
+  const labeledStack = {
+    ...stack,
+    overlayNames: ['/repo/a/mock.yaml', '/repo/b/mock.yaml'],
+    overlayLabels: ['a/mock.yaml', 'b/mock.yaml'],
+  };
+  const client = fakeClient({ 'yaml-dsl/overlayDiffStack': labeledStack, 'yaml-dsl/overlayDiff': diff });
+  const views = createOverlayDiffViews(vscode, client);
+  await views.diffAcrossOverlays(target);
+  await vscode.commands[CHOOSE_DIFF_OVERLAYS_COMMAND](vscode.shown[0].doc.uri);
+  assert.deepEqual(vscode.quickPicks[0].items.map((item) => item.label), ['a/mock.yaml', 'b/mock.yaml']);
+  assert.deepEqual(client.requests.at(-1).params, { ...target, overlayNames: ['/repo/a/mock.yaml'] });
 });

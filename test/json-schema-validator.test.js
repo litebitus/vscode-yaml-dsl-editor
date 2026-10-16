@@ -111,3 +111,38 @@ test('a schema that cannot be compiled is one failure at the document, and an un
   assert.equal(schemaValidatorFor({ $schema: 'https://example.com/mock-draft' }), null);
   assert.equal(schemaValidatorFor(null), null);
 });
+
+test('a fragment is validated against the node its pointer names, with no key required at any depth', () => {
+  for (const draftUri of DRAFT_URIS) {
+    const schema = {
+      ...mockSchema(draftUri),
+      required: ['mocktype'],
+      definitions: {
+        mock_entry: {
+          type: 'object',
+          required: ['label'],
+          properties: {
+            label: { type: 'string' },
+            mode: { anyOf: [{ type: 'object', required: ['kind'] }, { type: 'string' }] },
+          },
+        },
+      },
+    };
+    const validator = schemaValidatorFor(schema);
+    const keywordsOf = (failures) => failures.map(({ path, keyword }) => [path, keyword]);
+    assert.deepEqual(validator.documentFailures({}, { fragmentPointer: '' }), [], draftUri);
+    assert.deepEqual(keywordsOf(validator.documentFailures({}).filter((failure) => failure.keyword === 'required')), [
+      [[], 'required'],
+    ], draftUri);
+    const atMocktype = { fragmentPointer: '/properties/mocktype' };
+    assert.deepEqual(validator.documentFailures({ primary: {} }, atMocktype), [], draftUri);
+    assert.deepEqual(keywordsOf(validator.documentFailures({ primary: { label: 1 } }, atMocktype)), [
+      [['primary', 'label'], 'type'],
+    ], draftUri);
+    const atEntry = { fragmentPointer: '/definitions/mock_entry' };
+    assert.deepEqual(validator.documentFailures({ mode: {} }, atEntry), [], draftUri);
+    assert.deepEqual(keywordsOf(validator.documentFailures({ mode: 1 }, atEntry)), [[['mode'], 'anyOf']], draftUri);
+    const unread = validator.documentFailures({}, { fragmentPointer: '/properties/nothing' });
+    assert.deepEqual(unread.map((failure) => failure.message), ['the schema has no node at `#/properties/nothing`']);
+  }
+});
