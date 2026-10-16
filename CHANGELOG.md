@@ -10,6 +10,7 @@
 - Validation: a key's validation errors show in one hover under a colored heading, one bullet each.
 - Themes: every color the extension draws comes from a dark or a light theme, which follows the editor's theme by default; `yaml-dsl-editor.theme` names it, and a title bar button switches the editor and the extension between light and dark together.
 - Suggestions: in the light theme, a suggestion's gutter mark, inlay hint and Explorer badge show `✦` in the theme's suggestion color, where the light bulb emoji kept its own colors.
+- Hover: a key that sets a field of its entry, by `child_values_from_parent_key`, also documents the field it sets.
 
 ### Deprecated
 

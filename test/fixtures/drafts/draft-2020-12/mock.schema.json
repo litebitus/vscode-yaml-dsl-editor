@@ -17,6 +17,17 @@
         }
       },
       "properties": {
+        "entries": {
+          "additionalProperties": {
+            "description": "a mock entry",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "the entry's identity"
+              }
+            }
+          }
+        },
         "queue": {
           "type": "string",
           "description": "the mock queue"

@@ -7,3 +7,6 @@ mocktype:
     label: mock
   old: mock
   queue: mock-queue
+  entries:
+    id mock-entry:
+      size: 1

@@ -65,3 +65,7 @@ dsls:
         scope_name: local
         scope_group: null
         name_group: name
+    validator:
+      merge_base_keys: []
+      child_values_from_parent_key:
+        - pattern: "^(?<field>id) (?<value>[a-z0-9-]+)$"

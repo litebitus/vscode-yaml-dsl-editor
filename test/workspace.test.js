@@ -407,6 +407,43 @@ test('each overlay\'s fold is validated, each error placed in the file that wrot
   assert.deepEqual(validationMessages(unruled, two), [[2, '`name` is required']]);
 });
 
+test('hover on a key that sets a field of its entry documents the entry, then the field it sets', async () => {
+  const modeline = '# yaml-language-server: $schema=../schema.json\n';
+  const identifiedSchema = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      mocktype: {
+        type: 'object',
+        additionalProperties: {
+          type: 'object',
+          description: '[optional] A mock entry.',
+          properties: {
+            id: { type: 'string', pattern: '^[a-z-]+$', description: '[required] Mock identity.' },
+            size: { type: 'integer', description: '[optional] Mock size.' },
+          },
+        },
+      },
+    },
+  });
+  const files = {
+    [`${root}/schema.json`]: identifiedSchema,
+    [common]: 'mocktype: {}\n',
+    [one]: `${modeline}mocktype:\n  id mock-one:\n    size: 1\n  id mock-two:\n    id: mock-own\n  extra:\n    size: 2\n`,
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: configText(resourcesEntry({ validator: validatorRules })), dir: '/repo' }]);
+  for (const filePath of [common, one]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  const hoverOf = (needle) => ws.hover(`file://${one}`, at(files[one], needle)).contents.value;
+  const entryOf = (key) => `\`\`\`\n${key}: object    [optional]\n\`\`\`\n\nA mock entry.`;
+  const idDocumentation = '```\nid: string    [required]\n```\n\nMock identity.\n\n*Pattern:* `^[a-z-]+$`';
+  assert.equal(
+    hoverOf('id mock-one'),
+    `${entryOf('id mock-one')}\n\n*Sets* \`id\` *to* \`mock-one\`:\n\n${idDocumentation}`,
+  );
+  assert.equal(hoverOf('id mock-two'), entryOf('id mock-two'));
+  assert.equal(hoverOf('extra'), entryOf('extra'));
+});
+
 test('a schema that changes on disk revalidates every file reading it, the common layer included', async () => {
   const modeline = (schemaPath) => `# yaml-language-server: $schema=${schemaPath}\n`;
   const schemaPath = `${root}/schema.json`;

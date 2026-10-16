@@ -77,6 +77,15 @@ suite('JSON Schema drafts', () => {
     );
   });
 
+  test('a key that sets its entry\'s identity field hovers the entry, then that field\'s documentation', async () => {
+    const doc = await draftDocument('draft-2020-12');
+    assert.equal(
+      await hoverTextAt(doc, 'id mock-entry'),
+      '```\nid mock-entry    [optional]\n```\n\na mock entry\n\n*Sets* `id` *to* `mock-entry`:\n\n'
+        + '```\nid: string    [optional]\n```\n\nthe entry\'s identity',
+    );
+  });
+
   test('a schema declaring an older draft is read as draft-07', async () => {
     const doc = await draftDocument('draft-04');
     assert.equal(await hoverTextAt(doc, 'first'), FIRST_OF_PAIR);

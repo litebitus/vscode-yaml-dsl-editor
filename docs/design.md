@@ -583,6 +583,7 @@ A schema for this kind of value is built this way. This extension reads the sche
 | conditions | each `if`/`then`/`else` on the object, as when and otherwise; and on a field, what its parent's dependencies require when it is set, and its parent's conditions that name it, cut to what they say about the field |
 
 - The draft's renderer reads its own keywords, as its parser and validator do; a part it cannot read in words names a condition the schema states.
+- A key that sets a field of its entry, by the `validator`'s `child_values_from_parent_key`, documents its entry, then the field it sets, as that field's own tooltip would, under `*Sets* <field> *to* <value>:`. An entry that writes the field itself documents its entry alone.
 - In the common layer the tooltip documents the field in each overlay's schema; overlays whose documentation is the same share one section, headed by their names, and overlays whose schema has no such field are named last, as not a field.
 - A section's heading is its overlays' names in bold, in the theme's `overlayHeadingForeground`.
 - A description's HTML is shown as text, so a tag written in prose reads as written.
@@ -679,7 +680,7 @@ Each document is validated against its schema, with the requirement markers deci
 - A key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode`, supplies that field, so the field is not reported missing.
 - The error's message names the field and what it must be. A field whose allowed forms are a described definition reads as that description's first sentence, and any other reads that it matches none of its allowed forms.
 
-A DSL's `validator` block states how a document is read before it is validated, and only validation reads it:
+A DSL's `validator` block states how a document is read before it is validated; validation reads it, and hover reads `child_values_from_parent_key` to document the field a key sets:
 
 | Field | What it states |
 |---|---|
@@ -1500,5 +1501,4 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 - `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.
 - Find All References on a declaration lists every reference to it across the common layer and each overlay.
 - The formatter, as designed under Formatting.
-- Hover on a key that sets a field of its entry, by the `validator`'s `child_values_from_parent_key`, shows that field's description.
 - (Observing the fix) One undo after "rename everywhere" on an unsaved hand rename takes every overlay back every time; in about one Antigravity integration run in four, the overlay still holds the new name after the undo.
