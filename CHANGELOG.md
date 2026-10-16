@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 - 2026-10-15
 
 - Hover: fixed tooltips breaking lines in the middle of words.
 - Hover: a field's tooltip documents it like a javadoc: its signature with the forms its references reach, its description in markdown, what it accepts, its constraints, its conditions and its parent's conditions that name it; in the common layer, one section per overlay schema that documents it differently.
