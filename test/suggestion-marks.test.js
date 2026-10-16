@@ -3,14 +3,14 @@ const assert = require('node:assert/strict');
 const {
   APPLY_COMMAND,
   hoverMarkdownText,
-  paintLightbulbs,
+  paintSuggestionMarks,
   paintScopeBorders,
   suggestionInlayHints,
   suggestionFileDecoration,
   suggestionFileUrisOf,
   suggestionKindOf,
   applySuggestion,
-} = require('../lib/suggestion-lightbulbs');
+} = require('../lib/suggestion-marks');
 const { explorerUriSets } = require('../lib/explorer-folders');
 const { activateWith } = require('../lib/client');
 const { textHashOf } = require('../lib/text-hash');
@@ -146,7 +146,7 @@ function recordingEditor(uri, painted) {
   };
 }
 
-test('light bulbs paint on the visible editors their file\'s marks name, and clear elsewhere', () => {
+test('suggestion marks paint on the visible editors their file\'s marks name, and clear elsewhere', () => {
   const painted = [];
   const others = [];
   const position = { line: 2, character: 8 };
@@ -158,15 +158,15 @@ test('light bulbs paint on the visible editors their file\'s marks name, and cle
     recordingEditor('file:///repo/other.yml', others),
     { document: null },
   ]);
-  const gutterMarks = { lightbulb: 'lightbulb', potentialMove: 'potential-move' };
-  paintLightbulbs(vscode, gutterMarks, new Map([['file:///repo/dev/mock.yml', [mark, potential]]]));
+  const gutterMarks = { suggestion: 'suggestion', potentialMove: 'potential-move' };
+  paintSuggestionMarks(vscode, gutterMarks, new Map([['file:///repo/dev/mock.yml', [mark, potential]]]));
   assert.deepEqual(painted.map((item) => [item.mark, item.ranges.map((range) => range.startLine)]), [
-    ['lightbulb', [2]],
+    ['suggestion', [2]],
     ['potential-move', [4]],
   ]);
   assert.deepEqual({ ...painted[0].ranges[0] }, { startLine: 2, startCharacter: 8, endLine: 2, endCharacter: 8 });
   assert.deepEqual(others.map((item) => item.ranges), [[], []]);
-  paintLightbulbs({ window: {} }, gutterMarks, new Map());
+  paintSuggestionMarks({ window: {} }, gutterMarks, new Map());
 });
 
 function inlayVscode() {
@@ -199,7 +199,7 @@ test('each suggestion is an inlay hint at the end of its line, its tooltip the d
     { range: { start: { line: 9, character: 2 }, end: { line: 9, character: 2 } }, suggestion: moveSuggestion },
   ]]]);
   const document = documentOf('file:///repo/dev/mock.yml', ['queue:', 'queue:  # edited since', 'x']);
-  const [moveHint, deleteHint, ...rest] = suggestionInlayHints(vscode, marksByUri, document);
+  const [moveHint, deleteHint, ...rest] = suggestionInlayHints(vscode, 'dark', marksByUri, document);
   assert.equal(rest.length, 0);
   assert.deepEqual(moveHint.position, { line: 1, character: 22 });
   assert.equal(moveHint.paddingLeft, true);
@@ -210,27 +210,29 @@ test('each suggestion is an inlay hint at the end of its line, its tooltip the d
   assert.equal(label.command, undefined);
   assert.match(label.tooltip.value, /command:yaml-dsl-editor\.applySuggestion\?/);
   assert.equal(deleteHint.label[0].value, '💡 same in common layer');
-  assert.deepEqual(suggestionInlayHints(vscode, marksByUri, documentOf('file:///other.yml', ['a'])), []);
+  assert.deepEqual(suggestionInlayHints(vscode, 'dark', marksByUri, documentOf('file:///other.yml', ['a'])), []);
+  const lightHints = suggestionInlayHints(vscode, 'light', marksByUri, document);
+  assert.deepEqual(lightHints.map((hint) => hint.label[0].value), ['✦ move to common layer', '✦ same in common layer']);
 });
 
 const suggestionUriSetsOf = (marksByUri) => explorerUriSets(suggestionFileUrisOf(marksByUri));
 
-test('a file with a suggestion shows its name in the light bulb color, with a light bulb badge, and every folder above it the color', () => {
+test('a file with a suggestion shows its name in the theme\'s suggestion color, with its suggestion badge, and every folder above it the color', () => {
   const vscode = inlayVscode();
   const at = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
   const marksByUri = new Map([
     ['file:///repo/dev/mock.yml', [{ range: at, suggestion: moveSuggestion }]],
     ['file:///repo/staging/mock.yml', []],
   ]);
-  const decoration = suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/dev/mock.yml' });
+  const decoration = suggestionFileDecoration(vscode, 'dark', suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/dev/mock.yml' });
   assert.equal(decoration.badge, '💡');
-  assert.equal(decoration.color.id, 'editorLightBulb.foreground');
+  assert.equal(decoration.color.id, 'yamlDslEditor.dark.suggestionForeground');
   assert.equal(decoration.propagate, true);
-  assert.equal(suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/staging/mock.yml' }), undefined);
-  assert.equal(suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/other.yml' }), undefined);
-  const folder = suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/dev' });
-  assert.deepEqual([folder.badge, folder.color.id], [undefined, 'editorLightBulb.foreground']);
-  assert.equal(suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/staging' }), undefined);
+  assert.equal(suggestionFileDecoration(vscode, 'dark', suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/staging/mock.yml' }), undefined);
+  assert.equal(suggestionFileDecoration(vscode, 'dark', suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/other.yml' }), undefined);
+  const folder = suggestionFileDecoration(vscode, 'dark', suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/dev' });
+  assert.deepEqual([folder.badge, folder.color.id], [undefined, 'yamlDslEditor.dark.suggestionForeground']);
+  assert.equal(suggestionFileDecoration(vscode, 'dark', suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/staging' }), undefined);
 });
 
 test('a file whose only suggestions are potential moves takes no file decoration', () => {
@@ -243,9 +245,11 @@ test('a file whose only suggestions are potential moves takes no file decoration
     { range: at, suggestion: differingMove },
     { range: at, suggestion: optingOutMove },
   ]]]);
-  assert.equal(suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/uat/mock.yml' }), undefined);
+  assert.equal(suggestionFileDecoration(vscode, 'dark', suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/uat/mock.yml' }), undefined);
   marksByUri.get('file:///repo/uat/mock.yml').push({ range: at, suggestion: moveSuggestion });
-  assert.equal(suggestionFileDecoration(vscode, suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/uat/mock.yml' }).badge, '💡');
+  assert.equal(suggestionFileDecoration(vscode, 'dark', suggestionUriSetsOf(marksByUri),{ toString: () => 'file:///repo/uat/mock.yml' }).badge, '💡');
+  const light = suggestionFileDecoration(vscode, 'light', suggestionUriSetsOf(marksByUri), { toString: () => 'file:///repo/uat/mock.yml' });
+  assert.deepEqual([light.badge, light.color.id], ['✦', 'yamlDslEditor.light.suggestionForeground']);
 });
 
 const schemasDiffer = {
@@ -329,7 +333,7 @@ test('a move whose opt-out leaves out a conditionally required field warns and k
   const vscode = inlayVscode();
   const at = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
   const marksByUri = new Map([['file:///repo/dev/mock.yml', [{ range: at, suggestion: conditional }]]]);
-  const [hint] = suggestionInlayHints(vscode, marksByUri, documentOf('file:///repo/dev/mock.yml', ['queue:']));
+  const [hint] = suggestionInlayHints(vscode, 'dark', marksByUri, documentOf('file:///repo/dev/mock.yml', ['queue:']));
   assert.equal(hint.label[0].value, 'ⓘ potential move: overlay (uat) opt-out leaves out a conditionally required field');
 });
 
@@ -342,7 +346,7 @@ test('a potential move\'s inlay hint names the check that failed', () => {
     { range: at(2), suggestion: { ...optOutFails, optOutFailures: [...optOutFails.optOutFailures, { overlay: 'qa', failures: [] }] } },
   ]]]);
   const document = documentOf('file:///repo/dev/mock.yml', ['queue:', 'queue:', 'queue:']);
-  assert.deepEqual(suggestionInlayHints(vscode, marksByUri, document).map((hint) => hint.label[0].value), [
+  assert.deepEqual(suggestionInlayHints(vscode, 'dark', marksByUri, document).map((hint) => hint.label[0].value), [
     'ⓘ potential move: overlay schemas differ',
     'ⓘ potential move: overlay (uat) opt-out would fail the schema',
     'ⓘ potential move: overlay (uat, qa) opt-out would fail the schema',
@@ -363,7 +367,7 @@ test('a move with one difference is a potential move whose hint names the differ
     { range: at(2), suggestion: combinedWithDifference },
   ]]]);
   const document = documentOf('file:///repo/dev/mock.yml', ['queue:', 'queue:', 'queue:']);
-  assert.deepEqual(suggestionInlayHints(vscode, marksByUri, document).map((hint) => hint.label[0].value), [
+  assert.deepEqual(suggestionInlayHints(vscode, 'dark', marksByUri, document).map((hint) => hint.label[0].value), [
     'ⓘ potential move: one difference, size',
     'ⓘ potential move: one difference, events',
     'ⓘ potential move: one difference, events.size',
@@ -386,16 +390,16 @@ test('a combined move\'s hint names its blocks, and its hover lists them in orde
   const vscode = inlayVscode();
   const at = { start: { line: 0, character: 6 }, end: { line: 0, character: 6 } };
   const marksByUri = new Map([['file:///repo/dev/mock.yml', [{ range: at, suggestion: combined }]]]);
-  const [hint] = suggestionInlayHints(vscode, marksByUri, documentOf('file:///repo/dev/mock.yml', ['events:']));
+  const [hint] = suggestionInlayHints(vscode, 'dark', marksByUri, documentOf('file:///repo/dev/mock.yml', ['events:']));
   assert.equal(hint.label[0].value, '💡 move to common layer: events, alerts');
 });
 
-test('a move\'s scope takes a border only while the cursor is on its light bulb\'s line', () => {
+test('a move\'s scope takes a border only while the cursor is on its suggestion mark\'s line', () => {
   const painted = [];
   const editor = recordingEditor('file:///repo/dev/mock.yml', painted);
   const vscode = fakeVscode([editor]);
   const parts = (family) => Object.fromEntries(['top', 'middle', 'bottom', 'single'].map((part) => [part, `${family}-${part}`]));
-  const scopeBorders = { lightbulb: parts('lightbulb'), potentialMove: parts('potential') };
+  const scopeBorders = { suggestion: parts('suggestion'), potentialMove: parts('potential') };
   const markAt = (line, lastLine, suggestion) => ({
     range: { start: { line, character: 6 }, end: { line, character: 6 } },
     scope: { start: { line, character: 0 }, end: { line: lastLine, character: 0 } },
@@ -410,9 +414,9 @@ test('a move\'s scope takes a border only while the cursor is on its light bulb\
   editor.selection = { active: { line: 2, character: 0 } };
   paintScopeBorders(vscode, scopeBorders, marksByUri);
   assert.deepEqual(linesPainted(), {
-    'lightbulb-top': [[2, 2]],
-    'lightbulb-middle': [[3, 5]],
-    'lightbulb-bottom': [[6, 6]],
+    'suggestion-top': [[2, 2]],
+    'suggestion-middle': [[3, 5]],
+    'suggestion-bottom': [[6, 6]],
   });
   painted.length = 0;
   editor.selection = { active: { line: 8, character: 0 } };
@@ -451,7 +455,7 @@ test('a rename hint names the old and new name, and its hover counts the places 
   const vscode = inlayVscode();
   const at = { start: { line: 0, character: 2 }, end: { line: 0, character: 7 } };
   const marksByUri = new Map([['file:///repo/one/mock.yml', [{ range: at, suggestion: renameSuggestion }]]]);
-  const [hint] = suggestionInlayHints(vscode, marksByUri, documentOf('file:///repo/one/mock.yml', ['  store: x']));
+  const [hint] = suggestionInlayHints(vscode, 'dark', marksByUri, documentOf('file:///repo/one/mock.yml', ['  store: x']));
   assert.equal(hint.label[0].value, '💡 rename everywhere: db → store');
 });
 
@@ -521,7 +525,9 @@ test('activation paints the suggestions the server sends and registers the move'
   let inlayRegistrations = 0;
   let fileDecorationProvider = null;
   let suggestionsSetting = 'on';
-  const featureValues = {};
+  const featureValues = { 'validator.errorSeverity': 'warning' };
+  const settingUpdates = [];
+  const executedCommands = [];
   let stackCapacitySetting = 32;
   let configurationChanged = null;
   let documentClosed = null;
@@ -541,6 +547,7 @@ test('activation paints the suggestions the server sends and registers the move'
       dispose() {}
     },
     TextDocumentChangeReason: { Undo: 1, Redo: 2 },
+    ConfigurationTarget: { Global: 1 },
     Uri: { joinPath: (base, part) => `${base}/${part}`, parse: (uri) => uri },
     workspace: {
       workspaceFolders: [],
@@ -554,7 +561,7 @@ test('activation paints the suggestions the server sends and registers the move'
           return section === 'yaml-dsl-editor' && key.startsWith('cache.') ? 32 : {};
         },
         inspect: (key) => (Object.hasOwn(featureValues, key) ? { globalValue: featureValues[key] } : {}),
-        update: async () => {},
+        update: async (key, value, target) => { settingUpdates.push([key, value, target]); },
       }),
       onDidChangeConfiguration(fn) {
         configurationChanged = fn;
@@ -578,7 +585,7 @@ test('activation paints the suggestions the server sends and registers the move'
       },
     },
     commands: {
-      executeCommand: async () => {},
+      executeCommand: async (name) => { executedCommands.push(name); },
       registerCommand(name, fn) { commands[name] = fn; return disposable; },
     },
     languages: {
@@ -597,6 +604,10 @@ test('activation paints the suggestions the server sends and registers the move'
     return decorationType;
   };
   vscode.window.onDidChangeActiveTextEditor = () => disposable;
+  let colorThemeChanged = null;
+  vscode.ColorThemeKind = { Light: 1, Dark: 2, HighContrast: 3, HighContrastLight: 4 };
+  vscode.window.activeColorTheme = { kind: vscode.ColorThemeKind.Dark };
+  vscode.window.onDidChangeActiveColorTheme = (fn) => { colorThemeChanged = fn; return disposable; };
   vscode.window.createOutputChannel = () => ({ appendLine() {}, dispose() {} });
   vscode.window.onDidChangeVisibleTextEditors = (fn) => { vscode.visibleChanged = fn; return disposable; };
   vscode.window.registerFileDecorationProvider = (provider) => {
@@ -619,20 +630,20 @@ test('activation paints the suggestions the server sends and registers the move'
     stackId: '/repo/mock.yml',
     files: [{ uri: 'file:///repo/dev/mock.yml', marks: [mark] }],
   });
-  const lightbulbIcon = 'mock-extension/media/suggestion-lightbulb.svg';
-  const isLightbulb = (item) => item.mark.options && item.mark.options.gutterIconPath === lightbulbIcon;
-  const lightbulb = painted.filter(isLightbulb).at(-1);
-  assert.equal(lightbulb.mark.options.after, undefined);
-  assert.equal(lightbulb.ranges.length, 1);
+  const suggestionGutterIcon = 'mock-extension/media/dark/suggestion-gutter-mark.svg';
+  const isSuggestionMark = (item) => item.mark.options && item.mark.options.gutterIconPath === suggestionGutterIcon;
+  const suggestionMark = painted.filter(isSuggestionMark).at(-1);
+  assert.equal(suggestionMark.mark.options.after, undefined);
+  assert.equal(suggestionMark.ranges.length, 1);
   const errorMark = decorationTypes.find((decorationType) => decorationType.options.gutterIconPath
-    === 'mock-extension/media/error-gutter-mark.svg');
-  assert.equal(errorMark.options.color, '#dc7975');
-  assert.equal(errorMark.options.textDecoration, 'underline wavy #dc7975');
+    === 'mock-extension/media/dark/error-gutter-mark.svg');
+  assert.equal(errorMark.options.color, 'var(--vscode-yamlDslEditor-dark-errorForeground)');
+  assert.equal(errorMark.options.textDecoration, 'underline wavy var(--vscode-yamlDslEditor-dark-errorForeground)');
   const warningMark = decorationTypes.find((decorationType) => decorationType.options.gutterIconPath
-    === 'mock-extension/media/warning-gutter-mark.svg');
+    === 'mock-extension/media/dark/warning-gutter-mark.svg');
   assert.equal(warningMark.options.textDecoration, undefined);
   const deprecatedMark = decorationTypes.find((decorationType) => decorationType.options.textDecoration
-    === 'line-through #ece200');
+    === 'line-through var(--vscode-yamlDslEditor-dark-warningForeground)');
   assert.ok(deprecatedMark);
   assert.deepEqual(inlayProvider.selector, { language: 'yaml-dsl' });
   assert.equal(inlayChanges, 1);
@@ -640,14 +651,14 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.equal(hints[0].label[0].value, '💡 move to common layer');
   const devUri = { toString: () => 'file:///repo/dev/mock.yml' };
   assert.equal(fileDecorationChanges, 1);
-  assert.equal(fileDecorationProvider.provideFileDecoration(devUri).color.id, 'editorLightBulb.foreground');
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri).color.id, 'yamlDslEditor.dark.suggestionForeground');
   notes['yaml-dsl/suggestions']({
     stackId: '/repo/mock.yml',
     files: [{ uri: 'file:///repo/dev/mock.yml', warning: true, marks: [mark] }],
   });
   assert.equal(fileDecorationChanges, 2);
   const warned = fileDecorationProvider.provideFileDecoration(devUri);
-  assert.deepEqual([warned.badge, warned.color.id], ['⚠', 'yamlDslEditor.warningForeground']);
+  assert.deepEqual([warned.badge, warned.color.id], ['⚠', 'yamlDslEditor.dark.warningForeground']);
   const featureSettingsChanged = () => configurationChanged({
     affectsConfiguration: (setting) => ['yaml-dsl-editor.suggestion', 'yaml-dsl-editor.warning'].includes(setting),
   });
@@ -681,9 +692,9 @@ test('activation paints the suggestions the server sends and registers the move'
     stackId: '/repo/mock.yml',
     files: [{ uri: 'file:///repo/dev/mock.yml', warning: false, marks: [mark] }],
   });
-  const lightbulbPaintsBefore = painted.filter(isLightbulb).length;
+  const suggestionMarkPaintsBefore = painted.filter(isSuggestionMark).length;
   vscode.visibleChanged();
-  assert.equal(painted.filter(isLightbulb).length, lightbulbPaintsBefore + 1);
+  assert.equal(painted.filter(isSuggestionMark).length, suggestionMarkPaintsBefore + 1);
   assert.equal(typeof commands[APPLY_COMMAND], 'function');
   suggestionsSetting = 'off';
   const inlayChangesBeforeSettings = inlayChanges;
@@ -691,12 +702,12 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.equal(inlayChanges, inlayChangesBeforeSettings);
   configurationChanged({ affectsConfiguration: (setting) => setting === 'yaml-dsl-editor.features.suggestions' });
   assert.equal(inlayChanges, inlayChangesBeforeSettings + 1);
-  assert.deepEqual(painted.filter(isLightbulb).at(-1).ranges, []);
+  assert.deepEqual(painted.filter(isSuggestionMark).at(-1).ranges, []);
   assert.deepEqual(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])), []);
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri), undefined);
   suggestionsSetting = 'on';
   configurationChanged({ affectsConfiguration: () => true });
-  assert.equal(painted.filter(isLightbulb).at(-1).ranges.length, 1);
+  assert.equal(painted.filter(isSuggestionMark).at(-1).ranges.length, 1);
   const edited = { languageId: 'yaml-dsl', uri: { scheme: 'file', toString: () => 'file:///repo/dev/mock.yml' } };
   const changesBefore = inlayChanges;
   vscode.documentChanged({ document: edited, contentChanges: [] });
@@ -704,7 +715,7 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.notDeepEqual(inlayProvider.provider.provideInlayHints(editedDocument), []);
   assert.equal(inlayChanges, changesBefore);
   vscode.documentChanged({ document: edited, contentChanges: [MOCK_TEXT_CHANGE] });
-  assert.deepEqual(painted.filter(isLightbulb).at(-1).ranges, []);
+  assert.deepEqual(painted.filter(isSuggestionMark).at(-1).ranges, []);
   assert.deepEqual(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])), []);
   assert.equal(inlayChanges, changesBefore + 1);
   vscode.documentChanged({ document: edited, contentChanges: [MOCK_TEXT_CHANGE] });
@@ -768,6 +779,46 @@ test('activation paints the suggestions the server sends and registers the move'
   });
   await new Promise((resolve) => { setImmediate(resolve); });
   assert.equal(undone.saves, 1);
+  assert.deepEqual(sent.filter(([method]) => method === 'yaml-dsl/theme'), [['yaml-dsl/theme', { theme: 'dark' }]]);
+  await commands['yaml-dsl-editor.toggleTheme']();
+  assert.equal(executedCommands.at(-1), 'workbench.action.toggleLightDarkThemes');
+  assert.deepEqual(settingUpdates.at(-1), ['theme', undefined, 1]);
+  featureValues.theme = 'light';
+  const fileDecorationChangesBeforeTheme = fileDecorationChanges;
+  configurationChanged({ affectsConfiguration: (setting) => setting === 'yaml-dsl-editor.theme' });
+  await Promise.resolve();
+  const lightErrorMark = decorationTypes.find((decorationType) => decorationType.options.gutterIconPath
+    === 'mock-extension/media/light/error-gutter-mark.svg');
+  assert.equal(lightErrorMark.options.textDecoration, 'underline wavy var(--vscode-yamlDslEditor-light-errorForeground)');
+  assert.equal(fileDecorationChanges, fileDecorationChangesBeforeTheme + 1);
+  assert.deepEqual(sent.filter(([method]) => method === 'yaml-dsl/theme').at(-1), ['yaml-dsl/theme', { theme: 'light' }]);
+  notes['yaml-dsl/suggestions']({
+    stackId: '/repo/mock.yml',
+    files: [{ uri: 'file:///repo/dev/mock.yml', warning: true, marks: [] }],
+  });
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri).color.id, 'yamlDslEditor.light.warningForeground');
+  const inlayChangesBeforeLightMarks = inlayChanges;
+  notes['yaml-dsl/suggestions']({
+    stackId: '/repo/mock.yml',
+    files: [{ uri: 'file:///repo/dev/mock.yml', warning: false, marks: [mark] }],
+  });
+  const lightSuggestionIcon = 'mock-extension/media/light/suggestion-gutter-mark.svg';
+  const lightSuggestionMark = painted.filter((item) => item.mark.options
+    && item.mark.options.gutterIconPath === lightSuggestionIcon).at(-1);
+  assert.equal(lightSuggestionMark.ranges.length, 1);
+  const lightBadge = fileDecorationProvider.provideFileDecoration(devUri);
+  assert.deepEqual([lightBadge.badge, lightBadge.color.id], ['✦', 'yamlDslEditor.light.suggestionForeground']);
+  const lightHints = inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:']));
+  assert.equal(lightHints[0].label[0].value, '✦ move to common layer');
+  assert.ok(inlayChanges > inlayChangesBeforeLightMarks);
+  const themeNotes = () => sent.filter(([method]) => method === 'yaml-dsl/theme').map(([, params]) => params.theme);
+  featureValues.theme = 'auto';
+  colorThemeChanged();
+  vscode.window.activeColorTheme = { kind: vscode.ColorThemeKind.HighContrastLight };
+  colorThemeChanged();
+  colorThemeChanged();
+  await Promise.resolve();
+  assert.deepEqual(themeNotes().slice(-3), ['light', 'dark', 'light']);
 });
 
 test('a suggestion\'s kind is its setting\'s kind, a move with a difference or a conditional opt-out a potential move', () => {

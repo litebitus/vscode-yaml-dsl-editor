@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  OVERLAY_DIFF_COLOR_IDS,
+  overlayDiffColorIds,
   OVERLAY_DIFF_SCHEME,
   createOverlayDiffViews,
 } = require('../lib/overlay-diff-view');
@@ -200,8 +200,11 @@ test('each difference takes the next palette color, cycling, with struck keys an
   await views.diffAcrossOverlays(target);
   const [editor] = vscode.window.visibleTextEditors;
   const colorTypes = vscode.decorationTypes.filter((decorationType) => decorationType.options.backgroundColor);
-  assert.deepEqual(colorTypes.map((colorType) => colorType.options.backgroundColor.id), OVERLAY_DIFF_COLOR_IDS);
-  assert.deepEqual(OVERLAY_DIFF_COLOR_IDS, [1, 2, 3, 4, 5, 6].map((n) => `yamlDslEditor.overlayDiff.difference${n}`));
+  assert.deepEqual(colorTypes.map((colorType) => colorType.options.backgroundColor.id), overlayDiffColorIds('dark'));
+  assert.deepEqual(
+    overlayDiffColorIds('light'),
+    [1, 2, 3, 4, 5, 6].map((n) => `yamlDslEditor.light.overlayDiff.difference${n}`),
+  );
   const paintedLines = (decorationType) => editor.decorations.get(decorationType).map((painted) => painted.startLine);
   assert.deepEqual(colorTypes.map(paintedLines), [[1, 7], [2, 8], [3], [4], [5], [6]]);
   const typeWith = (predicate) => vscode.decorationTypes.find((decorationType) => predicate(decorationType.options));
@@ -217,6 +220,11 @@ test('each difference takes the next palette color, cycling, with struck keys an
   views.paintVisible();
   assert.equal(editor.decorations.size, vscode.decorationTypes.length);
   assert.equal(unrelated.decorations.size, 0);
+  views.applyTheme('light');
+  const lightTypes = vscode.decorationTypes.filter((decorationType) => decorationType.options.backgroundColor
+    && decorationType.options.backgroundColor.id.startsWith('yamlDslEditor.light.'));
+  assert.deepEqual(lightTypes.map((colorType) => colorType.options.backgroundColor.id), overlayDiffColorIds('light'));
+  assert.deepEqual(lightTypes.map(paintedLines), [[1, 7], [2, 8], [3], [4], [5], [6]]);
 });
 
 test('a stack with no overlays opens nothing, and a failing request is shown as a warning', async () => {
@@ -270,7 +278,7 @@ test('an open diff follows the selection in its stack, keeping its overlays, wit
   const followed = { title: 'group/concern-1', lines: [lineOf('# overlay-1, overlay-3: no differences', null)] };
   const answers = { 'yaml-dsl/overlayDiffStack': stack, 'yaml-dsl/overlayDiff': diff };
   const client = fakeClient(answers);
-  const views = createOverlayDiffViews(vscode, client, timers);
+  const views = createOverlayDiffViews(vscode, client, 'dark', timers);
   await views.diffAcrossOverlays(target);
   await views.chooseDiffOverlays(vscode.shown[0].doc.uri);
   const shownBefore = vscode.shown.length;
@@ -296,7 +304,7 @@ test('the selection is not followed without an open diff of its stack, outside a
   const timers = fakeTimers();
   const answers = { 'yaml-dsl/overlayDiffStack': stack, 'yaml-dsl/overlayDiff': diff };
   const client = fakeClient(answers);
-  const views = createOverlayDiffViews(vscode, client, timers);
+  const views = createOverlayDiffViews(vscode, client, 'dark', timers);
   views.followSelection(selectingEditor(target.uri, range));
   assert.equal(timers.pending.size, 0);
   await views.diffAcrossOverlays(target);

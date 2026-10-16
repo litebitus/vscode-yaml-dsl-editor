@@ -20,6 +20,8 @@ const {
 } = require('./config-builders');
 const { createDeclarationsPopup } = require('../lib/declarations-popup');
 
+const UNSET_SETTINGS = { getConfiguration: () => ({ get: () => undefined }) };
+
 function clickOpenedPopup(vscode) {
   return { ...createDeclarationsPopup(vscode), opensHoverAt: () => true };
 }
@@ -471,6 +473,7 @@ test('a cross-file target peeks that section and leaves this file', async () => 
       },
     },
     commands: { executeCommand: async (...args) => { peeked.push(args); } },
+    workspace: UNSET_SETTINGS,
   };
   const mid = editorMiddleware(vscode, () => [], clickOpenedPopup(vscode));
   const here = { scheme: 'file', toString() { return 'file:///repo/one/mock.yml'; } };
@@ -514,7 +517,7 @@ test('a cross-file target peeks that section and leaves this file', async () => 
   assert.match(section.contents.value, /<div><a href="[^"]+"><code><u>mock\.yml:3<\/u><\/code><\/a><div>/);
   assert.match(section.contents.value, /data_at_rest_key/);
   assert.match(section.contents.value, /<br>/);
-  assert.match(section.contents.value, /color:#87C3FF;/);
+  assert.ok(section.contents.value.includes('color:var(--vscode-yamlDslEditor-dark-declaration-keyForeground);'));
   assert.equal(section.contents.value.includes('```'), false);
   assert.equal(section.contents.value.includes('\n'), false);
   assert.match(section.contents.value, /command:yaml-dsl-editor\.peek\?/);
@@ -696,7 +699,8 @@ test('a deprecated key is struck through in yellow and its warning is the hover 
   assert.equal(hoverText(await hoverAt(hidden, 7)), 'the field description');
   const activated = fakeVscode({ documents: [] });
   await activatedFully(activated, { subscriptions: [] }, () => fakeClient());
-  assert.ok(activated.decorations.some((decoration) => decoration.options.textDecoration === 'line-through #ece200'));
+  assert.ok(activated.decorations.some((decoration) => decoration.options.textDecoration
+    === 'line-through var(--vscode-yamlDslEditor-dark-warningForeground)'));
 });
 
 test('a validation error takes the severity its setting names, every warning but a deprecation is underlined, and none shows when off', async () => {
@@ -913,7 +917,7 @@ test('the validation errors on one key share one hover, under its heading with e
     },
   });
   await paintUnderlines(vscode, client, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
-  const heading = '<span style="color:var(--vscode-yamlDslEditor-validationErrorsHeadingForeground);">'
+  const heading = '<span style="color:var(--vscode-yamlDslEditor-dark-validationErrorsHeadingForeground);">'
     + '<strong>validation errors</strong></span>';
   const errorMarks = lastPaint(painted, 'error').ranges;
   assert.deepEqual(errorMarks.map((mark) => mark.range), [rangeOf(2, 4, 9), rangeOf(1, 2, 9), rangeOf(0, 0, 8)]);
@@ -921,6 +925,13 @@ test('the validation errors on one key share one hover, under its heading with e
   assert.equal(errorMarks[0].hoverMessage.supportHtml, true);
   assert.equal(errorMarks[1].hoverMessage.value, `${heading}\n\n- \`size\` is required`);
   assert.equal(errorMarks[2].hoverMessage, 'flow sequence is not closed');
+  const lightPainted = [];
+  const lightVscode = paintingVscode([recordingEditor(doc, lightPainted)], { theme: 'light' });
+  await paintUnderlines(lightVscode, client, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
+  const [lightMark] = lastPaint(lightPainted, 'error').ranges;
+  assert.ok(lightMark.hoverMessage.value.startsWith(
+    '<span style="color:var(--vscode-yamlDslEditor-light-validationErrorsHeadingForeground);">',
+  ));
 });
 
 test('a hover from the server renders its HTML, so a field hover\'s headings show in their color', async () => {
@@ -960,6 +971,7 @@ test('a hover colors the declaration by the declaring file\'s DSL, with no DSL s
     Hover: class {
       constructor(contents, range) { this.contents = contents; this.range = range; }
     },
+    workspace: UNSET_SETTINGS,
   };
   const hover = (configText) => editorMiddleware(vscode, () => [{ text: configText, dir: '/repo' }], clickOpenedPopup(vscode))
     .provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
@@ -968,11 +980,13 @@ test('a hover colors the declaration by the declaring file\'s DSL, with no DSL s
           + '  source: ref thing.one\n  name: "x" ${local.db} ${env} @{y}\n```',
       },
     }));
+  const referenceSpan = '<span style="color:var(--vscode-yamlDslEditor-dark-declaration-referenceForeground);">';
+  const placeholderSpan = '<span style="color:var(--vscode-yamlDslEditor-dark-declaration-placeholderForeground);">';
   const configured = (await hover(referenceConfig)).contents.value;
-  assert.match(configured, /<span style="color:#efb080;">ref<\/span>/);
-  assert.match(configured, /<span style="color:#82D2CE;">\$\{local\.db\}<\/span>/);
-  assert.match(configured, /<span style="color:#82D2CE;">\$\{env\}<\/span>/);
-  assert.doesNotMatch(configured, /color:#82D2CE;">@\{y\}/);
+  assert.ok(configured.includes(`${referenceSpan}ref</span>`));
+  assert.ok(configured.includes(`${placeholderSpan}\${local.db}</span>`));
+  assert.ok(configured.includes(`${placeholderSpan}\${env}</span>`));
+  assert.ok(!configured.includes(`${placeholderSpan}@{y}`));
   const other = configText(dslEntry('other', {
     file_includes: ['**/*.yml'],
     placeholder: placeholder({ pattern: '@\\{(?<body>[^}]*)\\}' }),
@@ -980,13 +994,13 @@ test('a hover colors the declaration by the declaring file\'s DSL, with no DSL s
     references: [reference('use (?<name>[a-z]+)', 'local', { positions: ['anywhere_in_scalar'] })],
   }));
   const otherDsl = (await hover(other)).contents.value;
-  assert.doesNotMatch(otherDsl, /color:#efb080;">ref/);
-  assert.doesNotMatch(otherDsl, /color:#82D2CE;">\$\{env\}/);
-  assert.match(otherDsl, /<span style="color:#82D2CE;">@\{y\}<\/span>/);
+  assert.ok(!otherDsl.includes(`${referenceSpan}ref`));
+  assert.ok(!otherDsl.includes(`${placeholderSpan}\${env}`));
+  assert.ok(otherDsl.includes(`${placeholderSpan}@{y}</span>`));
   const unowned = (await editorMiddleware(vscode, () => [], clickOpenedPopup(vscode)).provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
     contents: { value: '[mock.yml:1](file:///repo/mock.yml#L1)\n\n```yaml-dsl\n  source: ref thing.one\n```' },
   }))).contents.value;
-  assert.doesNotMatch(unowned, /color:#efb080/);
+  assert.ok(!unowned.includes(referenceSpan));
 });
 
 test('the text pass underlines placeholder references and within matches from the config', async () => {
@@ -1051,6 +1065,7 @@ test('a reference\'s declarations show only when a click opened them, other hove
       constructor(anchor, active) { this.anchor = anchor; this.active = active; }
     },
     commands: { executeCommand: async () => {} },
+    workspace: UNSET_SETTINGS,
   };
   const document = { uri: { toString: () => 'file:///repo/mock.yml' } };
   vscode.window = { activeTextEditor: { document, selection: null } };
@@ -1078,6 +1093,7 @@ test('a hover reads # as a comment only at a line start or after whitespace', as
     Hover: class {
       constructor(contents, range) { this.contents = contents; this.range = range; }
     },
+    workspace: UNSET_SETTINGS,
   };
   const hover = await editorMiddleware(vscode, () => [], clickOpenedPopup(vscode)).provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
     contents: {
@@ -1086,8 +1102,15 @@ test('a hover reads # as a comment only at a line start or after whitespace', as
     },
   }));
   const body = hover.contents.value;
-  assert.match(body, /<span style="color:#6A9955;"># whole line<\/span>/);
+  assert.match(body, /<span style="color:var\(--vscode-yamlDslEditor-dark-declaration-commentForeground\);"># whole line<\/span>/);
   assert.match(body, /protocol\.yml#mock/);
-  assert.doesNotMatch(body, /color:#6A9955;">#mock/);
-  assert.match(body, /<span style="color:#6A9955;"># trailing<\/span>/);
+  assert.doesNotMatch(body, /color:var\(--vscode-yamlDslEditor-dark-declaration-commentForeground\);">#mock/);
+  const lightSettings = { getConfiguration: () => ({ get: (key) => (key === 'theme' ? 'light' : undefined) }) };
+  const lightVscode = { ...vscode, workspace: lightSettings };
+  const lightHover = await editorMiddleware(lightVscode, () => [], clickOpenedPopup(lightVscode))
+    .provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
+      contents: { value: '[mock.yml:1](file:///repo/mock.yml#L1)\n\n```yaml-dsl\n# whole line\n```' },
+    }));
+  assert.match(lightHover.contents.value, /color:var\(--vscode-yamlDslEditor-light-declaration-commentForeground\);/);
+  assert.match(body, /<span style="color:var\(--vscode-yamlDslEditor-dark-declaration-commentForeground\);"># trailing<\/span>/);
 });

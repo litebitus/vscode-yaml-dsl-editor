@@ -54,7 +54,7 @@
             "off"
           ],
           "default": "on",
-          "description": "Suggestions: a light bulb in the gutter and an inlay hint whose hover offers the edit.",
+          "description": "Suggestions: a suggestion mark in the gutter and an inlay hint whose hover offers the edit.",
           "deprecationMessage": "Deprecated: use the yaml-dsl-editor.suggestion.<kind>.enabled settings."
         },
         "yaml-dsl-editor.suggestion.delete.enabled": {
@@ -65,7 +65,7 @@
         "yaml-dsl-editor.suggestion.delete.fileDecoration": {
           "type": "boolean",
           "default": true,
-          "description": "A file holding a delete suggestion, and every folder above it, named in the light bulb color with a light bulb badge."
+          "description": "A file holding a delete suggestion, and every folder above it, named in the suggestion color with the suggestion mark as its badge."
         },
         "yaml-dsl-editor.suggestion.move.enabled": {
           "type": "boolean",
@@ -75,7 +75,7 @@
         "yaml-dsl-editor.suggestion.move.fileDecoration": {
           "type": "boolean",
           "default": true,
-          "description": "A file holding a move suggestion, and every folder above it, named in the light bulb color with a light bulb badge."
+          "description": "A file holding a move suggestion, and every folder above it, named in the suggestion color with the suggestion mark as its badge."
         },
         "yaml-dsl-editor.suggestion.potentialMove.enabled": {
           "type": "boolean",
@@ -90,7 +90,22 @@
         "yaml-dsl-editor.suggestion.rename.fileDecoration": {
           "type": "boolean",
           "default": true,
-          "description": "A file holding a rename suggestion, and every folder above it, named in the light bulb color with a light bulb badge."
+          "description": "A file holding a rename suggestion, and every folder above it, named in the suggestion color with the suggestion mark as its badge."
+        },
+        "yaml-dsl-editor.theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "dark",
+            "light"
+          ],
+          "enumDescriptions": [
+            "Follow the editor's theme: light for a light or high contrast light theme, dark for any other.",
+            "The dark palette.",
+            "The light palette."
+          ],
+          "default": "auto",
+          "description": "The palette the extension draws its colors from."
         },
         "yaml-dsl-editor.warning.deprecation.enabled": {
           "type": "boolean",
@@ -203,6 +218,12 @@
         "title": "Choose overlays to diff",
         "category": "YAML DSL",
         "icon": "$(filter)"
+      },
+      {
+        "command": "yaml-dsl-editor.toggleTheme",
+        "title": "Toggle light/dark theme",
+        "category": "YAML DSL",
+        "icon": "$(color-mode)"
       }
     ],
     "keybindings": [
@@ -233,6 +254,11 @@
           "command": "yaml-dsl-editor.chooseDiffOverlays",
           "when": "resourceScheme == yaml-dsl-overlay-diff",
           "group": "navigation"
+        },
+        {
+          "command": "yaml-dsl-editor.toggleTheme",
+          "when": "resourceLangId == yaml-dsl && resourceScheme == file",
+          "group": "navigation"
         }
       ],
       "editor/context": [
@@ -256,7 +282,7 @@
     "colors": [
       {
         "id": "yamlDslEditor.errorForeground",
-        "description": "Name of a file holding an error, and of every folder above it.",
+        "description": "Deprecated, not read: use `yamlDslEditor.dark.errorForeground` and `yamlDslEditor.light.errorForeground`.",
         "defaults": {
           "dark": "#DC7975",
           "light": "#DC7975",
@@ -266,7 +292,7 @@
       },
       {
         "id": "yamlDslEditor.infoForeground",
-        "description": "Name of a file holding an info problem, and of every folder above it.",
+        "description": "Deprecated, not read: use `yamlDslEditor.dark.infoForeground` and `yamlDslEditor.light.infoForeground`.",
         "defaults": {
           "dark": "#A6ABF2",
           "light": "#A6ABF2",
@@ -276,7 +302,7 @@
       },
       {
         "id": "yamlDslEditor.warningForeground",
-        "description": "Name of a file holding a warning, and of every folder above it.",
+        "description": "Deprecated, not read: use `yamlDslEditor.dark.warningForeground` and `yamlDslEditor.light.warningForeground`.",
         "defaults": {
           "dark": "#ECE200",
           "light": "#ECE200",
@@ -285,28 +311,8 @@
         }
       },
       {
-        "id": "yamlDslEditor.overlayHeadingForeground",
-        "description": "Heading naming the overlays a section of a common layer hover is about.",
-        "defaults": {
-          "dark": "#A6ABF2",
-          "light": "#3A65B0",
-          "highContrast": "#A6ABF2",
-          "highContrastLight": "#3A65B0"
-        }
-      },
-      {
-        "id": "yamlDslEditor.validationErrorsHeadingForeground",
-        "description": "Heading of the validation errors in a key's hover.",
-        "defaults": {
-          "dark": "#E394DC",
-          "light": "#AD4340",
-          "highContrast": "#E394DC",
-          "highContrastLight": "#AD4340"
-        }
-      },
-      {
         "id": "yamlDslEditor.overlayDiff.difference1",
-        "description": "Background of a difference in an overlay diff, first color of the palette.",
+        "description": "Deprecated, not read: use `yamlDslEditor.dark.overlayDiff.difference1` and `yamlDslEditor.light.overlayDiff.difference1`.",
         "defaults": {
           "dark": "#D68C8C47",
           "light": "#D68C8C47",
@@ -316,7 +322,7 @@
       },
       {
         "id": "yamlDslEditor.overlayDiff.difference2",
-        "description": "Background of a difference in an overlay diff, second color of the palette.",
+        "description": "Deprecated, not read: use `yamlDslEditor.dark.overlayDiff.difference2` and `yamlDslEditor.light.overlayDiff.difference2`.",
         "defaults": {
           "dark": "#82AAD247",
           "light": "#82AAD247",
@@ -326,7 +332,7 @@
       },
       {
         "id": "yamlDslEditor.overlayDiff.difference3",
-        "description": "Background of a difference in an overlay diff, third color of the palette.",
+        "description": "Deprecated, not read: use `yamlDslEditor.dark.overlayDiff.difference3` and `yamlDslEditor.light.overlayDiff.difference3`.",
         "defaults": {
           "dark": "#D2BE8247",
           "light": "#D2BE8247",
@@ -336,7 +342,7 @@
       },
       {
         "id": "yamlDslEditor.overlayDiff.difference4",
-        "description": "Background of a difference in an overlay diff, fourth color of the palette.",
+        "description": "Deprecated, not read: use `yamlDslEditor.dark.overlayDiff.difference4` and `yamlDslEditor.light.overlayDiff.difference4`.",
         "defaults": {
           "dark": "#8CBE9647",
           "light": "#8CBE9647",
@@ -346,7 +352,7 @@
       },
       {
         "id": "yamlDslEditor.overlayDiff.difference5",
-        "description": "Background of a difference in an overlay diff, fifth color of the palette.",
+        "description": "Deprecated, not read: use `yamlDslEditor.dark.overlayDiff.difference5` and `yamlDslEditor.light.overlayDiff.difference5`.",
         "defaults": {
           "dark": "#AA96D247",
           "light": "#AA96D247",
@@ -356,12 +362,352 @@
       },
       {
         "id": "yamlDslEditor.overlayDiff.difference6",
-        "description": "Background of a difference in an overlay diff, sixth color of the palette.",
+        "description": "Deprecated, not read: use `yamlDslEditor.dark.overlayDiff.difference6` and `yamlDslEditor.light.overlayDiff.difference6`.",
         "defaults": {
           "dark": "#D7A57D47",
           "light": "#D7A57D47",
           "highContrast": "#D7A57D47",
           "highContrastLight": "#D7A57D47"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.errorForeground",
+        "description": "An error's text, squiggle and gutter mark, and the name of a file holding one, in the dark theme.",
+        "defaults": {
+          "dark": "#DC7975",
+          "light": "#DC7975",
+          "highContrast": "#DC7975",
+          "highContrastLight": "#DC7975"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.warningForeground",
+        "description": "A warning's underline, strike-through and gutter mark, and the name of a file holding one, in the dark theme.",
+        "defaults": {
+          "dark": "#ECE200",
+          "light": "#ECE200",
+          "highContrast": "#ECE200",
+          "highContrastLight": "#ECE200"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.infoForeground",
+        "description": "An info problem's underline and gutter mark, a potential move's border, and the name of a file holding one, in the dark theme.",
+        "defaults": {
+          "dark": "#A6ABF2",
+          "light": "#A6ABF2",
+          "highContrast": "#A6ABF2",
+          "highContrastLight": "#A6ABF2"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.suggestionForeground",
+        "description": "A suggestion's gutter mark, border and badge, and the name of a file holding one, in the dark theme.",
+        "defaults": {
+          "dark": "#FFCC00",
+          "light": "#FFCC00",
+          "highContrast": "#FFCC00",
+          "highContrastLight": "#FFCC00"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.overlayHeadingForeground",
+        "description": "Heading naming the overlays a section of a common layer hover is about, in the dark theme.",
+        "defaults": {
+          "dark": "#A6ABF2",
+          "light": "#A6ABF2",
+          "highContrast": "#A6ABF2",
+          "highContrastLight": "#A6ABF2"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.validationErrorsHeadingForeground",
+        "description": "Heading of the validation errors in a key's hover, in the dark theme.",
+        "defaults": {
+          "dark": "#E394DC",
+          "light": "#E394DC",
+          "highContrast": "#E394DC",
+          "highContrastLight": "#E394DC"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.overlayDiff.difference1",
+        "description": "Background of a difference in an overlay diff, first color of the palette, in the dark theme.",
+        "defaults": {
+          "dark": "#D68C8C47",
+          "light": "#D68C8C47",
+          "highContrast": "#D68C8C47",
+          "highContrastLight": "#D68C8C47"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.overlayDiff.difference2",
+        "description": "Background of a difference in an overlay diff, second color of the palette, in the dark theme.",
+        "defaults": {
+          "dark": "#82AAD247",
+          "light": "#82AAD247",
+          "highContrast": "#82AAD247",
+          "highContrastLight": "#82AAD247"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.overlayDiff.difference3",
+        "description": "Background of a difference in an overlay diff, third color of the palette, in the dark theme.",
+        "defaults": {
+          "dark": "#D2BE8247",
+          "light": "#D2BE8247",
+          "highContrast": "#D2BE8247",
+          "highContrastLight": "#D2BE8247"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.overlayDiff.difference4",
+        "description": "Background of a difference in an overlay diff, fourth color of the palette, in the dark theme.",
+        "defaults": {
+          "dark": "#8CBE9647",
+          "light": "#8CBE9647",
+          "highContrast": "#8CBE9647",
+          "highContrastLight": "#8CBE9647"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.overlayDiff.difference5",
+        "description": "Background of a difference in an overlay diff, fifth color of the palette, in the dark theme.",
+        "defaults": {
+          "dark": "#AA96D247",
+          "light": "#AA96D247",
+          "highContrast": "#AA96D247",
+          "highContrastLight": "#AA96D247"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.overlayDiff.difference6",
+        "description": "Background of a difference in an overlay diff, sixth color of the palette, in the dark theme.",
+        "defaults": {
+          "dark": "#D7A57D47",
+          "light": "#D7A57D47",
+          "highContrast": "#D7A57D47",
+          "highContrastLight": "#D7A57D47"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.declaration.keyForeground",
+        "description": "A key in the declaration a reference hover shows, in the dark theme.",
+        "defaults": {
+          "dark": "#87C3FF",
+          "light": "#87C3FF",
+          "highContrast": "#87C3FF",
+          "highContrastLight": "#87C3FF"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.declaration.stringForeground",
+        "description": "A quoted string in the declaration a reference hover shows, in the dark theme.",
+        "defaults": {
+          "dark": "#E394DC",
+          "light": "#E394DC",
+          "highContrast": "#E394DC",
+          "highContrastLight": "#E394DC"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.declaration.commentForeground",
+        "description": "A comment in the declaration a reference hover shows, in the dark theme.",
+        "defaults": {
+          "dark": "#6A9955",
+          "light": "#6A9955",
+          "highContrast": "#6A9955",
+          "highContrastLight": "#6A9955"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.declaration.referenceForeground",
+        "description": "A reference's leading literal in the declaration a reference hover shows, in the dark theme.",
+        "defaults": {
+          "dark": "#EFB080",
+          "light": "#EFB080",
+          "highContrast": "#EFB080",
+          "highContrastLight": "#EFB080"
+        }
+      },
+      {
+        "id": "yamlDslEditor.dark.declaration.placeholderForeground",
+        "description": "A placeholder in the declaration a reference hover shows, in the dark theme.",
+        "defaults": {
+          "dark": "#82D2CE",
+          "light": "#82D2CE",
+          "highContrast": "#82D2CE",
+          "highContrastLight": "#82D2CE"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.errorForeground",
+        "description": "An error's text, squiggle and gutter mark, and the name of a file holding one, in the light theme.",
+        "defaults": {
+          "dark": "#DC322F",
+          "light": "#DC322F",
+          "highContrast": "#DC322F",
+          "highContrastLight": "#DC322F"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.warningForeground",
+        "description": "A warning's underline, strike-through and gutter mark, and the name of a file holding one, in the light theme.",
+        "defaults": {
+          "dark": "#CB4B16",
+          "light": "#CB4B16",
+          "highContrast": "#CB4B16",
+          "highContrastLight": "#CB4B16"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.infoForeground",
+        "description": "An info problem's underline and gutter mark, a potential move's border, and the name of a file holding one, in the light theme.",
+        "defaults": {
+          "dark": "#268BD2",
+          "light": "#268BD2",
+          "highContrast": "#268BD2",
+          "highContrastLight": "#268BD2"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.suggestionForeground",
+        "description": "A suggestion's gutter mark, border and badge, and the name of a file holding one, in the light theme.",
+        "defaults": {
+          "dark": "#2AA198",
+          "light": "#2AA198",
+          "highContrast": "#2AA198",
+          "highContrastLight": "#2AA198"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.overlayHeadingForeground",
+        "description": "Heading naming the overlays a section of a common layer hover is about, in the light theme.",
+        "defaults": {
+          "dark": "#6C71C4",
+          "light": "#6C71C4",
+          "highContrast": "#6C71C4",
+          "highContrastLight": "#6C71C4"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.validationErrorsHeadingForeground",
+        "description": "Heading of the validation errors in a key's hover, in the light theme.",
+        "defaults": {
+          "dark": "#D33682",
+          "light": "#D33682",
+          "highContrast": "#D33682",
+          "highContrastLight": "#D33682"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.overlayDiff.difference1",
+        "description": "Background of a difference in an overlay diff, first color of the palette, in the light theme.",
+        "defaults": {
+          "dark": "#D68C8C47",
+          "light": "#D68C8C47",
+          "highContrast": "#D68C8C47",
+          "highContrastLight": "#D68C8C47"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.overlayDiff.difference2",
+        "description": "Background of a difference in an overlay diff, second color of the palette, in the light theme.",
+        "defaults": {
+          "dark": "#82AAD247",
+          "light": "#82AAD247",
+          "highContrast": "#82AAD247",
+          "highContrastLight": "#82AAD247"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.overlayDiff.difference3",
+        "description": "Background of a difference in an overlay diff, third color of the palette, in the light theme.",
+        "defaults": {
+          "dark": "#D2BE8247",
+          "light": "#D2BE8247",
+          "highContrast": "#D2BE8247",
+          "highContrastLight": "#D2BE8247"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.overlayDiff.difference4",
+        "description": "Background of a difference in an overlay diff, fourth color of the palette, in the light theme.",
+        "defaults": {
+          "dark": "#8CBE9647",
+          "light": "#8CBE9647",
+          "highContrast": "#8CBE9647",
+          "highContrastLight": "#8CBE9647"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.overlayDiff.difference5",
+        "description": "Background of a difference in an overlay diff, fifth color of the palette, in the light theme.",
+        "defaults": {
+          "dark": "#AA96D247",
+          "light": "#AA96D247",
+          "highContrast": "#AA96D247",
+          "highContrastLight": "#AA96D247"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.overlayDiff.difference6",
+        "description": "Background of a difference in an overlay diff, sixth color of the palette, in the light theme.",
+        "defaults": {
+          "dark": "#D7A57D47",
+          "light": "#D7A57D47",
+          "highContrast": "#D7A57D47",
+          "highContrastLight": "#D7A57D47"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.declaration.keyForeground",
+        "description": "A key in the declaration a reference hover shows, in the light theme.",
+        "defaults": {
+          "dark": "#268BD2",
+          "light": "#268BD2",
+          "highContrast": "#268BD2",
+          "highContrastLight": "#268BD2"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.declaration.stringForeground",
+        "description": "A quoted string in the declaration a reference hover shows, in the light theme.",
+        "defaults": {
+          "dark": "#D33682",
+          "light": "#D33682",
+          "highContrast": "#D33682",
+          "highContrastLight": "#D33682"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.declaration.commentForeground",
+        "description": "A comment in the declaration a reference hover shows, in the light theme.",
+        "defaults": {
+          "dark": "#93A1A1",
+          "light": "#93A1A1",
+          "highContrast": "#93A1A1",
+          "highContrastLight": "#93A1A1"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.declaration.referenceForeground",
+        "description": "A reference's leading literal in the declaration a reference hover shows, in the light theme.",
+        "defaults": {
+          "dark": "#CB4B16",
+          "light": "#CB4B16",
+          "highContrast": "#CB4B16",
+          "highContrastLight": "#CB4B16"
+        }
+      },
+      {
+        "id": "yamlDslEditor.light.declaration.placeholderForeground",
+        "description": "A placeholder in the declaration a reference hover shows, in the light theme.",
+        "defaults": {
+          "dark": "#2AA198",
+          "light": "#2AA198",
+          "highContrast": "#2AA198",
+          "highContrastLight": "#2AA198"
         }
       }
     ]

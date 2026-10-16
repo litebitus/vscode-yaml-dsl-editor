@@ -2,7 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
-const { APPLY_COMMAND } = require('../../lib/suggestion-lightbulbs');
+const { APPLY_COMMAND } = require('../../lib/suggestion-marks');
 
 const SAME_IN_COMMON_LAYER = '💡 same in common layer';
 const MOVE_TO_COMMON_LAYER = '💡 move to common layer';

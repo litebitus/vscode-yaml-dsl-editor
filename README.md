@@ -69,8 +69,6 @@ layers:
 
 Hover documents a field like a javadoc: its signature with the forms its references reach, the description written beside its `$ref` rather than the shared composite's, what it accepts, and its constraints and conditions. In the common layer, each section is headed by the overlays it documents. A deprecated field is a warning: struck through, marked in the gutter, and its file and folders shown in yellow.
 
-The headings' colors are theme colors you can override with `workbench.colorCustomizations`.
-
 Each document is validated against its schema, an overlay as the common layer merged with it, and every validation error is marked on the key that wrote it.
 
 The JSON Schema drafts read, each by its own parser, validator and renderer:
@@ -114,7 +112,14 @@ Narrow the view to the overlays you check with either:
 - the filter button <img src="media/filter-button.png" alt="filter button" height="16"> in the view's title bar, which shows once you click in the view
 - `YAML DSL: Choose overlays to diff` in the Command Palette
 
-The colors are theme colors you can override with `workbench.colorCustomizations`.
+### Light and dark themes
+
+Every color the extension draws with comes from its dark or light theme, which follows the editor's theme by default. Switch the editor and the extension between light and dark together with either:
+
+- the theme button in a DSL file's title bar
+- `YAML DSL: Toggle light/dark theme` in the Command Palette
+
+Each color is a theme color you can override with `workbench.colorCustomizations`.
 
 ### Responsive and bounded
 
@@ -141,6 +146,7 @@ The extension's own settings live under `yaml-dsl-editor` in the editor's settin
 | `yaml-dsl-editor.suggestion.potentialMove.enabled` | `true`, `false` | Whether potential move suggestions are shown |
 | `yaml-dsl-editor.suggestion.rename.enabled` | `true`, `false` | Whether rename suggestions are shown |
 | `yaml-dsl-editor.suggestion.rename.fileDecoration` | `true`, `false` | Whether a file holding a rename suggestion, and its folders, are colored |
+| `yaml-dsl-editor.theme` | `auto`, `dark`, `light` | The theme the extension draws its colors from; `auto` follows the editor's theme |
 | `yaml-dsl-editor.validator.enabled` | `true`, `false` | Whether validation errors are shown |
 | `yaml-dsl-editor.validator.errorSeverity` | `error`, `warning`, `info` | The severity a validation error is shown with |
 | `yaml-dsl-editor.validator.fileDecoration` | `true`, `false` | Whether a file holding a validation error, and its folders, are colored |

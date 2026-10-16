@@ -11,7 +11,7 @@ const {
   hintTooltipOf,
   applyArgumentIn,
 } = require('./editor-hints');
-const { APPLY_COMMAND } = require('../../lib/suggestion-lightbulbs');
+const { APPLY_COMMAND } = require('../../lib/suggestion-marks');
 
 function concernPath(...segments) {
   return path.join(vscode.workspace.workspaceFolders[2].uri.fsPath, ...segments);

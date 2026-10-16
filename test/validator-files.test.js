@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { validatorFileDecoration } = require('../lib/validator-files');
-const { WARNING_BADGE, WARNING_THEME_COLOR } = require('../lib/warning-files');
+const { WARNING_BADGE } = require('../lib/warning-files');
 const { explorerUriSets } = require('../lib/explorer-folders');
 
 const fakeVscode = {
@@ -18,15 +18,18 @@ const fakeVscode = {
 
 const uriOf = (text) => ({ toString: () => text });
 
-test('a file holding a validation error takes the badge and color of the error severity, its folders the color', () => {
+test('a file holding a validation error takes the badge and the theme\'s color of the error severity, its folders the color', () => {
   const uriSets = explorerUriSets(['file:///repo/dev/mock.yml']);
-  const decorationOf = (errorSeverity, uri) => {
-    const decoration = validatorFileDecoration(fakeVscode, errorSeverity, uriSets, uriOf(uri));
+  const decorationOf = (theme, errorSeverity, uri) => {
+    const decoration = validatorFileDecoration(fakeVscode, theme, errorSeverity, uriSets, uriOf(uri));
     return [decoration.badge, decoration.color.id];
   };
-  assert.deepEqual(decorationOf('error', 'file:///repo/dev/mock.yml'), ['✖', 'yamlDslEditor.errorForeground']);
-  assert.deepEqual(decorationOf('warning', 'file:///repo/dev/mock.yml'), [WARNING_BADGE, WARNING_THEME_COLOR]);
-  assert.deepEqual(decorationOf('info', 'file:///repo/dev/mock.yml'), ['ⓘ', 'yamlDslEditor.infoForeground']);
-  assert.deepEqual(decorationOf('error', 'file:///repo/dev'), [undefined, 'yamlDslEditor.errorForeground']);
-  assert.equal(validatorFileDecoration(fakeVscode, 'error', uriSets, uriOf('file:///repo/staging/mock.yml')), undefined);
+  const file = 'file:///repo/dev/mock.yml';
+  assert.deepEqual(decorationOf('dark', 'error', file), ['✖', 'yamlDslEditor.dark.errorForeground']);
+  assert.deepEqual(decorationOf('dark', 'warning', file), [WARNING_BADGE, 'yamlDslEditor.dark.warningForeground']);
+  assert.deepEqual(decorationOf('dark', 'info', file), ['ⓘ', 'yamlDslEditor.dark.infoForeground']);
+  assert.deepEqual(decorationOf('light', 'error', file), ['✖', 'yamlDslEditor.light.errorForeground']);
+  assert.deepEqual(decorationOf('dark', 'error', 'file:///repo/dev'), [undefined, 'yamlDslEditor.dark.errorForeground']);
+  const staging = uriOf('file:///repo/staging/mock.yml');
+  assert.equal(validatorFileDecoration(fakeVscode, 'dark', 'error', uriSets, staging), undefined);
 });

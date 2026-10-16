@@ -10,7 +10,7 @@ const {
   hintTooltipOf,
   applyArgumentIn,
 } = require('./editor-hints');
-const { APPLY_COMMAND } = require('../../lib/suggestion-lightbulbs');
+const { APPLY_COMMAND } = require('../../lib/suggestion-marks');
 
 const RENAME_DB_TO_STORE = '💡 rename everywhere: db → store';
 

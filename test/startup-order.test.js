@@ -168,7 +168,7 @@ function startupHarness({ editors = [], answerDecorations = () => new Promise(()
     editor.setDecorations = (decorationType, ranges) => {
       if (ranges.length === 0) return;
       const options = decorationTypes.get(decorationType) || {};
-      const kind = String(options.gutterIconPath || '').includes('lightbulb') ? 'light bulb' : 'underline';
+      const kind = String(options.gutterIconPath || '').includes('suggestion-gutter-mark') ? 'suggestion mark' : 'underline';
       events.push(`${kind} ${editor.document.uri.fsPath}`);
     };
     return editor;
@@ -222,7 +222,7 @@ test('startup shows the file, colors it, paints saved suggestions, and only then
   assertInOrder(harness.events, [
     `language ${ACTIVE_PATH} yaml-dsl`,
     `underline ${ACTIVE_PATH}`,
-    `light bulb ${ACTIVE_PATH}`,
+    `suggestion mark ${ACTIVE_PATH}`,
     'start language server',
     'notify yaml-dsl/config',
     `notify yaml-dsl/active ${ACTIVE_PATH}`,
@@ -250,7 +250,7 @@ test('startup reads no file of the workspace before painting, searches nothing a
   const harness = startupHarness({ editors: [editor], answerDecorations: async () => null });
   const handle = await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
   await handle.startup;
-  const firstPaint = indexOf(harness.events, `light bulb ${ACTIVE_PATH}`);
+  const firstPaint = indexOf(harness.events, `suggestion mark ${ACTIVE_PATH}`);
   const readsBeforePaint = harness.events.slice(0, firstPaint).filter((event) => event.startsWith('read '));
   assert.deepEqual(readsBeforePaint.filter((event) => !event.endsWith('yaml-dsl.yml') && !event.endsWith('.json')), []);
   assert.equal(harness.events.includes('search workspace'), false);
@@ -298,7 +298,7 @@ test('saved suggestions for a file changed while the editor was closed are refre
   const handle = await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
   await handle.startup;
   assertInOrder(harness.events, [
-    `light bulb ${ACTIVE_PATH}`,
+    `suggestion mark ${ACTIVE_PATH}`,
     'notify yaml-dsl/config',
     'notify yaml-dsl/refreshSuggestions',
   ]);

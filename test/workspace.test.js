@@ -521,10 +521,15 @@ test('a common layer field hover names the overlays whose schema has no such fie
     `${overlayHeadingOf('one, two')}\n\n\`\`\`\nsize: integer    [optional]\n\`\`\`\n\nMock size.`,
     `${overlayHeadingOf('three')}\n\nnot a field`,
   ].join('\n\n'));
+  ws.setTheme('light');
+  assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
+    `${overlayHeadingOf('one, two', 'light')}\n\n\`\`\`\nsize: integer    [optional]\n\`\`\`\n\nMock size.`,
+    `${overlayHeadingOf('three', 'light')}\n\nnot a field`,
+  ].join('\n\n'));
 });
 
-function overlayHeadingOf(labels) {
-  return `<span style="color:var(--vscode-yamlDslEditor-overlayHeadingForeground);"><strong>${labels}</strong></span>`;
+function overlayHeadingOf(labels, theme = 'dark') {
+  return `<span style="color:var(--vscode-yamlDslEditor-${theme}-overlayHeadingForeground);"><strong>${labels}</strong></span>`;
 }
 
 test('the modeline\'s schema path links to the schema it names, a path from the file\'s folder or a URL as written', async () => {

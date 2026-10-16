@@ -55,7 +55,7 @@ A problem has a severity, drawn in the color the DevOps tools print it in:
 - The gutter marks share one size.
 - An info problem is a schema the file names that cannot be loaded.
 - A validation error takes the severity its setting names.
-- The validation errors on one key share one hover: a `validation errors` heading in bold, in the `yamlDslEditor.validationErrorsHeadingForeground` theme color, and each error a bullet.
+- The validation errors on one key share one hover: a `validation errors` heading in bold, in the theme's `validationErrorsHeadingForeground`, and each error a bullet.
 - Every warning but a deprecation is underlined in yellow.
 
 Keys:
@@ -584,7 +584,7 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 - The draft's renderer reads its own keywords, as its parser and validator do; a part it cannot read in words names a condition the schema states.
 - In the common layer the tooltip documents the field in each overlay's schema; overlays whose documentation is the same share one section, headed by their names, and overlays whose schema has no such field are named last, as not a field.
-- A section's heading is its overlays' names in bold, in the `yamlDslEditor.overlayHeadingForeground` theme color.
+- A section's heading is its overlays' names in bold, in the theme's `overlayHeadingForeground`.
 - A description's HTML is shown as text, so a tag written in prose reads as written.
 
 ### Requirement markers
@@ -733,7 +733,7 @@ The view is a read-only document titled with the stack's path from the workspace
 | a key an overlay lacks | struck, `key:`, among that key's lines and labeled with the overlay; its parents stay plain lines, so a missing key is struck at its leaf wherever it sits |
 | a block an overlay lacks entirely | struck once at its key, above the block; the lines below diff the overlays that hold it |
 
-Each difference, every line of one key, takes one background color, the next difference the next color of a palette of mellow shades contributed as theme colors, so adjacent differences never share one.
+Each difference, every line of one key, takes one background color, the next difference the next of the theme's `overlayDiff.difference<n>` mellow shades, so adjacent differences never share one.
 
 ```
 mocktype:
@@ -751,9 +751,16 @@ mocktype:
 
 The extension suggests an edit where it can see one. A suggestion shows as:
 
-- a light bulb in the gutter of the line it concerns;
+- a suggestion mark in the gutter of the line it concerns;
 - an inlay hint at the end of that line, whose hover says what the edit does and links to it;
-- the holding file's name in the light bulb's color, with a light bulb badge in the Explorer and on its tab, every folder above it up to the workspace root taking the color.
+- the holding file's name in the theme's `suggestionForeground`, with the suggestion mark as its badge in the Explorer and on its tab, every folder above it up to the workspace root taking the color.
+
+The suggestion mark is the theme's, and the inlay hint's label opens with it:
+
+| Theme | Mark |
+|---|---|
+| `dark` | a light bulb, `💡` in the badge and the label |
+| `light` | `✦`, a plain character that takes the theme's color |
 
 Each folder above a decorated file is decorated in its own right, so its color shows over the one a child's decoration carries up, such as source control's.
 
@@ -817,7 +824,7 @@ sequenceDiagram
   Server->>Server: restart the stack's 500 ms quiet period
   Server->>Server: once quiet, queue its suggestions
   Server-->>Editor: suggestions, each file with its marks and text hash
-  Editor->>Editor: light bulbs, inlay hints, file colors
+  Editor->>Editor: gutter marks, inlay hints, file colors
   Editor->>Storage: save marks a second after the last report
   Note over Storage,Server: The user clicks a suggestion's hover link
   Editor->>Server: apply the suggestion
@@ -828,7 +835,7 @@ sequenceDiagram
   Editor->>Editor: keep its marks until the stack is analyzed again
   Note over Storage,Server: The editor starts
   Editor->>Storage: read saved marks
-  Editor->>Editor: light bulbs, inlay hints, file colors
+  Editor->>Editor: gutter marks, inlay hints, file colors
   Editor->>Server: workspace config
   Editor->>Editor: hash each file on disk, drop the marks whose hash differs
   Editor->>Server: refresh the stacks of files whose hash differs
@@ -972,7 +979,7 @@ Moves of neighboring keys in one map are one move. Two moves combine when:
 
 - Its hint names the keys, and its hover lists the blocks in order.
 - The click writes them into the common layer one after another in that order, each placed and spaced by the overlays as they stood before the click, and each checked against the folds as a move of its own.
-- While the cursor is on a suggestion's light bulb line, a border marks every line the suggestion takes.
+- While the cursor is on a suggestion mark's line, a border marks every line the suggestion takes.
 
 ### Deleting a duplicate
 
@@ -1446,6 +1453,32 @@ dsls:
 - When the workspace config loads, each DSL's files are associated with that language: those its `file_includes` globs or the `{concern}` names in its `layers.common_layer_files` match, and its `file_excludes` globs do not. Such a file opens as `yaml-dsl`, and the language server's document selector is that language.
 - An extension that selects `yaml`, such as the Red Hat YAML extension, does not own these files and does not activate on them.
 - A file that matches no DSL pattern stays `yaml`.
+
+## Themes
+
+Every color the extension draws with comes from its theme, a palette of roles. The extension has two themes, `dark` and `light`.
+
+- `yaml-dsl-editor.theme` names the theme: `auto`, the default, or `dark` or `light`.
+- `auto` follows the editor's theme: a light or high contrast light theme takes `light`, any other `dark`, and a change of the editor's theme switches it at once.
+- A button in the title bar of a DSL file switches the editor between its preferred light and dark color themes, as the editor's own `Toggle between Light/Dark Themes` does, and returns the extension's theme to `auto`, so both switch together; the Command Palette offers it as `YAML DSL: Toggle light/dark theme`.
+- A switch repaints at once: problems, gutter marks, the overlay diff, the Explorer's file colors and every hover.
+- Each role is a theme color per theme, `yamlDslEditor.<theme>.<role>`, which `workbench.colorCustomizations` overrides.
+- A gutter mark is an image drawn per theme in that theme's colors.
+
+| Role | Draws |
+|---|---|
+| `errorForeground` | an error's text, squiggle and gutter mark; the name of a file holding one and its folders |
+| `warningForeground` | a warning's underline, strike-through and gutter mark; the name of a file holding one and its folders |
+| `infoForeground` | an info problem's underline and gutter mark, a potential move's border; the name of a file holding one and its folders |
+| `suggestionForeground` | a suggestion's gutter mark, border and badge; the name of a file holding one and its folders |
+| `overlayHeadingForeground` | the heading naming a common layer hover section's overlays |
+| `validationErrorsHeadingForeground` | the heading of a key's validation errors |
+| `overlayDiff.difference<n>` | the background of the overlay diff's n-th difference color |
+| `declaration.keyForeground` | a key in the declaration a reference hover shows |
+| `declaration.stringForeground` | a quoted string in that declaration |
+| `declaration.commentForeground` | a comment in that declaration |
+| `declaration.referenceForeground` | a reference's leading literal in that declaration |
+| `declaration.placeholderForeground` | a placeholder in that declaration |
 
 ## Settings
 

@@ -1,11 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { OVERLAY_HEADING_COLOR, hoverHeading, markdownWithoutHtml } = require('../lib/hover-heading');
+const { hoverHeading, markdownWithoutHtml } = require('../lib/hover-heading');
 
 test('a heading is its text in bold, in the color it is given, its HTML escaped', () => {
   assert.equal(
-    hoverHeading('dev, <uat>', OVERLAY_HEADING_COLOR),
-    '<span style="color:var(--vscode-yamlDslEditor-overlayHeadingForeground);"><strong>dev, &lt;uat&gt;</strong></span>',
+    hoverHeading('dev, <uat>', 'var(--vscode-mock-color)'),
+    '<span style="color:var(--vscode-mock-color);"><strong>dev, &lt;uat&gt;</strong></span>',
   );
 });
 
