@@ -1501,4 +1501,4 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 - Find All References on a declaration lists every reference to it across the common layer and each overlay.
 - The formatter, as designed under Formatting.
 - Hover on a key that sets a field of its entry, by the `validator`'s `child_values_from_parent_key`, shows that field's description.
-- One undo after "rename everywhere" on an unsaved hand rename takes every overlay back every time; in about one Antigravity integration run in four, the overlay still holds the new name after the undo.
+- (Observing the fix) One undo after "rename everywhere" on an unsaved hand rename takes every overlay back every time; in about one Antigravity integration run in four, the overlay still holds the new name after the undo.

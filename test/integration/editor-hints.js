@@ -84,6 +84,11 @@ async function hoverTextBecomes(doc, position, expected) {
   assert.equal(text, expected);
 }
 
+async function undoInEditorOf(document) {
+  await vscode.window.showTextDocument(document);
+  await vscode.commands.executeCommand('undo');
+}
+
 module.exports = {
   SAME_IN_COMMON_LAYER,
   MOVE_TO_COMMON_LAYER,
@@ -96,4 +101,5 @@ module.exports = {
   applyArgumentIn,
   positionInText,
   hoverTextBecomes,
+  undoInEditorOf,
 };

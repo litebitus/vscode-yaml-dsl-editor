@@ -8,6 +8,7 @@ const {
   shownDocument,
   hintLabelsOf,
   hintLabelsBecome,
+  undoInEditorOf,
 } = require('./editor-hints');
 
 const SHARED_BLOCK = 'mocktype:\n  shared:\n    size: 1\n';
@@ -44,7 +45,7 @@ suite('layer files changing on disk', () => {
     fs.renameSync(commonPath, `${commonPath}.away`);
     await new Promise((resolve) => { setTimeout(resolve, 2000); });
     assert.deepEqual(await hintLabelsOf(overlay), [SAME_IN_COMMON_LAYER]);
-    await vscode.commands.executeCommand('undo');
+    await undoInEditorOf(commonEditor.document);
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
     await hintLabelsBecome(overlay, [MOVE_TO_COMMON_LAYER]);
   });

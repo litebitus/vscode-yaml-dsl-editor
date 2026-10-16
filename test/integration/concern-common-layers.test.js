@@ -10,6 +10,7 @@ const {
   hintLabelsBecome,
   hintTooltipOf,
   applyArgumentIn,
+  undoInEditorOf,
 } = require('./editor-hints');
 const { APPLY_COMMAND } = require('../../lib/suggestion-marks');
 
@@ -74,9 +75,8 @@ suite('concern common layers', () => {
       if (event.document.uri.fsPath === concernFile) concernSaves.push(event.document.getText());
     });
     try {
-      await vscode.window.showTextDocument(overlay);
       const movedVersion = overlay.version;
-      await vscode.commands.executeCommand('undo');
+      await undoInEditorOf(overlay);
       const undoDeadline = Date.now() + UNDO_RECORDED_WAIT_MILLISECONDS;
       while (overlay.version === movedVersion && Date.now() < undoDeadline) {
         await new Promise((resolve) => { setTimeout(resolve, 50); });

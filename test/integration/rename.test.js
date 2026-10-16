@@ -9,17 +9,26 @@ const {
   fixtureCopy,
   hintTooltipOf,
   applyArgumentIn,
+  undoInEditorOf,
 } = require('./editor-hints');
 const { APPLY_COMMAND } = require('../../lib/suggestion-marks');
 
 const RENAME_DB_TO_STORE = '💡 rename everywhere: db → store';
+
+function fileStateText(filePath) {
+  const openDocument = vscode.workspace.textDocuments.find((document) => document.uri.fsPath === filePath);
+  const openState = openDocument
+    ? `open, ${openDocument.isDirty ? 'dirty' : 'saved'}, holding:\n${openDocument.getText()}`
+    : 'not open';
+  return `on disk:\n${fs.readFileSync(filePath, 'utf8')}\nin the editor: ${openState}`;
+}
 
 async function fileTextHolds(filePath, expected) {
   const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
   while (Date.now() < deadline && !fs.readFileSync(filePath, 'utf8').includes(expected)) {
     await new Promise((resolve) => { setTimeout(resolve, 50); });
   }
-  assert.ok(fs.readFileSync(filePath, 'utf8').includes(expected), fs.readFileSync(filePath, 'utf8'));
+  assert.ok(fs.readFileSync(filePath, 'utf8').includes(expected), fileStateText(filePath));
 }
 
 suite('rename suggestions', () => {
@@ -63,7 +72,8 @@ suite('rename suggestions', () => {
     await hintLabelsBecome(commonLayer, [RENAME_DB_TO_STORE]);
     await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(await hintTooltipOf(commonLayer)));
     await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.store');
-    await vscode.commands.executeCommand('undo');
+    await vscode.commands.executeCommand('workbench.action.quickOpen');
+    await undoInEditorOf(commonLayer);
     await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.db');
     await fileTextHolds(path.join(stack, 'mock.yml'), '  db: mock-value');
     assert.ok(commonLayer.getText().includes('label: local.db'));
@@ -83,7 +93,7 @@ suite('rename suggestions', () => {
     await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(await hintTooltipOf(commonLayer)));
     await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.store');
     await fileTextHolds(commonPath, '  store: mock-value');
-    await vscode.commands.executeCommand('undo');
+    await undoInEditorOf(commonLayer);
     await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.db');
     await fileTextHolds(commonPath, '  db: mock-value');
     assert.ok(commonLayer.getText().includes('label: local.db'));
@@ -100,8 +110,8 @@ suite('rename suggestions', () => {
     await hintLabelsBecome(commonLayer, [RENAME_DB_TO_STORE]);
     await vscode.commands.executeCommand(APPLY_COMMAND, applyArgumentIn(await hintTooltipOf(commonLayer)));
     await fileTextHolds(path.join(stack, 'mock.yml'), 'label: local.store');
-    await shownDocument(path.join(stack, 'one', 'mock.yml'));
-    await vscode.commands.executeCommand('undo');
+    const overlay = (await shownDocument(path.join(stack, 'one', 'mock.yml'))).document;
+    await undoInEditorOf(overlay);
     await fileTextHolds(path.join(stack, 'one', 'mock.yml'), 'label: local.db');
     await fileTextHolds(path.join(stack, 'mock.yml'), '  db: mock-value');
     assert.ok(commonLayer.getText().includes('label: local.db'));

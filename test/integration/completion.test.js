@@ -2,7 +2,12 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
-const { WAIT_DEADLINE_MILLISECONDS, shownDocument, fixtureCopy } = require('./editor-hints');
+const {
+  WAIT_DEADLINE_MILLISECONDS,
+  shownDocument,
+  fixtureCopy,
+  undoInEditorOf,
+} = require('./editor-hints');
 
 function stackCopy() {
   return fixtureCopy('stack');
@@ -189,7 +194,7 @@ suite('required fields', () => {
     await vscode.commands.executeCommand('jumpToNextSnippetPlaceholder');
     assert.equal(doc.getText(editor.selection), 'mock-name');
     await vscode.commands.executeCommand('leaveSnippet');
-    await vscode.commands.executeCommand('undo');
+    await undoInEditorOf(doc);
     assert.equal(doc.getText().includes('kms_key_arn:'), false);
     const throughKeyLine = textBefore.slice(0, textBefore.indexOf('  alerts:') + '  alerts:\n'.length);
     assert.equal(doc.getText().startsWith(throughKeyLine), true);

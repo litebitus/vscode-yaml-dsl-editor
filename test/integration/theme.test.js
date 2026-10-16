@@ -8,17 +8,46 @@ const {
   positionInText,
   hoverTextBecomes,
   hintLabelsBecome,
+  WAIT_DEADLINE_MILLISECONDS,
 } = require('./editor-hints');
 const { writeOverlays, overlayHeadingOf } = require('./overlay-schema-folders');
 
 const SETTINGS_SECTION = 'yaml-dsl-editor';
 
+function editorThemeStateText() {
+  const workbenchSettings = vscode.workspace.getConfiguration('workbench');
+  return JSON.stringify({
+    kind: vscode.window.activeColorTheme.kind,
+    colorTheme: workbenchSettings.get('colorTheme'),
+    preferredLightColorTheme: workbenchSettings.get('preferredLightColorTheme'),
+    preferredDarkColorTheme: workbenchSettings.get('preferredDarkColorTheme'),
+    autoDetectColorScheme: vscode.workspace.getConfiguration('window').get('autoDetectColorScheme'),
+    extensionTheme: vscode.workspace.getConfiguration(SETTINGS_SECTION).get('theme'),
+  });
+}
+
+async function editorThemeBecomes(light) {
+  const lightKinds = [vscode.ColorThemeKind.Light, vscode.ColorThemeKind.HighContrastLight];
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+  while (lightKinds.includes(vscode.window.activeColorTheme.kind) !== light && Date.now() < deadline) {
+    await new Promise((resolve) => { setTimeout(resolve, 50); });
+  }
+  assert.equal(lightKinds.includes(vscode.window.activeColorTheme.kind), light, editorThemeStateText());
+}
+
 suite('themes', () => {
+  setup(async () => {
+    const windowSettings = vscode.workspace.getConfiguration('window');
+    await windowSettings.update('autoDetectColorScheme', false, vscode.ConfigurationTarget.Global);
+  });
+
   teardown(async () => {
     const settings = vscode.workspace.getConfiguration(SETTINGS_SECTION);
     await settings.update('theme', undefined, vscode.ConfigurationTarget.Global);
     const workbenchSettings = vscode.workspace.getConfiguration('workbench');
     await workbenchSettings.update('colorTheme', undefined, vscode.ConfigurationTarget.Global);
+    const windowSettings = vscode.workspace.getConfiguration('window');
+    await windowSettings.update('autoDetectColorScheme', undefined, vscode.ConfigurationTarget.Global);
   });
 
   test('the title bar toggle switches the editor between light and dark, and the extension\'s theme with it', async () => {
@@ -31,14 +60,14 @@ suite('themes', () => {
       .map((overlayName) => `${overlayHeadingOf(overlayName, theme)}\n\n\`\`\`\nlabel: string    [optional]\n\`\`\`\n\n`
         + `Label of ${overlayName}`)
       .join('\n\n');
-    const editorThemeIsLight = () => vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light;
+    await editorThemeBecomes(false);
     await hoverTextBecomes(common, label, hoverIn('dark'));
     await vscode.commands.executeCommand('yaml-dsl-editor.toggleTheme');
+    await editorThemeBecomes(true);
     await hoverTextBecomes(common, label, hoverIn('light'));
-    assert.equal(editorThemeIsLight(), true);
     await vscode.commands.executeCommand('yaml-dsl-editor.toggleTheme');
+    await editorThemeBecomes(false);
     await hoverTextBecomes(common, label, hoverIn('dark'));
-    assert.equal(editorThemeIsLight(), false);
   });
 
   test('a suggestion\'s inlay hint opens with the light bulb in the dark theme and with a ✦ in the light theme', async () => {
