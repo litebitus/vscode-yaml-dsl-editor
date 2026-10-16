@@ -70,11 +70,38 @@ Keys:
 
 ### Startup
 
-The extension is an editor first, and nothing it does holds back the file. On startup, and for every newly opened file:
+The extension is an editor first, and nothing it does holds back the file. Its first act on startup is to claim the DSL files, before anything else reads them:
+
+1. It reads each workspace folder's own config and writes its files' associations, so a file opened from then on opens as its DSL's language.
+2. It lists every other `yaml-dsl.yml` in the background, and writes their associations once they are read.
+
+Then, on startup and for every newly opened file:
 
 1. The file opens as its DSL's language at once, colored by the grammar, its references underlined from the text.
 2. The suggestions saved from earlier sessions paint next, from the one file that keeps them.
 3. Analysis starts in the background, and its classes, problems and suggestions paint as they land.
+
+```mermaid
+sequenceDiagram
+  participant Editor
+  participant Settings as Workspace settings
+  participant Client as Extension
+  participant Server as Language server
+  Editor->>Client: activate
+  Client->>Client: read each workspace folder's config
+  Client->>Settings: add their files' associations
+  Client-)Client: list every other yaml-dsl.yml, in the background
+  Client->>Editor: set the language of the open DSL files
+  Client->>Editor: underline the visible files from their text
+  Client->>Editor: paint the saved suggestions
+  Client->>Server: start, and send the configs
+  Server-->>Editor: analysis, as it lands
+  Note over Client: the listing ends
+  Client->>Client: read the configs it found
+  Client->>Settings: write every association, dropping the ones no config states
+  Client->>Server: send the configs
+  Editor->>Editor: a file opened later opens as its DSL's language
+```
 
 The workspace holds many stacks. The server loads one when a file in it is first opened, and loads no other. A resident stack is the parsed common layer, every adjacent overlay, the symbol index, and the folded document of each overlay. Switching files inside a resident stack is a hit.
 
@@ -180,9 +207,28 @@ A DSL's `performance` block states how the editor keeps a large schema fast:
 |---|---|
 | `compiled_schema_cache` | whether the DSL's compiled schema is kept in the extension's storage and loaded in later sessions instead of compiled |
 
-- A kept compiled schema is one file per DSL entry, stating the schema's hash and the extension's build.
-- The validating worker loads it when both match. When either differs, or the file cannot be loaded, the worker compiles the schema and saves over the file.
+- A kept compiled schema is one file per DSL entry, stating the schema's hash, the extension's build and the validator library's version.
+- The validating worker loads it when all three match. When any differs, or the file cannot be loaded, the worker compiles the schema and saves over the file.
 - The saved validator refers to the nodes of the schema the worker holds, so a failure names the same schema nodes as a fresh compile.
+- A save writes a new file and renames it over the old one, so a reader finds the whole of one compile or the other.
+
+```mermaid
+flowchart TD
+  request["A document of an opted-in DSL<br/>is validated, its schema not yet compiled"] --> read{"Read the DSL entry's file"}
+  read -- "missing" --> compile
+  read -- "found" --> header{"Its header states this schema's hash,<br/>this extension build and this validator version?"}
+  header -- "any differs:<br/>the schema changed, or the extension was updated" --> compile
+  header -- "all match" --> load{"Load the saved validator,<br/>its schema references bound to the parsed schema"}
+  load -- "loaded" --> validate
+  load -- "cannot load" --> compile
+  compile["Compile the schema"] --> save["Write the validator with its header beside the file,<br/>then rename it over the file"]
+  save --> validate["Validate the document"]
+  validate --> held["Kept with the schema's cache entry<br/>until the schema cache drops it"]
+  classDef savedPath fill:#6495ED33
+  classDef compiledPath fill:#FFB74D40
+  class read,header,load savedPath
+  class compile,save compiledPath
+```
 
 ### Staleness checks
 
@@ -356,7 +402,7 @@ layers:
 - An overlay with several includes takes several common layers, and is an overlay in each of their stacks.
 - Move suggestions compare the overlays that merge a common layer at the same place, and move a unit below that place into it.
 - An overlay is its full path, and is shown by its file name, or by its folder and file name where two of the stack's overlays share a file name, such as `dev/mock-queue.yaml` and `prod/mock-queue.yaml`. Overlays whose shown names still match keep them, so the author sees the duplicate. Where the doc takes overlays in `layers.overlay_folders` order, these are taken in the order of their path from the config's folder.
-- A stack is built from its overlays: reading an overlay follows its includes, and a common layer's stack holds the overlays read so far that include it. Startup still searches nothing.
+- A stack is built from its overlays: reading an overlay follows its includes, and a common layer's stack holds the overlays read so far that include it. Startup searches for no overlay.
 - A fragment, a file its modeline marks as one under "Finding the schema", is a common layer, merged into the overlays that include it. A full document included by an overlay is a common layer too, and read alone it is validated as a full document.
 - A location no mapping covers, or whose mapped file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem.
 - Command-click on a location opens the common layer.
@@ -1556,7 +1602,8 @@ dsls:
 
 ### The config index
 
-- The index holds each config by its folder. It reads each workspace folder's own config at startup, and learns a deeper one when a file below it opens: a walk from the file's folder up to its workspace folder reads the configs on the way, so startup searches nothing.
+- The index holds each config by its folder. At startup it reads each workspace folder's own config first, then, in the background, every other `yaml-dsl.yml` the workspace lists, a bounded number of them.
+- A config the listing leaves out, such as one under an excluded folder, is learned when a file below it opens: a walk from the file's folder up to its workspace folder reads the configs on the way.
 - A file belongs to the config of the deepest folder holding it, and only that config's DSLs are matched against it. A file none of them claims stays YAML; a shallower config is not consulted.
 - A path or glob in a config may start with `{config_root}`, the config's folder. Every other one keeps its meaning: a glob matches a file's path, and a file path is relative to the file being read.
 - `{config_root}` anchors a glob at the config's folder, `{config_root}/*.yaml` a YAML file directly in it and `{config_root}/**/*.yaml` one at any depth, and a file path at the same folder, `{config_root}/schemas/sample.schema.json` one file from every depth.
@@ -1570,8 +1617,11 @@ dsls:
 
 - The extension contributes the language `yaml-dsl`.
 - It starts only when the workspace holds a `yaml-dsl.yml`, and leaves a file outside every config's folder alone.
-- When the workspace config loads, each DSL's files are associated with that language: those its `file_includes` globs or the `{concern}` names in its `layers.common_layer_files` match, and its `file_excludes` globs do not. Such a file opens as `yaml-dsl`, and the language server's document selector is that language.
-- An extension that selects `yaml`, such as the Red Hat YAML extension, does not own these files and does not activate on them.
+- Each DSL's files are associated with that language in the workspace's `files.associations`, so a file opens as `yaml-dsl` and no extension that selects `yaml`, such as the Red Hat YAML extension, receives it. The language server's document selector is that language.
+- An association is a DSL's `file_includes` glob, or a `{concern}` name in its `layers.common_layer_files`, anchored at the config's folder. A glob holding a character the editor's globs cannot hold is left to the claim below.
+- The associations follow the configs: every `yaml-dsl.yml` read, saved, created or deleted writes them again, adding the new globs and dropping the ones no config states. Every association to `yaml-dsl` is the extension's; the other languages' entries are kept as written.
+- Until the startup listing has read every config, a write only adds, so the association of a config not read yet stays in place.
+- An open file is claimed as well: a file a DSL owns becomes `yaml-dsl`, and a `yaml-dsl` file no DSL owns, such as one a `file_excludes` glob matches, goes back to `yaml`.
 - A file that matches no DSL pattern stays `yaml`.
 
 ## Themes

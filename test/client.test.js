@@ -4,7 +4,6 @@ const {
   activateWith,
   parseFoldPath,
   foldUri,
-  associationPatterns,
   closeEvicted,
   editorMiddleware,
   ownedFile,
@@ -183,7 +182,8 @@ test('fold paths round-trip and reject a path that is not a fold', () => {
   assert.deepEqual(parseFoldPath(labeled.path), { stackId: '/repo/snippet.yaml', overlayName: '/repo/dev/mock.yaml' });
 });
 
-test('activation finishes without waiting on analysis and searches no workspace files', async () => {
+test('activation finishes without waiting on analysis, '
+  + 'and lists the workspace\'s configs to associate their files', async () => {
   const editor = {
     document: {
       uri: { scheme: 'file', fsPath: '/repo/mock.yml', toString: () => 'file:///repo/mock.yml' },
@@ -193,8 +193,11 @@ test('activation finishes without waiting on analysis and searches no workspace 
     setDecorations() {},
   };
   const vscode = fakeVscode({ editor, visible: [editor], readFile: async () => Buffer.from(sampleConfig) });
-  let searched = false;
-  vscode.workspace.findFiles = async () => { searched = true; return []; };
+  const searched = [];
+  vscode.workspace.findFiles = async (pattern) => {
+    searched.push(pattern);
+    return [{ fsPath: '/repo/nested/yaml-dsl.yml' }, { fsPath: '/elsewhere/yaml-dsl.yml' }];
+  };
   const client = fakeClient();
   let answerDecorations = null;
   client.sendRequest = (method, params) => {
@@ -208,7 +211,40 @@ test('activation finishes without waiting on analysis and searches no workspace 
   assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/decorations'), true);
   answerDecorations(null);
   await handle.startup;
-  assert.equal(searched, false);
+  assert.deepEqual(searched, ['**/yaml-dsl.yml']);
+  assert.deepEqual(vscode.updated, { '/repo/**/mock.yml': 'yaml-dsl', '/repo/nested/**/mock.yml': 'yaml-dsl' });
+});
+
+test('the workspace folders\' associations are added first, keeping every other, '
+  + 'and only once the listing ends are the stale ones dropped', async () => {
+  const vscode = fakeVscode({ readFile: async () => Buffer.from(sampleConfig) });
+  let written = {
+    '*.mock': 'mock-language',
+    '/repo/nested/**/mock.yml': 'yaml-dsl',
+    '/repo/gone/**/mock.yml': 'yaml-dsl',
+  };
+  const writes = [];
+  vscode.workspace.getConfiguration = () => ({
+    get: (key) => (key === 'associations' ? written : 32),
+    update: async (key, value) => { written = value; writes.push(value); },
+  });
+  let finishListing = null;
+  vscode.workspace.findFiles = () => new Promise((resolve) => { finishListing = resolve; });
+  const handle = await activateWith(vscode, { subscriptions: [] }, () => fakeClient());
+  assert.deepEqual(writes, [{
+    '*.mock': 'mock-language',
+    '/repo/nested/**/mock.yml': 'yaml-dsl',
+    '/repo/gone/**/mock.yml': 'yaml-dsl',
+    '/repo/**/mock.yml': 'yaml-dsl',
+  }]);
+  finishListing([{ fsPath: '/repo/nested/yaml-dsl.yml' }]);
+  await handle.startup;
+  assert.deepEqual(written, {
+    '*.mock': 'mock-language',
+    '/repo/nested/**/mock.yml': 'yaml-dsl',
+    '/repo/**/mock.yml': 'yaml-dsl',
+  });
+  assert.equal(writes.length, 2);
 });
 
 test('owned files are watched by each DSL\'s include patterns under its config folder', async () => {
@@ -322,7 +358,7 @@ test('activation associates matching files and reveals the fold', async () => {
   assert.equal(doc.languageId, 'yaml-dsl');
   assert.equal(outside.languageId, 'yaml');
   assert.equal(plain.languageId, 'yaml');
-  assert.deepEqual(vscode.updated, {});
+  assert.deepEqual(vscode.updated, { '/repo/**/mock.yml': 'yaml-dsl', '/repo/mock/**/mock.yml': 'yaml-dsl' });
   assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/config'), true);
   assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/active' && item.params.path === '/repo/mock/mock.yml'), true);
   assert.deepEqual(client.sent.find((item) => item.method === 'yaml-dsl/visibleFolds').params.stackIds, ['/repo/mock/mock.yml']);
@@ -442,10 +478,9 @@ test('evicted folds close and a workspace without config still starts', async ()
   });
   await activatedFully(changed, { subscriptions: [] }, () => fakeClient());
   assert.equal(sample.languageId, 'yaml-dsl');
-  assert.equal(changed.updated, undefined);
+  assert.deepEqual(changed.updated, { '/repo/**/mock.yml': 'yaml-dsl' });
   assert.equal(ownedFile('/other/mock.yml', [{ dir: '/repo', text: sampleConfig }]), false);
   assert.equal(ownedFile('/repo/mock.yml', [{ dir: '/repo', text: sampleConfig }]), true);
-  assert.deepEqual(associationPatterns(['**/mock.yml', '*.yml']), ['**/mock.yml', 'mock.yml', '*.yml']);
 });
 
 test('a cross-file target peeks that section and leaves this file', async () => {

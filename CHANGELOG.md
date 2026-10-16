@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Ownership: each config's globs are written to the workspace's `files.associations`, so a DSL file opens as YAML DSL before another YAML extension can read it.
 - Config: a `yaml-dsl.yml` in any folder of the workspace governs the files below it, and `{config_root}/` starts a glob or schema path at its folder.
 - Config: `tag_keys` reads a YAML tag as the key it stands for, so `!Ref Mock` and `Ref: Mock` are one reference, one field and one value.
 - Hover, completion and required-field filling: a schema's `if`/`then`/`else` is read by the branch the document's value selects.

@@ -98,6 +98,7 @@ function startupHarness({ editors = [], answerDecorations = () => new Promise(()
       fire() {}
       dispose() {}
     },
+    ConfigurationTarget: { Workspace: 2 },
     Uri: {
       joinPath: (base, ...parts) => fileUri([base.fsPath || base, ...parts].join('/')),
       file: (fsPath) => fileUri(fsPath),
@@ -116,8 +117,8 @@ function startupHarness({ editors = [], answerDecorations = () => new Promise(()
         createDirectory: async () => {},
         delete: async () => {},
       },
-      findFiles: async () => {
-        events.push('search workspace');
+      findFiles: async (pattern) => {
+        events.push(`search workspace ${pattern}`);
         return [];
       },
       getConfiguration: () => ({ get: (key) => (key && key.startsWith('cache.') ? 32 : undefined), update: async () => {} }),
@@ -246,7 +247,8 @@ test('activation finishes while analysis never answers', async () => {
   assert.equal(settled, 'still analyzing');
 });
 
-test('startup reads no file of the workspace before painting, searches nothing and loads no stack on its own', async () => {
+test('startup reads no file of the workspace before painting, searches only for configs '
+  + 'and loads no stack on its own', async () => {
   const editor = { document: mockDocument(ACTIVE_PATH, ACTIVE_TEXT, 'yaml-dsl') };
   const harness = startupHarness({ editors: [editor], answerDecorations: async () => null });
   const handle = await activateWith(harness.vscode, harness.context, harness.start, harness.readBuildHash);
@@ -254,7 +256,9 @@ test('startup reads no file of the workspace before painting, searches nothing a
   const firstPaint = indexOf(harness.events, `suggestion mark ${ACTIVE_PATH}`);
   const readsBeforePaint = harness.events.slice(0, firstPaint).filter((event) => event.startsWith('read '));
   assert.deepEqual(readsBeforePaint.filter((event) => !event.endsWith('yaml-dsl.yml') && !event.endsWith('.json')), []);
-  assert.equal(harness.events.includes('search workspace'), false);
+  assert.deepEqual(harness.events.filter((event) => event.startsWith('search workspace')), [
+    'search workspace **/yaml-dsl.yml',
+  ]);
   assert.equal(harness.events.some((event) => event.startsWith('notify yaml-dsl/warm')), false);
   assert.ok(indexOf(harness.events, `read ${ACTIVE_PATH}`) > indexOf(harness.events, 'start language server'));
 });

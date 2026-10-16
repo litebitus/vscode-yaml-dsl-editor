@@ -1,0 +1,10 @@
+version: "1"
+dsls:
+  - id: associated
+    file_includes: ["{config_root}/*.yaml"]
+    file_excludes: []
+    schema_search_paths: []
+    key_sort_orders: []
+    scopes: {}
+    declarations: []
+    references: []
