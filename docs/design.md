@@ -655,8 +655,8 @@ A requirement marker is the extension's standard for saying whether a key must b
 
 ### Branches the document selects
 
-- Where a node's schema holds `if`/`then`/`else`, hover, completion and required-field filling read the branch the document's value at that node selects, as validation does.
-- With no value to test, such as a map still being written, they read every branch, as without a document.
+- Where a node's schema holds `if`/`then`/`else`, hover, completion and required-field filling evaluate `if` against the instance at that node, as validation does, and read `then` or `else` by the result.
+- Where the document has no instance at that node, such as completion in a common layer, which no single fold holds, they read both `then` and `else`.
 - A schema whose shape hangs on a value, such as a resource's properties on its `Type`, is documented and completed by that value.
 
 ### What the schema is for

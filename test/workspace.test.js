@@ -1482,3 +1482,61 @@ test('completion offers a name in the short form with its tag and under the key 
   assert.deepEqual(long.map((item) => item.label).sort(), ['MockBucket', 'MockQueue']);
   assert.deepEqual(long[0].range.start, { line: longPosition.line, character: '        Ref: '.length });
 });
+
+const branchedSchema = JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  properties: {
+    mocktype: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        properties: { kind: { enum: ['bucket', 'queue'] } },
+        if: { properties: { kind: { const: 'bucket' } }, required: ['kind'] },
+        then: { properties: { bucket_name: { type: 'string', description: 'The bucket name.' } } },
+        else: { properties: { queue_name: { type: 'string', description: 'The queue name.' } } },
+        unevaluatedProperties: false,
+      },
+    },
+  },
+});
+
+test('hover and completion read the branch the document\'s value selects', async () => {
+  const filePath = '/repo/branched/mock.yml';
+  const text = [
+    '# yaml-language-server: $schema=schema.json',
+    'mocktype:',
+    '  first:',
+    '    kind: bucket',
+    '    bucket_name: mock-bucket',
+    '  second:',
+    '    kind: queue',
+    '    bucket_name: mock-stray',
+    '    na',
+    '',
+  ].join('\n');
+  const ws = workspace({ [filePath]: text, '/repo/branched/schema.json': branchedSchema });
+  await ws.setConfigs([{ text: configText(dslEntry('branched')), dir: '/repo' }]);
+  await ws.sync(`file://${filePath}`, filePath, text);
+  const uri = `file://${filePath}`;
+  assert.match(ws.hover(uri, place(text, 'bucket_name: mock-bucket', 1)).contents.value, /The bucket name\./);
+  assert.equal(ws.hover(uri, place(text, 'bucket_name: mock-stray', 1)), null);
+  const typed = ws.completion(uri, place(text, '    na\n', '    na'.length)).map((item) => item.label);
+  assert.deepEqual(typed.sort(), ['kind', 'queue_name']);
+});
+
+test('an overlay\'s hover reads the branch its fold selects, and the common layer one per overlay', async () => {
+  const files = {
+    [`${root}/schema.json`]: branchedSchema,
+    [common]: '# yaml-language-server: $schema=schema.json\nmocktype:\n  shared:\n    kind: bucket\n    bucket_name: mock\n',
+    [one]: '# yaml-language-server: $schema=../schema.json\nmocktype:\n  shared:\n    bucket_name: mock-one\n',
+    [two]: '# yaml-language-server: $schema=../schema.json\nmocktype:\n  shared:\n    kind: queue\n',
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  assert.match(ws.hover(`file://${one}`, place(files[one], 'bucket_name', 1)).contents.value, /The bucket name\./);
+  const commonHover = ws.hover(`file://${common}`, place(files[common], 'bucket_name', 1)).contents.value;
+  assert.match(commonHover, /one[\s\S]*The bucket name\./);
+  assert.match(commonHover, /two[\s\S]*not a field/);
+});

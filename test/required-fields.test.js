@@ -127,3 +127,47 @@ test('a key with a value, a map that already holds lines, a scalar field and an 
   const optionalOnly = { properties: { queue: { type: 'object', properties: { alerts: { type: 'object' } } } } };
   assert.equal(fill('queue:\n  alerts:\n', 1, optionalOnly), null);
 });
+
+test('Enter after an empty key fills the required fields of the branch the document selects', () => {
+  const branchedSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      mockthings: {
+        type: 'object',
+        additionalProperties: {
+          type: 'object',
+          properties: { Type: { enum: ['Mock::Bucket', 'Mock::Queue'] } },
+          if: { properties: { Type: { const: 'Mock::Bucket' } }, required: ['Type'] },
+          then: {
+            properties: {
+              Properties: {
+                type: 'object',
+                required: ['BucketName'],
+                properties: { BucketName: { type: 'string' } },
+              },
+            },
+          },
+          else: {
+            properties: {
+              Properties: {
+                type: 'object',
+                required: ['QueueName'],
+                properties: { QueueName: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  const fillKeysFor = (type) => requiredFieldsToFill({
+    text: `mockthings:\n  one:\n    Type: ${type}\n    Properties:\n`,
+    keyLine: 3,
+    schema: branchedSchema,
+    documentValue: { mockthings: { one: { Type: type, Properties: null } } },
+    dsl: dslWith([]),
+    heldKeysAt: noHeldKeys,
+  }).fields.map((field) => field.key);
+  assert.deepEqual(fillKeysFor('Mock::Bucket'), ['BucketName']);
+  assert.deepEqual(fillKeysFor('Mock::Queue'), ['QueueName']);
+});

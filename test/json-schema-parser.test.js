@@ -1,6 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { JSON_SCHEMA_DRAFTS, draftOfSchema, unreadDraftProblem, schemaParserFor } = require('../lib/json-schema');
+const {
+  JSON_SCHEMA_DRAFTS,
+  draftOfSchema,
+  unreadDraftProblem,
+  schemaParserFor,
+  schemaParserForDocument,
+} = require('../lib/json-schema');
 const { createSchemaChecks } = require('../lib/schema-checks');
 
 const DRAFT_07_URI = 'http://json-schema.org/draft-07/schema#';
@@ -169,4 +175,70 @@ test('an opt-out is validated by the validator of the schema\'s draft', () => {
   assert.deepEqual(checks.nodeCheck('mock-draft-2020-12', ['hosts']).optOutFailures([]), []);
   const unread = createSchemaChecks(() => ({ $schema: 'https://json-schema.org/draft/mock-future/schema' }));
   assert.equal(unread.nodeCheck('mock-future-draft', ['hosts']).state, 'no_schema');
+});
+
+const branchSchema = {
+  $schema: DRAFT_2020_12_URI,
+  $defs: { 'Mock::Bucket': { const: 'Mock::Bucket' } },
+  properties: {
+    mockthings: {
+      additionalProperties: {
+        properties: { Type: { enum: ['Mock::Bucket', 'Mock::Queue'] } },
+        allOf: [
+          {
+            if: { properties: { Type: { $ref: '#/$defs/Mock::Bucket' } }, required: ['Type'] },
+            then: {
+              properties: { Properties: { properties: { BucketName: { type: 'string', description: 'The bucket name.' } } } },
+              required: ['Properties'],
+            },
+            else: { properties: { Properties: { properties: { QueueName: { enum: ['mock-a', 'mock-b'] } } } } },
+          },
+        ],
+      },
+    },
+  },
+};
+
+test('a document selects the branch its value meets, and without a value every branch is read', () => {
+  const bucket = { mockthings: { one: { Type: 'Mock::Bucket' } } };
+  const queue = { mockthings: { one: { Type: 'Mock::Queue' } } };
+  const bucketParser = schemaParserForDocument(branchSchema, bucket);
+  const queueParser = schemaParserForDocument(branchSchema, queue);
+  const anyParser = schemaParserForDocument(branchSchema, undefined);
+  const propertiesPath = ['mockthings', 'one', 'Properties'];
+  assert.deepEqual(Object.keys(bucketParser.fieldsAt(propertiesPath)), ['BucketName']);
+  assert.deepEqual(Object.keys(queueParser.fieldsAt(propertiesPath)), ['QueueName']);
+  assert.deepEqual(Object.keys(anyParser.fieldsAt(propertiesPath)).sort(), ['BucketName', 'QueueName']);
+  assert.deepEqual(bucketParser.requiredKeysAt(['mockthings', 'one']), ['Properties']);
+  assert.deepEqual(queueParser.requiredKeysAt(['mockthings', 'one']), []);
+  assert.equal(bucketParser.fieldDescription([...propertiesPath, 'BucketName']), 'The bucket name.');
+  assert.equal(queueParser.fieldDescription([...propertiesPath, 'BucketName']), null);
+  assert.deepEqual(queueParser.valueFormsAt([...propertiesPath, 'QueueName']), [{ enum: ['mock-a', 'mock-b'] }]);
+  const unknown = schemaParserForDocument(branchSchema, { mockthings: { one: {} } });
+  assert.deepEqual(Object.keys(unknown.fieldsAt(propertiesPath)), ['QueueName']);
+  const anywhere = schemaParserForDocument(branchSchema, { mockthings: {} });
+  assert.deepEqual(Object.keys(anywhere.fieldsAt(propertiesPath)).sort(), ['BucketName', 'QueueName']);
+});
+
+test('a value form under a branch is one form when the document selects it and an alternative of each branch without', () => {
+  const schema = {
+    $schema: DRAFT_2020_12_URI,
+    properties: {
+      mode: { type: 'string' },
+      size: {
+        if: { type: 'string' },
+        then: { enum: ['small', 'large'] },
+        else: { enum: [1, 2] },
+        anyOf: [{ description: 'first' }, { description: 'second' }],
+      },
+    },
+  };
+  assert.deepEqual(
+    schemaParserForDocument(schema, { size: 'small' }).valueFormsAt(['size']).map((form) => form.enum),
+    [['small', 'large'], ['small', 'large']],
+  );
+  assert.deepEqual(
+    schemaParserForDocument(schema, undefined).valueFormsAt(['size']).map((form) => form.enum),
+    [['small', 'large'], [1, 2], ['small', 'large'], [1, 2]],
+  );
 });

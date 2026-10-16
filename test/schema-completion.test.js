@@ -106,7 +106,7 @@ test('a key typed in a tagged map is offered the fields of the key its tag stand
   };
   const text = 'mockvalue: !Mock\n  la';
   const position = { line: 1, character: 4 };
-  const labelsWith = (tagKeys) => schemaCompletionsAt(text, position, tagged, tagKeys).map((item) => item.label);
+  const labelsWith = (tagKeys) => schemaCompletionsAt(text, position, tagged, { tagKeys }).map((item) => item.label);
   assert.deepEqual(labelsWith([{ tag: '!Mock', key: 'Fn::Mock' }]), ['label']);
   assert.deepEqual(labelsWith([]), ['Fn::Mock']);
 });

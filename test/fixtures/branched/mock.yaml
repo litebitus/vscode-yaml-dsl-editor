@@ -1,0 +1,9 @@
+Resources:
+  MockBucket:
+    Type: Mock::Bucket
+    Properties:
+      BucketName: mock-bucket
+  MockQueue:
+    Type: Mock::Queue
+    Properties:
+      QueueName: mock-queue
