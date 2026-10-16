@@ -24,14 +24,16 @@ dsls:
       - { tag: "!Split", key: "Fn::Split" }
       - { tag: "!Sub", key: "Fn::Sub" }
       - { tag: "!Transform", key: "Fn::Transform" }
-    includes:
-      - paths: ["$.Transform", "$..['Fn::Transform']"]
-        value_conditions:
-          - { key: Name, value: "AWS::Include" }
-        location_path: "$.Parameters.Location"
-        location_pattern: "^s3://[^/]+/(?<path>.+)$"
-        search_folders: ["{config_root}/snippets"]
-        included_tags_allowed: false
+    layers:
+      common_layer_discovery: overlay_includes
+      overlay_includes:
+        - key_paths: ["$.Transform", "$..['Fn::Transform']"]
+          value_conditions:
+            - { key: Name, value: "AWS::Include" }
+          location_path: "$.Parameters.Location"
+          location_mappings:
+            - { local: "{config_root}/snippets/", remote: "s3://mock-bucket/snippets/" }
+      duplicate_check: { depth: 2, key_depths: {}, skip_keys: [] }
     placeholder:
       pattern: "\\$\\{(?<body>[^!}][^}]*)\\}"
       unscanned_paths: []

@@ -158,6 +158,7 @@ test('a complete config states every field and keeps them', () => {
     overlayFolders: ['one'],
     commonLayerDiscovery: 'ancestor',
     commonLayerFiles: { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] },
+    overlayIncludes: [],
     duplicateCheck: { depth: 3, keyDepths: { data_source: 2 }, skipKeys: ['schema_version'] },
   });
   assert.equal(sample.placeholder.pattern, '\\$\\{(?<body>[^}]*)\\}');
@@ -678,5 +679,45 @@ test('tag_keys pairs each tag with the key it stands for, and a DSL without read
   assert.equal(
     problemsOf([{ tag: '!Ref', key: 'Ref' }, { tag: '!Other', key: 'Ref' }]),
     'sample.tag_keys[1].key Ref is listed more than once',
+  );
+});
+
+test('overlay_includes pairs an overlay with the common layers its includes name, and reads no overlay folders', () => {
+  const includeLayers = {
+    common_layer_discovery: 'overlay_includes',
+    overlay_includes: [{
+      key_paths: ['$.Include', "$..['Mock::Include']"],
+      value_conditions: [{ key: 'Name', value: 'Mock::Snippet' }],
+      location_path: '$.Parameters.Location',
+      location_mappings: [{ local: '{config_root}/snippets/', remote: 's3://mock-bucket/snippets/' }],
+    }],
+    duplicate_check: { depth: 2, key_depths: {}, skip_keys: [] },
+  };
+  const parsed = parseConfig(configText(dslEntry('sample', { layers: includeLayers })));
+  assert.equal(parsed.ok, true, parsed.error);
+  const [include] = parsed.dsls[0].layers.overlayIncludes;
+  assert.equal(parsed.dsls[0].layers.commonLayerDiscovery, 'overlay_includes');
+  assert.deepEqual(parsed.dsls[0].layers.overlayFolders, []);
+  assert.deepEqual(include.keyPaths, [
+    [{ kind: 'name', key: 'Include' }],
+    [{ kind: 'descendant_name', key: 'Mock::Include' }],
+  ]);
+  assert.deepEqual(include.valueConditions, [{ key: 'Name', value: 'Mock::Snippet' }]);
+  assert.deepEqual(include.locationPath, [{ kind: 'name', key: 'Parameters' }, { kind: 'name', key: 'Location' }]);
+  assert.deepEqual(include.locationMappings, [
+    { local: '{config_root}/snippets/', remote: 's3://mock-bucket/snippets/' },
+  ]);
+  const problemOf = (layers) => parseConfig(configText(dslEntry('sample', { layers }))).error;
+  assert.equal(
+    problemOf({ ...includeLayers, overlay_folders: ['one'] }),
+    'sample.layers.overlay_folders is not read with common_layer_discovery overlay_includes',
+  );
+  assert.equal(
+    problemOf({ ...includeLayers, overlay_includes: [{ ...includeLayers.overlay_includes[0], location_path: '$.*' }] }),
+    'sample.layers.overlay_includes[0].location_path is required: a JSONPath of names such as $.Parameters.Location',
+  );
+  assert.equal(
+    problemOf({ ...includeLayers, common_layer_discovery: 'parent', overlay_folders: ['one'] }),
+    'sample.layers.overlay_includes is read only with common_layer_discovery overlay_includes',
   );
 });

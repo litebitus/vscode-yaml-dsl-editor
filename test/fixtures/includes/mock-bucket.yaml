@@ -1,0 +1,11 @@
+Resources:
+  MockHandle:
+    Type: Mock::Handle
+  Fn::Transform:
+    Name: AWS::Include
+    Parameters:
+      Location: s3://mock-bucket/snippets/mock-wait.yaml
+  MockUser:
+    Type: Mock::User
+    Properties:
+      Waits: !Ref MockWait

@@ -97,8 +97,17 @@
     "layers": {
       "type": "object",
       "description": "The common layer and its overlays. Left out for a DSL without layers.",
-      "required": ["overlay_folders", "common_layer_discovery", "duplicate_check"],
+      "required": ["common_layer_discovery", "duplicate_check"],
       "additionalProperties": false,
+      "if": { "properties": { "common_layer_discovery": { "const": "overlay_includes" } } },
+      "then": {
+        "required": ["overlay_includes"],
+        "not": { "anyOf": [{ "required": ["overlay_folders"] }, { "required": ["common_layer_files"] }] }
+      },
+      "else": {
+        "required": ["overlay_folders"],
+        "not": { "required": ["overlay_includes"] }
+      },
       "properties": {
         "overlay_folders": {
           "type": "array",
@@ -106,8 +115,13 @@
           "description": "Folder names of the overlays."
         },
         "common_layer_discovery": {
-          "enum": ["parent", "ancestor"],
-          "description": "Where the common layer sits: the overlay folder's parent, or the nearest ancestor above an overlay folder."
+          "enum": ["parent", "ancestor", "overlay_includes"],
+          "description": "How an overlay and its common layer are paired: by the overlay folder's parent, by the nearest ancestor above an overlay folder, or by an include in the overlay."
+        },
+        "overlay_includes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/overlay_include" },
+          "description": "How an include in an overlay names its common layer. Read only with common_layer_discovery overlay_includes."
         },
         "common_layer_files": {
           "type": "object",
@@ -141,6 +155,54 @@
               "description": "Keys no suggestion compares or moves, at any depth."
             }
           }
+        }
+      }
+    },
+    "overlay_include": {
+      "type": "object",
+      "description": "An include: a key whose value names the common layer merged in place of the include.",
+      "required": ["key_paths", "value_conditions", "location_path", "location_mappings"],
+      "additionalProperties": false,
+      "properties": {
+        "key_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "JSONPaths of the keys whose values are includes, such as $..['Fn::Transform']. A value that is a list holds one include per map."
+        },
+        "value_conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "value"],
+            "additionalProperties": false,
+            "properties": {
+              "key": { "type": "string", "minLength": 1, "description": "A key the include value holds." },
+              "value": { "type": "string", "minLength": 1, "description": "The value it holds at that key." }
+            }
+          },
+          "description": "The key and value pairs an include value holds, [] for none."
+        },
+        "location_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A JSONPath of names from the include value to its location, such as $.Parameters.Location."
+        },
+        "location_mappings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["local", "remote"],
+            "additionalProperties": false,
+            "properties": {
+              "local": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The local path a remote location stands for, relative to the overlay, or to the config's folder when it starts with {config_root}/."
+              },
+              "remote": { "type": "string", "minLength": 1, "description": "The start of a location." }
+            }
+          },
+          "description": "A location starting with remote names the file at local followed by the rest of the location. A location none covers names no file."
         }
       }
     },
@@ -456,7 +518,7 @@
     "path": {
       "type": "string",
       "pattern": "^\\$(\\.(\\*|[^.\\[*][^.\\[]*)|\\[\\*\\])*(\\.\\.\\*)?$",
-      "description": "A JSONPath (RFC 9535) from $, with .name, .* and [*] steps and an optional final ..*."
+      "description": "A JSONPath (RFC 9535) from $, with .name, ['name'], ..name, .* and [*] steps and an optional final ..*."
     },
     "globs": {
       "type": "array",

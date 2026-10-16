@@ -1,0 +1,4 @@
+MockWait:
+  Type: Mock::Wait
+  Properties:
+    Handle: !Ref MockHandle

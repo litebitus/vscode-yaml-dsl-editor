@@ -252,3 +252,15 @@ test('a rule reading anywhere in a scalar reads it with its tag, and matches not
   const names = analyzed.references.map((ref) => [ref.groups.name, text.slice(ref.span.groups[0].start, ref.span.groups[0].end)]);
   assert.deepEqual(names, [['mock_bucket', 'mock_bucket'], ['mock_bucket', 'mock_bucket']]);
 });
+
+test('a ..name declaration path declares the key at every depth it is found', () => {
+  const text = 'mock:\n  Exports:\n    first: 1\n  nested:\n    Exports:\n      second: 2\n';
+  const analyzed = doc(text, {
+    scopes: { EXPORT: scope() },
+    declarations: [declaration('$..Exports.*', 'EXPORT')],
+  });
+  assert.deepEqual(analyzed.symbols.map((symbol) => [symbol.name, symbol.documentPath]), [
+    ['first', ['mock', 'Exports', 'first']],
+    ['second', ['mock', 'nested', 'Exports', 'second']],
+  ]);
+});

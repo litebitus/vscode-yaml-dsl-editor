@@ -72,6 +72,7 @@ function stackOf(dsl, texts) {
     files,
     common,
     overlays: Object.fromEntries(OVERLAYS.map((name) => [name, overlayPath(name)])),
+    overlayNames: OVERLAYS.slice(),
     symbols: [...files.values()].flatMap((doc) => doc.symbols),
   };
 }

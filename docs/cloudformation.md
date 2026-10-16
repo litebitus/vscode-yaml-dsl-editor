@@ -20,9 +20,10 @@ The DSL is a config like any other. The engine features it needs are generic and
 | `${...}` in `Fn::Sub` | a placeholder |
 | an intrinsic function | a field whose value is its arguments |
 | a YAML short form, such as `!Ref` | a tag key |
-| an `AWS::Include` transform | an include |
-| a snippet an `AWS::Include` names | an included document |
-| a template with its snippets | a stack, its fold the template with each snippet in place |
+| an `AWS::Include` transform | an include, pairing an overlay with its common layer |
+| a template that includes a snippet | an overlay |
+| a snippet an `AWS::Include` names | a common layer, rooted at the map holding the include |
+| a snippet with the templates that include it | a stack |
 | the resource provider schemas | the schema |
 
 A CloudFormation stack is what AWS deploys from a template; the editor's stack is the files that compose one document. The doc says "CloudFormation stack" for the former.
@@ -32,13 +33,13 @@ A CloudFormation stack is what AWS deploys from a template; the editor's stack i
 | Feature | In a template |
 |---|---|
 | references | `!Ref`, `!GetAtt`, `!Condition` and `${...}` in `!Sub`, in the short or the long form, resolve to their declarations: hover shows the declaration, Command-click opens it, completion offers the names, and a name nothing declares is an error |
-| includes | an `AWS::Include` snippet in the repo is read in place: Command-click on its `Location` opens it, and names resolve across the template and its snippets both ways |
+| includes | an `AWS::Include` snippet in the repo is read in place as the template's common layer: Command-click on its `Location` opens it, and names resolve across the template and its snippets both ways |
 | intrinsic functions | each function's arguments are validated, and hover documents the function |
 | field documentation | a resource's properties are documented with AWS's own descriptions for its `Type` |
 | completion | the properties of the resource's `Type`, the required ones filled on Enter |
 | validation | the whole template, against the CloudFormation schema |
 
-A template composes by including snippets, so the DSL's config holds `includes` and no `layers`.
+A template composes by including snippets, so the DSL's `layers` pair overlays and common layers by `overlay_includes`.
 
 ## The DSL config
 
@@ -78,20 +79,18 @@ A name that only its field marks, such as in `DependsOn`, the first item of `Fn:
 
 `${...}` is a placeholder, and `${!...}` is literal text, as `Fn::Sub` reads them.
 
-### Includes
+### Layers
 
-One include rule reads `AWS::Include`, at the top level as `Transform` and inside a section as `Fn::Transform`:
+`layers.common_layer_discovery` is `overlay_includes`, and one `overlay_includes` entry reads `AWS::Include`, at the top level as `Transform` and inside a section as `Fn::Transform`:
 
 | Field | Value |
 |---|---|
-| `paths` | `$.Transform`, `$..['Fn::Transform']` |
+| `key_paths` | `$.Transform`, `$..['Fn::Transform']` |
 | `value_conditions` | `Name` is `AWS::Include` |
 | `location_path` | `$.Parameters.Location` |
-| `location_pattern` | the key after `s3://<bucket>/` |
-| `search_folders` | the folders the repo uploads its snippets from, through `{config_root}` |
-| `included_tags_allowed` | `false`, since CloudFormation reads no short form in a snippet |
+| `location_mappings` | the S3 prefix the repo uploads its snippets to, as `remote`, and the folder it uploads them from, as `local` |
 
-A repo that keeps its snippets elsewhere states its own `location_pattern` and `search_folders`.
+A repo states its own `location_mappings`; no S3 location maps to a folder by default.
 
 ### Functions
 
@@ -145,7 +144,7 @@ Each is designed in the editor's design doc:
 
 - the config index, so `examples/cloudformation/yaml-dsl.yml` governs every YAML file in its folder;
 - YAML tags, `tag_keys`;
-- includes, `includes`;
+- overlay includes, `layers.common_layer_discovery: overlay_includes`;
 - a reference rule reading a scalar with its tag;
 - the `['name']` path step;
 - the branches the document selects, so a resource is documented and completed by its `Type`.

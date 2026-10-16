@@ -220,13 +220,20 @@ A startup step that fails is logged and skipped, so the language server always s
 
 ## Common layer and overlays
 
-A layered DSL's stack is one common layer and its overlays:
+A layered DSL's stack is one common layer and its overlays. The engine deep-merges the common layer under the overlay at the common layer's root, and the folded document is what a plan sees.
+
+`layers.common_layer_discovery` states how an overlay and its common layer are paired:
+
+| Value | The pairing | The common layer's root |
+|---|---|---|
+| `parent` | an overlay directory holds the overlay itself, its parent the common layer | `$` |
+| `ancestor` | the overlay may sit deeper, at the same path below the overlay directory in every overlay | `$` |
+| `overlay_includes` | an include in the overlay names the common layer | the map holding the include |
+
+For `parent` and `ancestor`:
 
 - Each overlay is a `mock-dsl.yml` under an overlay directory, one `layers.overlay_folders` names, such as `overlay-1` or `overlay-2`, directly below the common layer's directory.
 - A file below no overlay directory is a common layer.
-- The engine deep-merges the common layer under the overlay. The folded document is what a plan sees.
-
-`layers.common_layer_discovery` states how far below the overlay directory an overlay file sits:
 
 | Value | The overlay file | Example |
 |---|---|---|
@@ -310,26 +317,39 @@ layers:
 
 A DSL with both takes this config, since `ancestor` also reaches a concern above its overlays.
 
-## Includes
+### Overlay includes
 
-An include is a key whose entry the engine replaces with the entries of another document, the included document. A DSL lists its includes in `includes`, `[]` for a DSL without:
+With `overlay_includes`, an overlay names its common layer in an include, a key whose value holds the common layer's location. `layers.overlay_includes` lists how includes are written:
 
 | Field | Meaning |
 |---|---|
-| `paths` | the keys whose entries are includes, such as `$..['Fn::Transform']` |
+| `key_paths` | the keys whose values are includes, such as `$..['Fn::Transform']`; a value that is a list holds one include per map in it |
 | `value_conditions` | the key and value pairs an include's value holds, each with `key` and `value`, such as `Name` and `AWS::Include`; `[]` for none |
 | `location_path` | where in the include's value its location is written, a path from the value, such as `$.Parameters.Location` |
-| `location_pattern` | a regular expression whose `path` group reads the included document's path from the location |
-| `search_folders` | the folders in which that path is looked up, each relative to the including document, or to the config's folder when it starts with `{config_root}`; the first holding it is the included document |
-| `included_tags_allowed` | whether a tag of `tag_keys` may stand in an included document; when `false`, each is a problem on its tag |
+| `location_mappings` | each a `remote` location prefix and the `local` path it stands for: a location starting with `remote` names the file at `local` followed by the rest of the location; `local` is relative to the overlay, or to the config's folder when it starts with `{config_root}` |
 
-- The included document's entries take the include's place in the map holding it, so an include under a section adds its entries to that section.
-- A document and the documents it includes are a stack, and the fold is the document with each included document's entries in place.
-- An included document is to the documents including it what a common layer is to its overlays: shared content, resolved in the fold of each document that takes it. A reference in it is an error unless it resolves in every such fold.
-- An included document no document includes is read alone; a name it references and does not declare is unresolved, not an error.
-- An include whose location is found in no search folder declares every name, as a `declares_every_name` key does, and its location is an info problem.
-- Command-click on a location opens the included document.
-- An included document's own includes are not followed, and each is a problem.
+```yaml
+layers:
+  common_layer_discovery: overlay_includes
+  overlay_includes:
+    - key_paths: ["$.Transform", "$..['Fn::Transform']"]
+      value_conditions:
+        - { key: Name, value: "AWS::Include" }
+      location_path: "$.Parameters.Location"
+      location_mappings:
+        - { local: "{config_root}/snippets/", remote: "s3://mock-bucket/snippets/" }
+  duplicate_check: { depth: 2, key_depths: {}, skip_keys: [] }
+```
+
+- The common layer's root is the map holding the include, and its entries take the include's place there.
+- An overlay with several includes takes several common layers, and is an overlay in each of their stacks.
+- Move suggestions compare the overlays that merge a common layer at the same place, and move a unit below that place into it.
+- An overlay is labeled by its path from the config's folder, and where the doc takes overlays in `layers.overlay_folders` order, these are taken in the order of that path.
+- A stack is built from its overlays: reading an overlay follows its includes, and a common layer's stack holds the overlays read so far that include it. Startup still searches nothing.
+- A common layer read before any overlay naming it is read alone. With no root it gets no schema reading, and a name it references and does not declare is unresolved, not an error.
+- A location no mapping covers, or whose mapped file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem.
+- Command-click on a location opens the common layer.
+- A common layer's own includes are not followed, and each is a problem.
 
 ## Formatting
 

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "Resources": {
+      "type": "object",
+      "properties": { "Fn::Transform": { "type": "object" } },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "Type": { "type": "string", "description": "The resource type." },
+          "Properties": { "type": "object" }
+        }
+      }
+    }
+  }
+}

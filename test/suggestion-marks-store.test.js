@@ -83,7 +83,7 @@ test('marks are saved per file after a quiet second and load back in a new sessi
   await new Promise((resolve) => { setImmediate(resolve); });
   const saved = JSON.parse(fileSystem.files.get(storePath).toString('utf8'));
   assert.deepEqual(Object.keys(saved.files).sort(), [devUri, stagingUri]);
-  assert.equal(saved.files[devUri].stackId, '/repo/mock.yml');
+  assert.deepEqual(saved.files[devUri].map((savedFile) => savedFile.stackId), ['/repo/mock.yml']);
   const restarted = storeOver(fileSystem, manualTimers());
   assert.deepEqual(await restarted.load(), { loaded: true });
   assert.deepEqual(restarted.marksByUri.get(devUri), [loadedMark]);
@@ -111,7 +111,7 @@ test('a version 1 store, keyed by stack, migrates to the current format with eve
 test('a saved mark without the kept-value fields loads with them empty, and a malformed mark is dropped', async () => {
   const fileSystem = memoryFileSystem({ [devUri]: devText });
   fileSystem.files.set(storePath, Buffer.from(JSON.stringify({
-    version: STORE_FORMAT_VERSION,
+    version: 2,
     build: MOCK_BUILD_HASH,
     files: { [devUri]: { stackId: '/repo/mock.yml', textHash: textHashOf(devText), marks: [mark, null, {}] } },
   }), 'utf8'));
@@ -283,7 +283,7 @@ test('a file holding only a warning is saved and loads back holding it, and a fi
   await reloaded.load();
   assert.deepEqual(reloaded.warningUris(), [devUri]);
   const savedBeforeWarnings = {
-    version: STORE_FORMAT_VERSION,
+    version: 2,
     build: MOCK_BUILD_HASH,
     files: { [stagingUri]: { stackId: '/repo/mock.yml', textHash: textHashOf(stagingText), marks: [mark] } },
   };
@@ -310,7 +310,7 @@ test('a file holding only a validation error is saved and loads back holding it,
   await reloaded.load();
   assert.deepEqual(reloaded.validationErrorUris(), [devUri]);
   const savedBeforeValidation = {
-    version: STORE_FORMAT_VERSION,
+    version: 2,
     build: MOCK_BUILD_HASH,
     files: { [stagingUri]: { stackId: '/repo/mock.yml', textHash: textHashOf(stagingText), marks: [mark] } },
   };
@@ -332,7 +332,7 @@ test('each kept file\'s schema hash is saved and loads back, and a file saved be
   await reloaded.load();
   assert.deepEqual(reloaded.keptSchemaHashes(), [{ uri: devUri, schemaHash: 'mock-schema-hash' }]);
   const savedBeforeSchemaHashes = {
-    version: STORE_FORMAT_VERSION,
+    version: 2,
     build: MOCK_BUILD_HASH,
     files: { [devUri]: { stackId: '/repo/mock.yml', textHash: textHashOf(devText), marks: [mark] } },
   };
@@ -340,4 +340,24 @@ test('each kept file\'s schema hash is saved and loads back, and a file saved be
   const older = storeOver(fileSystem, manualTimers());
   await older.load();
   assert.deepEqual(older.keptSchemaHashes(), [{ uri: devUri, schemaHash: null }]);
+});
+
+test('a file in two stacks keeps the marks of both, and one stack reported again replaces only its own', async () => {
+  const fileSystem = memoryFileSystem({ [devUri]: devText });
+  const timers = manualTimers();
+  const store = storeOver(fileSystem, timers);
+  const otherMark = { ...mark, suggestion: { id: 'mock-other' } };
+  store.replaceStack('/repo/mock-a.yml', [reported(devUri, devText)]);
+  store.replaceStack('/repo/mock-b.yml', [{ uri: devUri, textHash: textHashOf(devText), marks: [otherMark] }]);
+  assert.deepEqual(store.marksByUri.get(devUri), [mark, otherMark]);
+  store.replaceStack('/repo/mock-a.yml', []);
+  assert.deepEqual(store.marksByUri.get(devUri), [otherMark]);
+  store.replaceStack('/repo/mock-a.yml', [reported(devUri, devText)]);
+  timers.fireAll();
+  await new Promise((resolve) => { setImmediate(resolve); });
+  const saved = JSON.parse(fileSystem.files.get(storePath).toString('utf8'));
+  assert.deepEqual(saved.files[devUri].map((savedFile) => savedFile.stackId), ['/repo/mock-b.yml', '/repo/mock-a.yml']);
+  const reloaded = storeOver(fileSystem, manualTimers());
+  await reloaded.load();
+  assert.equal(reloaded.marksByUri.get(devUri).length, 2);
 });

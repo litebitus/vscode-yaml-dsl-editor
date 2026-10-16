@@ -20,7 +20,7 @@ async function languageStaysOutOfDsl(filePath) {
 }
 
 suite('nested config', () => {
-  test('a yaml-dsl.yml below the workspace folder governs its folder, its schema found through {config_root}', async () => {
+  test('a yaml-dsl.yml below the workspace folder governs it, its schema found through {config_root}', async () => {
     const entry = (await shownDocument(path.join(nestedConfigFolder(), 'deep', 'entry.yaml'))).document;
     await hoverTextBecomes(
       entry,
