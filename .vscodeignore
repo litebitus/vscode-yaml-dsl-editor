@@ -8,4 +8,5 @@ package-lock.json
 *.vsix
 **/.DS_Store
 docs/
+examples/
 .cursor-state.md

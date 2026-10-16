@@ -127,7 +127,7 @@ The schema is `examples/schemas/cloudformation-<format version>.schema.json`, be
 - `AWSTemplateFormatVersion` is the template's grammar version, as a DSL's schema version is, and the schema is versioned to match it.
 - The editor supports the latest format version only, and the schema's `AWSTemplateFormatVersion` takes that version alone.
 - CloudFormation grows by adding resource types, each namespaced `AWS::<service>::<resource>`, and changing their schemas, all under the same format version. The generator writes the latest of them into the same file.
-- AWS publishes no versions of the provider schemas, so the schema's `$comment` states the Region and the date the generator downloaded them: the schema is current as of that date. Whether it is committed or written by the generator on demand is undecided until its size is known.
+- AWS publishes no versions of the provider schemas, so the schema's `$comment` states the Region and the date the generator downloaded them: the schema is current as of that date. The schema is committed; the generator only writes it.
 
 ## Examples
 
