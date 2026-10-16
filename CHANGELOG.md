@@ -8,6 +8,8 @@
 - Layers: `common_layer_discovery: overlay_includes` pairs an overlay with the common layers its includes name, each merged where its include sits.
 - Paths: the JSONPath steps `['name']` and `..name`.
 - Schemas: a modeline's `#` or `#/pointer` marks a fragment, validated at the node it names with no key required.
+- Schemas: a `pattern` is built with the `u` flag, as JSON Schema says.
+- Examples: the CloudFormation schema, generated from AWS's resource provider schemas by `scripts/cloudformation-schema/`.
 - Docs: the design doc and README speak of entries and a sample DSL, no longer of one DSL's resources.
 
 ## 0.7.0 - 2026-10-15

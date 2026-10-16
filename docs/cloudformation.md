@@ -111,10 +111,14 @@ The template schema is generated from them. The template's own sections are writ
 | From the provider schemas | In the template schema |
 |---|---|
 | a resource type | a `$defs` entry holding its properties, its own definitions nested and their references rewritten to them |
-| every resource type | `Type` takes one of them, and one `if`/`then` per type gives `Properties` that type's entry |
-| a read-only property | left out of `Properties`; it is an attribute |
+| every resource type | `Type` takes one of them, and one `if`/`then` per service, `AWS::<service>`, holds one per type of the service, which gives `Properties` that type's entry |
+| a read-only property | left out of `Properties`; it is an attribute, and a reference to it reads its schema in place |
+| a deprecated property | marked `deprecated` |
 | a property value | its own schema, or an intrinsic function |
+| a pattern | kept when the `u` flag reads it, else without its identity escapes; one neither reads is left out and listed when the generator runs |
 | a description | carried as written, so hover shows AWS's text |
+
+`Type` also takes a custom resource type, `Custom::<name>`, and a registry type, `<organization>::<service>::<resource>`, whose `Properties` the schema leaves open.
 
 The hand-written part covers each top-level section and its entries: `Parameters` with their types and constraints, `Mappings`, `Conditions` built from condition functions, `Resources` with their resource attributes such as `DependsOn`, `Condition` and `DeletionPolicy`, and `Outputs` with `Value`, `Export` and `Condition`.
 

@@ -741,6 +741,8 @@ A parser states what its draft's keywords mean:
 
 The validator's core compiles each schema once with its draft's validator, and reports each failure at its document path; an alternative none of whose branches holds is one failure, without the branches' own, and so is a key's dependency it does not meet.
 
+A `pattern` or `patternProperties` key is a regular expression built with the `u` flag, as JSON Schema says.
+
 ### Validation
 
 Each document is validated against its schema, with the requirement markers deciding which fields are required:

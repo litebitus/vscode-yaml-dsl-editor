@@ -146,3 +146,25 @@ test('a fragment is validated against the node its pointer names, with no key re
     assert.deepEqual(unread.map((failure) => failure.message), ['the schema has no node at `#/properties/nothing`']);
   }
 });
+
+test('a pattern is built with the u flag, so a Unicode property escape and a code point escape are read', () => {
+  for (const draftUri of DRAFT_URIS) {
+    const schema = {
+      $schema: draftUri,
+      type: 'object',
+      properties: {
+        letters: { type: 'string', pattern: '^\\p{L}+$' },
+        astral: { type: 'string', pattern: '^[\\u{1F600}-\\u{1F64F}]$' },
+      },
+      patternProperties: { '^\\p{Lu}': { type: 'integer' } },
+    };
+    const validator = schemaValidatorFor(schema);
+    const keywordsOf = (value) => validator.documentFailures(value).map(({ path, keyword }) => [path, keyword]);
+    assert.deepEqual(keywordsOf({ letters: 'éß', astral: '😀', Mock: 1 }), [], draftUri);
+    assert.deepEqual(keywordsOf({ letters: 'mock-1', astral: 'x', Mock: 'x' }), [
+      [['letters'], 'pattern'],
+      [['astral'], 'pattern'],
+      [['Mock'], 'type'],
+    ], draftUri);
+  }
+});
