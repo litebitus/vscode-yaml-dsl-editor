@@ -285,6 +285,26 @@
         }
       },
       {
+        "id": "yamlDslEditor.overlayHeadingForeground",
+        "description": "Heading naming the overlays a section of a common layer hover is about.",
+        "defaults": {
+          "dark": "#A6ABF2",
+          "light": "#3A65B0",
+          "highContrast": "#A6ABF2",
+          "highContrastLight": "#3A65B0"
+        }
+      },
+      {
+        "id": "yamlDslEditor.validationErrorsHeadingForeground",
+        "description": "Heading of the validation errors in a key's hover.",
+        "defaults": {
+          "dark": "#E394DC",
+          "light": "#AD4340",
+          "highContrast": "#E394DC",
+          "highContrastLight": "#AD4340"
+        }
+      },
+      {
         "id": "yamlDslEditor.overlayDiff.difference1",
         "description": "Background of a difference in an overlay diff, first color of the palette.",
         "defaults": {

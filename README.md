@@ -67,7 +67,9 @@ layers:
 
 ### Schema hover
 
-Hover documents a field like a javadoc: its signature with the forms its references reach, the description written beside its `$ref` rather than the shared composite's, what it accepts, and its constraints and conditions. A deprecated field is a warning: struck through, marked in the gutter, and its file and folders shown in yellow.
+Hover documents a field like a javadoc: its signature with the forms its references reach, the description written beside its `$ref` rather than the shared composite's, what it accepts, and its constraints and conditions. In the common layer, each section is headed by the overlays it documents. A deprecated field is a warning: struck through, marked in the gutter, and its file and folders shown in yellow.
+
+The headings' colors are theme colors you can override with `workbench.colorCustomizations`.
 
 Each document is validated against its schema, an overlay as the common layer merged with it, and every validation error is marked on the key that wrote it.
 

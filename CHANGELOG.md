@@ -6,6 +6,8 @@
 - Hover: a field's tooltip documents it like a javadoc: its signature with the forms its references reach, its description in markdown, what it accepts, its constraints, its conditions and its parent's conditions that name it; in the common layer, one section per overlay schema that documents it differently.
 - Hover: a field shows what its schema's dependencies require when it is set, and in the common layer, which overlays' schemas don't have the field.
 - Validation: a field set without the fields its schema's dependencies require is now an error on that field saying what it needs.
+- Hover: in the common layer, each section is headed by its overlays' names in a color of its own, for light and dark themes.
+- Validation: a key's validation errors show in one hover under a colored heading, one bullet each.
 
 ## 0.6.0 - 2026-10-15
 

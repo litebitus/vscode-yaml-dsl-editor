@@ -55,6 +55,7 @@ A problem has a severity, drawn in the color the DevOps tools print it in:
 - The gutter marks share one size.
 - An info problem is a schema the file names that cannot be loaded.
 - A validation error takes the severity its setting names.
+- The validation errors on one key share one hover: a `validation errors` heading in bold, in the `yamlDslEditor.validationErrorsHeadingForeground` theme color, and each error a bullet.
 - Every warning but a deprecation is underlined in yellow.
 
 Keys:
@@ -583,6 +584,8 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 - The draft's renderer reads its own keywords, as its parser and validator do; a part it cannot read in words names a condition the schema states.
 - In the common layer the tooltip documents the field in each overlay's schema; overlays whose documentation is the same share one section, headed by their names, and overlays whose schema has no such field are named last, as not a field.
+- A section's heading is its overlays' names in bold, in the `yamlDslEditor.overlayHeadingForeground` theme color.
+- A description's HTML is shown as text, so a tag written in prose reads as written.
 
 ### Requirement markers
 

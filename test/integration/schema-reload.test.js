@@ -26,6 +26,10 @@ function writeSchemaFolder(overlayFolder, labelDescription) {
   fs.writeFileSync(path.join(schemaFolder, 'resources.schema.json'), labelSchemaText(labelDescription));
 }
 
+function overlayHeadingOf(labels) {
+  return `<span style="color:var(--vscode-yamlDslEditor-overlayHeadingForeground);"><strong>${labels}</strong></span>`;
+}
+
 function replaceSchemaFolder(overlayFolder, labelDescription) {
   const schemaFolder = path.join(overlayFolder, SCHEMA_FOLDER);
   fs.renameSync(schemaFolder, `${schemaFolder}-previous`);
@@ -61,13 +65,13 @@ suite('schema reload', () => {
     fs.writeFileSync(path.join(stack, 'mock.yml'), 'mocktype:\n  shared:\n    label: mock\n');
     const common = (await shownDocument(path.join(stack, 'mock.yml'))).document;
     const sectionOf = (overlayName, description) => (
-      `\`${overlayName}\`\n\n\`\`\`\nlabel: string    [optional]\n\`\`\`\n\n${description}`
+      `${overlayHeadingOf(overlayName)}\n\n\`\`\`\nlabel: string    [optional]\n\`\`\`\n\n${description}`
     );
     const label = positionInText(common, 'label: mock', 1);
     await hoverTextBecomes(
       common,
       label,
-      [sectionOf('one', 'Label of one first'), sectionOf('two', 'Label of two first')].join('\n\n---\n\n'),
+      [sectionOf('one', 'Label of one first'), sectionOf('two', 'Label of two first')].join('\n\n'),
     );
     replaceSchemaFolder(path.join(stack, 'two'), 'Label of one first');
     await hoverTextBecomes(common, label, '```\nlabel: string    [optional]\n```\n\nLabel of one first');
@@ -92,7 +96,10 @@ suite('schema reload', () => {
     await hoverTextBecomes(
       common,
       positionInText(common, 'label: mock', 1),
-      ['`one`\n\n```\nlabel: string    [optional]\n```\n\nLabel of one', '`two`: not a field'].join('\n\n---\n\n'),
+      [
+        `${overlayHeadingOf('one')}\n\n\`\`\`\nlabel: string    [optional]\n\`\`\`\n\nLabel of one`,
+        `${overlayHeadingOf('two')}\n\nnot a field`,
+      ].join('\n\n'),
     );
   });
 });

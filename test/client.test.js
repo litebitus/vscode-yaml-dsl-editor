@@ -896,6 +896,40 @@ test('problems are error squiggles, or warning or info underlines, with their me
   assert.equal(painted.some((item) => item.kind === 'external' && item.ranges.length > 0), false);
 });
 
+test('the validation errors on one key share one hover, under its heading with each error a bullet', async () => {
+  const painted = [];
+  const doc = documentOf('mocktype:\n  primary:\n    queue: mock-queue\n');
+  doc.lineCount = 4;
+  const vscode = paintingVscode([recordingEditor(doc, painted)]);
+  const client = fakeClient({
+    decorations: {
+      references: null,
+      problems: [
+        { range: rangeOf(2, 4, 9), message: '`queue` needs `role`', severity: 'error', kind: 'validationError' },
+        { range: rangeOf(2, 4, 9), message: '`queue` must be `<arn>`', severity: 'error', kind: 'validationError' },
+        { range: rangeOf(1, 2, 9), message: '`size` is required', severity: 'error', kind: 'validationError' },
+        { range: rangeOf(0, 0, 8), message: 'flow sequence is not closed', severity: 'error' },
+      ],
+    },
+  });
+  await paintUnderlines(vscode, client, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
+  const heading = '<span style="color:var(--vscode-yamlDslEditor-validationErrorsHeadingForeground);">'
+    + '<strong>validation errors</strong></span>';
+  const errorMarks = lastPaint(painted, 'error').ranges;
+  assert.deepEqual(errorMarks.map((mark) => mark.range), [rangeOf(2, 4, 9), rangeOf(1, 2, 9), rangeOf(0, 0, 8)]);
+  assert.equal(errorMarks[0].hoverMessage.value, `${heading}\n\n- \`queue\` needs \`role\`\n- \`queue\` must be \`<arn>\``);
+  assert.equal(errorMarks[0].hoverMessage.supportHtml, true);
+  assert.equal(errorMarks[1].hoverMessage.value, `${heading}\n\n- \`size\` is required`);
+  assert.equal(errorMarks[2].hoverMessage, 'flow sequence is not closed');
+});
+
+test('a hover from the server renders its HTML, so a field hover\'s headings show in their color', async () => {
+  const mid = editorMiddleware(paintingVscode([]), () => [], clickOpenedPopup(paintingVscode([])));
+  const markdown = { value: '<span style="color:var(--vscode-mock);"><strong>dev</strong></span>' };
+  const hover = await mid.provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({ contents: [markdown] }));
+  assert.equal(hover.contents[0].supportHtml, true);
+});
+
 test('a workspace config file shows its own problems and nothing else', async () => {
   const painted = [];
   const config = {

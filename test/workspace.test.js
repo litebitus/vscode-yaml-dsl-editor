@@ -478,9 +478,9 @@ test('a common layer field hover shows each overlay schema\'s documentation, the
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   for (const filePath of [common, one, two, three]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
-    '`one`, `three`\n\n```\nsize: integer    [optional]\n```\n\nMock size.',
-    '`two`\n\n```\nsize: integer    [required]\n```\n\nMock size, now required.',
-  ].join('\n\n---\n\n'));
+    `${overlayHeadingOf('one, three')}\n\n\`\`\`\nsize: integer    [optional]\n\`\`\`\n\nMock size.`,
+    `${overlayHeadingOf('two')}\n\n\`\`\`\nsize: integer    [required]\n\`\`\`\n\nMock size, now required.`,
+  ].join('\n\n'));
   assert.equal(ws.hover(`file://${one}`, at(files[one], 'mocktype')).contents.value, '```\nmocktype    [optional]\n```');
   const twoSchemaPath = `${root}/two/.schema/resources.schema.json`;
   files[twoSchemaPath] = schemaWith('[optional] Mock size.');
@@ -512,16 +512,20 @@ test('a common layer field hover names the overlays whose schema has no such fie
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   for (const filePath of [common, one, two, three]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
-    '`one`\n\n```\nsize: integer    [optional]\n```\n\nMock size.',
-    '`two`, `three`: not a field',
-  ].join('\n\n---\n\n'));
+    `${overlayHeadingOf('one')}\n\n\`\`\`\nsize: integer    [optional]\n\`\`\`\n\nMock size.`,
+    `${overlayHeadingOf('two, three')}\n\nnot a field`,
+  ].join('\n\n'));
   files[twoSchemaPath] = sized;
   await ws.schemasChanged([twoSchemaPath]);
   assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
-    '`one`, `two`\n\n```\nsize: integer    [optional]\n```\n\nMock size.',
-    '`three`: not a field',
-  ].join('\n\n---\n\n'));
+    `${overlayHeadingOf('one, two')}\n\n\`\`\`\nsize: integer    [optional]\n\`\`\`\n\nMock size.`,
+    `${overlayHeadingOf('three')}\n\nnot a field`,
+  ].join('\n\n'));
 });
+
+function overlayHeadingOf(labels) {
+  return `<span style="color:var(--vscode-yamlDslEditor-overlayHeadingForeground);"><strong>${labels}</strong></span>`;
+}
 
 test('the modeline\'s schema path links to the schema it names, a path from the file\'s folder or a URL as written', async () => {
   const urlModeline = '# yaml-language-server: $schema=https://example.test/mock.schema.json\n';
