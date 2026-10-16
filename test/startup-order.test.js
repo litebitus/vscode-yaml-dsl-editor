@@ -100,6 +100,7 @@ function startupHarness({ editors = [], answerDecorations = () => new Promise(()
     },
     Uri: {
       joinPath: (base, ...parts) => fileUri([base.fsPath || base, ...parts].join('/')),
+      file: (fsPath) => fileUri(fsPath),
       parse: (value) => fileUri(String(value).replace(/^file:\/\//, '')),
     },
     workspace: {

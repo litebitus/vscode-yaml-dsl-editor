@@ -39,16 +39,16 @@
         },
         "file_includes": {
           "$ref": "#/$defs/globs",
-          "description": "Globs of the files the DSL owns."
+          "description": "Globs of the files the DSL owns. A glob starting with {config_root}/ matches below the config's folder."
         },
         "file_excludes": {
           "$ref": "#/$defs/globs",
-          "description": "Globs of files the DSL does not own, even when file_includes matches them."
+          "description": "Globs of files the DSL does not own, even when file_includes matches them. A glob starting with {config_root}/ matches below the config's folder."
         },
         "schema_search_paths": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
-          "description": "Schemas tried in order when a file names none, or the one it names is not on disk. Each path is relative to the file; a URL is fetched."
+          "description": "Schemas tried in order when a file names none, or the one it names is not on disk. Each path is relative to the file, or to the config's folder when it starts with {config_root}/; a URL is fetched."
         },
         "layers": { "$ref": "#/$defs/layers" },
         "placeholder": { "$ref": "#/$defs/placeholder" },

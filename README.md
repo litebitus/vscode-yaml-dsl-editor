@@ -129,7 +129,7 @@ The design is [docs/design.md](docs/design.md).
 
 ## Configuration file
 
-`yaml-dsl.yml` at the root of a workspace folder declares the workspace's DSLs, one entry under `dsls` each, in the format `version: "1"`. The extension checks it against its JSON Schema, [schemas/yaml-dsl.schema.json](schemas/yaml-dsl.schema.json), shows its problems in the file, and applies it when it is saved. Each field is described in that schema, and what the fields do together is in the design doc.
+`yaml-dsl.yml` declares the DSLs of the files in its folder and below, one entry under `dsls` each, and a deeper one governs its own folder, in the format `version: "1"`. The extension checks it against its JSON Schema, [schemas/yaml-dsl.schema.json](schemas/yaml-dsl.schema.json), shows its problems in the file, and applies it when it is saved. Each field is described in that schema, and what the fields do together is in the design doc.
 
 ## Settings
 

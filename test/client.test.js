@@ -70,6 +70,7 @@ function fakeVscode(options = {}) {
       joinPath(base, part) {
         return { fsPath: `${base.fsPath}/${part}`, toString() { return `file://${base.fsPath}/${part}`; } };
       },
+      file(fsPath) { return { scheme: 'file', fsPath, toString() { return `file://${fsPath}`; } }; },
       from(parts) { return { scheme: parts.scheme, path: parts.path, fsPath: parts.path }; },
       parse(value) { return { scheme: 'file', toString() { return value; } }; },
     },
@@ -322,7 +323,7 @@ test('activation associates matching files and reveals the fold', async () => {
   assert.equal(client.sent.some((item) => item.method === 'yaml-dsl/active' && item.params.path === '/repo/mock/mock.yml'), true);
   assert.deepEqual(client.sent.find((item) => item.method === 'yaml-dsl/visibleFolds').params.stackIds, ['/repo/mock/mock.yml']);
   assert.equal(vscode.peeked.length, 0);
-  assert.equal(vscode.languagesSet[0].languageId, 'yaml-dsl');
+  assert.equal(vscode.languagesSet.includes(doc), true);
   await vscode.listeners.active[0]();
   assert.equal(vscode.peeked.length, 0);
   assert.equal(await vscode.provider.value.provideTextDocumentContent({ path: '/nope' }), '');

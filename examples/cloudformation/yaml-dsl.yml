@@ -1,0 +1,129 @@
+version: "1"
+dsls:
+  - id: cloudformation
+    file_includes: ["{config_root}/**/*.yaml", "{config_root}/**/*.yml"]
+    file_excludes: []
+    schema_search_paths: ["{config_root}/../schemas/cloudformation-2010-09-09.schema.json"]
+    tag_keys:
+      - { tag: "!And", key: "Fn::And" }
+      - { tag: "!Base64", key: "Fn::Base64" }
+      - { tag: "!Cidr", key: "Fn::Cidr" }
+      - { tag: "!Condition", key: Condition }
+      - { tag: "!Equals", key: "Fn::Equals" }
+      - { tag: "!FindInMap", key: "Fn::FindInMap" }
+      - { tag: "!GetAZs", key: "Fn::GetAZs" }
+      - { tag: "!GetAtt", key: "Fn::GetAtt" }
+      - { tag: "!GetStackOutput", key: "Fn::GetStackOutput" }
+      - { tag: "!If", key: "Fn::If" }
+      - { tag: "!ImportValue", key: "Fn::ImportValue" }
+      - { tag: "!Join", key: "Fn::Join" }
+      - { tag: "!Not", key: "Fn::Not" }
+      - { tag: "!Or", key: "Fn::Or" }
+      - { tag: "!Ref", key: Ref }
+      - { tag: "!Select", key: "Fn::Select" }
+      - { tag: "!Split", key: "Fn::Split" }
+      - { tag: "!Sub", key: "Fn::Sub" }
+      - { tag: "!Transform", key: "Fn::Transform" }
+    includes:
+      - paths: ["$.Transform", "$..['Fn::Transform']"]
+        value_conditions:
+          - { key: Name, value: "AWS::Include" }
+        location_path: "$.Parameters.Location"
+        location_pattern: "^s3://[^/]+/(?<path>.+)$"
+        search_folders: ["{config_root}/snippets"]
+        included_tags_allowed: false
+    placeholder:
+      pattern: "\\$\\{(?<body>[^!}][^}]*)\\}"
+      unscanned_paths: []
+    key_sort_orders:
+      - path: "$"
+        skip_keys: []
+        order: significance
+        first_keys:
+          - AWSTemplateFormatVersion
+          - Description
+          - Metadata
+          - Parameters
+          - Rules
+          - Mappings
+          - Conditions
+          - Transform
+          - Resources
+        last_keys: [Outputs]
+      - path: "$.Resources.*"
+        skip_keys: []
+        order: significance
+        first_keys: [Type, Condition, DependsOn]
+        last_keys: [Properties]
+    scopes:
+      LOGICAL_ID:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names:
+          - "AWS::AccountId"
+          - "AWS::NoValue"
+          - "AWS::NotificationARNs"
+          - "AWS::Partition"
+          - "AWS::Region"
+          - "AWS::StackId"
+          - "AWS::StackName"
+          - "AWS::URLSuffix"
+      CONDITION:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: []
+    declarations:
+      - path: "$.Parameters.*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: key
+        key_token: all_words
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: LOGICAL_ID
+      - path: "$.Resources.*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: key
+        key_token: all_words
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: LOGICAL_ID
+      - path: "$.Conditions.*"
+        skip_keys: []
+        exclude_candidates: []
+        name_source: key
+        key_token: all_words
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: CONDITION
+    references:
+      - pattern: "^!Ref (?<name>AWS::[A-Za-z]+|[A-Za-z0-9]+)$"
+        positions: [whole_scalar]
+        text_after_name_allowed: false
+        scope_name: LOGICAL_ID
+        scope_group: null
+        name_group: name
+      - pattern: "^!GetAtt (?<name>[A-Za-z0-9]+)\\."
+        positions: [whole_scalar]
+        text_after_name_allowed: true
+        scope_name: LOGICAL_ID
+        scope_group: null
+        name_group: name
+      - pattern: "^(?<name>AWS::[A-Za-z]+|[A-Za-z0-9]+)"
+        positions: [whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: true
+        scope_name: LOGICAL_ID
+        scope_group: null
+        name_group: name
+      - pattern: "^!Condition (?<name>[A-Za-z0-9]+)$"
+        positions: [whole_scalar]
+        text_after_name_allowed: false
+        scope_name: CONDITION
+        scope_group: null
+        name_group: name

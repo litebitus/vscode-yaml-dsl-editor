@@ -28,7 +28,7 @@
   "activationEvents": [
     "onLanguage:yaml",
     "onLanguage:yaml-dsl",
-    "workspaceContains:yaml-dsl.yml"
+    "workspaceContains:**/yaml-dsl.yml"
   ],
   "main": "./extension.js",
   "contributes": {

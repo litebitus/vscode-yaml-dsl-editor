@@ -176,6 +176,21 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.equal(SCHEMA_UNAVAILABLE, 'schema is unavailable');
 });
 
+test('a schema search path starting with {config_root} is read from the config folder for a file at any depth', async () => {
+  const text = 'name: plain\n';
+  const files = {
+    '/repo/examples/schemas/mock.schema.json': JSON.stringify({ properties: { name: { description: 'the name' } } }),
+    '/repo/examples/mock-dsl/deep/nested/mock.yml': text,
+  };
+  const ws = workspace(files, async () => null);
+  const rooted = dslEntry('sample', { schema_search_paths: ['{config_root}/../schemas/mock.schema.json'] });
+  await ws.setConfigs([{ text: configText(rooted), dir: '/repo/examples/mock-dsl' }]);
+  const uri = 'file:///repo/examples/mock-dsl/deep/nested/mock.yml';
+  await ws.sync(uri, '/repo/examples/mock-dsl/deep/nested/mock.yml', text);
+  assert.equal(ws.problems(uri).some((item) => item.message === SCHEMA_UNAVAILABLE), false);
+  assert.equal(ws.hover(uri, at(text, 'name')).contents.value, '```\nname    [optional]\n```\n\nthe name');
+});
+
 test('a modeline that fails falls through to the published schema', async () => {
   const files = {
     '/repo/only/mock.yml': '# yaml-language-server: $schema=https://example.test/missing.json\nname: plain\n',

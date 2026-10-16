@@ -310,6 +310,27 @@ layers:
 
 A DSL with both takes this config, since `ancestor` also reaches a concern above its overlays.
 
+## Includes
+
+An include is a key whose entry the engine replaces with the entries of another document, the included document. A DSL lists its includes in `includes`, `[]` for a DSL without:
+
+| Field | Meaning |
+|---|---|
+| `paths` | the keys whose entries are includes, such as `$..['Fn::Transform']` |
+| `value_conditions` | the key and value pairs an include's value holds, each with `key` and `value`, such as `Name` and `AWS::Include`; `[]` for none |
+| `location_path` | where in the include's value its location is written, a path from the value, such as `$.Parameters.Location` |
+| `location_pattern` | a regular expression whose `path` group reads the included document's path from the location |
+| `search_folders` | the folders in which that path is looked up, each relative to the including document, or to the config's folder when it starts with `{config_root}`; the first holding it is the included document |
+| `included_tags_allowed` | whether a tag of `tag_keys` may stand in an included document; when `false`, each is a problem on its tag |
+
+- The included document's entries take the include's place in the map holding it, so an include under a section adds its entries to that section.
+- A document and the documents it includes are a stack, and the fold is the document with each included document's entries in place.
+- An included document is to the documents including it what a common layer is to its overlays: shared content, resolved in the fold of each document that takes it. A reference in it is an error unless it resolves in every such fold.
+- An included document no document includes is read alone; a name it references and does not declare is unresolved, not an error.
+- An include whose location is found in no search folder declares every name, as a `declares_every_name` key does, and its location is an info problem.
+- Command-click on a location opens the included document.
+- An included document's own includes are not followed, and each is a problem.
+
 ## Formatting
 
 The formatter is the editor's document formatter for every DSL file, and writes the canonical form the DSL's `formatter` block states.
@@ -356,12 +377,28 @@ Every path in the config is a JSONPath query (RFC 9535) in this subset:
 |---|---|
 | `$` | the document root, the map that holds the top-level keys |
 | `.name` | the key `name` |
+| `['name']` | the key `name`, for a key `.name` cannot spell, such as `Fn::GetAtt` |
 | `.*`, `[*]` | every child of a map or a list |
+| `..name`, `..['name']` | the key `name` at any depth below the path before it |
 | `..*`, final only | every node below the path before it, not that node itself |
 
 - A node and everything below it are two entries, `P` and `P..*`.
 - An entry's `skip_keys` lists keys a `.*`, `[*]` or `..*` step does not select or descend into.
 - In a list of path entries, the path names the entry and appears once.
+
+## YAML tags
+
+A DSL whose YAML tags stand for keys lists them in `tag_keys`, `[]` for a DSL without:
+
+| Field | Meaning |
+|---|---|
+| `tag` | the tag as written, such as `!Ref` |
+| `key` | the key the tagged node stands for, such as `Ref` |
+
+- A node carrying a listed tag reads as a map holding that key, the node its value: `!Ref Bucket` reads as `Ref: Bucket`, and `!If [IsProd, a, b]` as `Fn::If: [IsProd, a, b]`.
+- Paths, validation, hover and completion read the expanded form, so a short and a long form of one value read alike.
+- A reference is known by its syntax, and a reference rule reads a scalar with its tag as written: `!Ref Bucket` is the text `!Ref Bucket`. A scalar that is the value of a listed key reads with that key's tag, so `Ref: Bucket` is the text `!Ref Bucket` too.
+- The text keeps the tag as written.
 
 ## Scopes
 
@@ -608,7 +645,7 @@ A requirement marker is the extension's standard for saying whether a key must b
 | Source | Used |
 |---|---|
 | a `# yaml-language-server: $schema=` modeline | first; its path is relative to the file |
-| `schema_search_paths`, a list, `[]` when empty | when the file has no modeline, or the path it names is not on disk; each entry is relative to the file, and the first on disk is the schema |
+| `schema_search_paths`, a list, `[]` when empty | when the file has no modeline, or the path it names is not on disk; each entry is relative to the file, or to the config's folder when it starts with `{config_root}`, and the first on disk is the schema |
 
 - A modeline points at the schema shipped with the grammar version the stack has initialized: an overlay names `.schema/sample.schema.json`, and a common layer names it through the overlay directory that initialized the stack, such as `one/.schema/sample.schema.json`.
 - A URL in a path is fetched. The search does not override a modeline that resolves.
@@ -616,12 +653,19 @@ A requirement marker is the extension's standard for saying whether a key must b
 - The extension embeds no schema.
 - When neither source resolves, the file's modeline line gets a problem, or its first line when it has no modeline, and field hovers stay empty. Navigation, other problems and suggestions still run.
 
+### Branches the document selects
+
+- Where a node's schema holds `if`/`then`/`else`, hover, completion and required-field filling read the branch the document's value at that node selects, as validation does.
+- With no value to test, such as a map still being written, they read every branch, as without a document.
+- A schema whose shape hangs on a value, such as a resource's properties on its `Type`, is documented and completed by that value.
+
 ### What the schema is for
 
 - DSL-level behavior is configured in `yaml-dsl.yml`: which files, the scopes, the syntax of declarations, references, placeholders and calls, how layers are grouped. The concepts are the editor's, the syntax is the DSL's, and that syntax does not move into the schema.
 - The schema is how the editor understands a field and the shape of an object: which keys exist, what value shape a key takes, and the field's own description, the text beside a `$ref` included. It is read as published.
 - The schema is what a document is validated against; a document that breaks it holds a validation error.
 - When the schema is not enough to understand a field or a shape, the schema gains an extension point and the grammar publishes it; the extension does not grow a special case for that object. No such point is added before a field or a shape requires one.
+- The extension defines the standard a schema follows to work with it: JSON Schema, and the editor's own keywords where JSON Schema says too little. Each keyword is named `x-yaml-dsl-<name>`, sits on the schema node it describes, and ships with its own JSON Schema, as `x-yaml-dsl-functions` does.
 - The schema is not the engine's checks, which are a separate pass. A check can require a group of fields only when another field has a certain value, allow a field for only one mode, or allow exactly one of two fields; the published schema has no such table, and an extension point is not a transcription of these checks.
 - A field may be filled from the common layer while the editor looks at one file, so a `required` array on the entry alone does not say whether the folded document is complete.
 
@@ -1124,7 +1168,7 @@ Terraform's signatures are read into the same table:
 
 ## What the workspace defines
 
-One `yaml-dsl.yml` at the root of a workspace folder. The extension ships its JSON Schema at `schemas/yaml-dsl.schema.json`.
+A `yaml-dsl.yml` anywhere in the workspace is a config, and its folder is its scope. The extension ships its JSON Schema at `schemas/yaml-dsl.schema.json`.
 
 ```yaml
 version: "1"
@@ -1447,10 +1491,22 @@ dsls:
 - A block left out is a feature the DSL does not have: `layers` is a DSL's composition of a common layer and its overlays, and a DSL without layers still formats, navigates and hovers.
 - A file matching two DSLs is reported and claimed by neither. Other YAML is untouched.
 
+### The config index
+
+- The index holds each config by its folder. It reads each workspace folder's own config at startup, and learns a deeper one when a file below it opens: a walk from the file's folder up to its workspace folder reads the configs on the way, so startup searches nothing.
+- A file belongs to the config of the deepest folder holding it, and only that config's DSLs are matched against it. A file none of them claims stays YAML; a shallower config is not consulted.
+- A path or glob in a config may start with `{config_root}`, the config's folder. Every other one keeps its meaning: a glob matches a file's path, and a file path is relative to the file being read.
+- `{config_root}` anchors a glob at the config's folder, `{config_root}/*.yaml` a YAML file directly in it and `{config_root}/**/*.yaml` one at any depth, and a file path at the same folder, `{config_root}/schemas/sample.schema.json` one file from every depth.
+- A config in a folder of its own makes that folder one language: `file_includes` of `{config_root}/**/*.yaml` and `{config_root}/**/*.yml` claims every YAML file under it, whatever its name.
+- A `yaml-dsl.yml` is a config, never a DSL file, whatever globs match it.
+- The index follows every `yaml-dsl.yml` saved, created or deleted, and every workspace folder added or removed.
+- A file outside every workspace folder belongs to no config.
+- One package holds the index: the client reads it to set a file's language, and the language server to pick the file's DSL.
+
 ## Ownership
 
 - The extension contributes the language `yaml-dsl`.
-- It starts only when a workspace folder holds `yaml-dsl.yml`, and leaves a folder without one alone, even in a window where another folder has one.
+- It starts only when the workspace holds a `yaml-dsl.yml`, and leaves a file outside every config's folder alone.
 - When the workspace config loads, each DSL's files are associated with that language: those its `file_includes` globs or the `{concern}` names in its `layers.common_layer_files` match, and its `file_excludes` globs do not. Such a file opens as `yaml-dsl`, and the language server's document selector is that language.
 - An extension that selects `yaml`, such as the Red Hat YAML extension, does not own these files and does not activate on them.
 - A file that matches no DSL pattern stays `yaml`.

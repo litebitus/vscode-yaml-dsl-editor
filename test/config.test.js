@@ -12,6 +12,7 @@ const {
   NAME_SPELLINGS,
   parseConfig,
   claimFile,
+  configPathOf,
   ownsFile,
 } = require('../lib/config');
 const { REFERENCE_POSITIONS } = require('../lib/reference-positions');
@@ -607,6 +608,33 @@ test('file_includes and file_excludes decide the files a DSL owns, and two owner
   assert.equal(claimFile('/repo-a/sample.yml', [{ ...shared, dir: '/repo' }]).status, 'none');
   assert.equal(claimFile('/repo/a/sample.yml', [{ ...shared, dir: '/' }]).status, 'none');
   assert.equal(claimFile('/repo/readme.md', [{ ...shared, dir: '/repo' }]).status, 'none');
+});
+
+test('the deepest config folder owns a file, and its yaml-dsl.yml is never a DSL file', () => {
+  const owner = (id, dir, fileIncludes) => ({ id, dir, fileIncludes, fileExcludes: [] });
+  const outer = owner('outer', '/repo', ['**/*.yaml', '**/*.yml']);
+  const inner = owner('inner', '/repo/examples/cfn', ['{config_root}/**/*.yaml']);
+  const deep = claimFile('/repo/examples/cfn/sqs/queue.yaml', [outer, inner]);
+  assert.equal(deep.status, 'one');
+  assert.equal(deep.dsl.id, 'inner');
+  assert.equal(claimFile('/repo/examples/cfn/notes.yml', [outer, inner]).status, 'none');
+  assert.equal(claimFile('/repo/examples/other.yaml', [outer, inner]).dsl.id, 'outer');
+  assert.equal(claimFile('/repo/examples/cfn/yaml-dsl.yml', [outer, inner]).status, 'none');
+  assert.equal(claimFile('/repo/yaml-dsl.yml', [outer]).status, 'none');
+});
+
+test('a glob starting with {config_root} matches below the config folder, and every other glob keeps its meaning', () => {
+  const dsl = { id: 'mock', dir: '/repo/mock', fileIncludes: ['{config_root}/*.yaml'], fileExcludes: ['{config_root}/skip.yaml'] };
+  assert.equal(ownsFile(dsl, '/repo/mock/a.yaml'), true);
+  assert.equal(ownsFile(dsl, '/repo/mock/nested/a.yaml'), false);
+  assert.equal(ownsFile(dsl, '/repo/mock/skip.yaml'), false);
+  assert.equal(ownsFile(dsl, '/repo/mock-other/a.yaml'), false);
+  const anyDepth = { id: 'mock', dir: '/repo/mock', fileIncludes: ['**/mock/*.yaml'], fileExcludes: [] };
+  assert.equal(ownsFile(anyDepth, '/repo/mock/a.yaml'), true);
+  const relative = { id: 'mock', dir: '/repo/mock', fileIncludes: ['*.yaml'], fileExcludes: [] };
+  assert.equal(ownsFile(relative, '/repo/mock/a.yaml'), false);
+  assert.equal(configPathOf('{config_root}/../schemas/mock.schema.json', '/repo/mock'), '/repo/schemas/mock.schema.json');
+  assert.equal(configPathOf('schemas/mock.schema.json', '/repo/mock'), 'schemas/mock.schema.json');
 });
 
 test('the shipped schema of the config is a draft 2020-12 schema stating the values the reader accepts', () => {
