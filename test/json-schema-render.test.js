@@ -79,13 +79,13 @@ test('a field is named by the reference it makes, and a node refining a referenc
     $schema: DRAFT_2020_12,
     $defs: {
       mock_fields: { patternProperties: { '^mock ': {} } },
-      mock_resource: { type: 'object', $ref: '#/$defs/mock_fields', properties: { size: { type: 'integer' } } },
+      mock_entry: { type: 'object', $ref: '#/$defs/mock_fields', properties: { size: { type: 'integer' } } },
     },
-    properties: { resource: { $ref: '#/$defs/mock_resource' }, inline: { $ref: '#/$defs/mock_fields', properties: {} } },
+    properties: { entry: { $ref: '#/$defs/mock_entry' }, inline: { $ref: '#/$defs/mock_fields', properties: {} } },
   };
   const renderer = schemaRendererFor(root);
-  assert.equal(renderer.renderNode(root.properties.resource).shape, 'mock_resource');
-  assert.equal(renderer.renderNode(root.$defs.mock_resource).shape, 'object');
+  assert.equal(renderer.renderNode(root.properties.entry).shape, 'mock_entry');
+  assert.equal(renderer.renderNode(root.$defs.mock_entry).shape, 'object');
   assert.equal(renderer.renderNode(root.properties.inline).shape, 'any');
 });
 

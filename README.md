@@ -83,7 +83,7 @@ The JSON Schema drafts read, each by its own parser, validator and renderer:
 - A common layer reference reaching a declaration in several overlays opens them all, one section per overlay, on Command-click.
 - Keys and values complete from the schema, each field with its requirement and description.
 - Tab and Shift+Tab move through the list, Tab accepts a lone entry, and Enter accepts.
-- Enter after a new resource's key fills its required fields, and Tab moves between their values.
+- Enter after a new entry's key fills its required fields, and Tab moves between their values.
 
 ### Renaming
 

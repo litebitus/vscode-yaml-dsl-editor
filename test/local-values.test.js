@@ -16,18 +16,18 @@ const {
 const inPlaceholders = ['whole_placeholder', 'placeholder_in_text'];
 
 function localsDsl(fields = {}) {
-  return parsedDsl(dslEntry('resource', {
+  return parsedDsl(dslEntry('sample', {
     placeholder: placeholder(),
     function: markerFunction(),
     locals: { scope_name: 'local' },
     scopes: {
       GLOBAL: scope({ builtin_names: ['env'] }),
       local: scope(),
-      RESOURCE: scope({ named_by_parent_key: true }),
+      ENTRY: scope({ named_by_parent_key: true }),
     },
     declarations: [
       declaration('$.locals.*', 'local', { key_token: 'first_word' }),
-      declaration('$.*.*', 'RESOURCE', { skip_keys: ['locals'], key_token: 'last_word' }),
+      declaration('$.*.*', 'ENTRY', { skip_keys: ['locals'], key_token: 'last_word' }),
     ],
     references: [
       reference('^local\\.(?<name>[a-z0-9_]+)$', 'local', { positions: ['whole_scalar', ...inPlaceholders] }),
@@ -110,9 +110,9 @@ test('hover on a local shows its resolved value', () => {
 test('without a locals block there are no local values and no names known by them', () => {
   const withLocals = localsDsl();
   const withoutLocals = { ...withLocals, locals: null };
-  const text = 'locals:\n  thing: mock-thing\nRESOURCE:\n  "name ${local.thing}": {}\n';
+  const text = 'locals:\n  thing: mock-thing\nENTRY:\n  "name ${local.thing}": {}\n';
   const stack = stackOf(withLocals, { [common]: text }, common);
-  const keyed = stack.symbols.find((symbol) => symbol.scopeName === 'RESOURCE');
+  const keyed = stack.symbols.find((symbol) => symbol.scopeName === 'ENTRY');
   assert.equal(substitutedName(keyed, stack, common), 'mock-thing');
   assert.equal(substitutedName(keyed, { ...stack, dsl: withoutLocals }, common), null);
   assert.equal(createLocalValues({ ...stack, dsl: withoutLocals }, common).valueOf('thing'), null);

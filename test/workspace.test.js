@@ -30,9 +30,9 @@ async function visitStack(ws, filePath) {
   await ws.setActive(null);
 }
 
-function resourceReferences(refNamePattern = '[a-z0-9_]+') {
+function entryReferences(refNamePattern = '[a-z0-9_]+') {
   return [
-    reference(`^ref (?<type>[a-z0-9_]+)\\.(?<name>${refNamePattern})`, 'RESOURCE', {
+    reference(`^ref (?<type>[a-z0-9_]+)\\.(?<name>${refNamePattern})`, 'ENTRY', {
       text_after_name_allowed: true,
       scope_group: 'type',
     }),
@@ -41,8 +41,8 @@ function resourceReferences(refNamePattern = '[a-z0-9_]+') {
   ];
 }
 
-function resourcesEntry(fields = {}, localKeyToken = 'all_words') {
-  return dslEntry('resources', {
+function sampleEntry(fields = {}, localKeyToken = 'all_words') {
+  return dslEntry('sample', {
     schema_search_paths: ['https://example.test/fallback.json'],
     layers: {
       overlay_folders: ['one', 'two', 'three', 'four'],
@@ -53,24 +53,24 @@ function resourcesEntry(fields = {}, localKeyToken = 'all_words') {
     locals: { scope_name: 'local' },
     scopes: {
       GLOBAL: scope({ builtin_names: ['env'] }),
-      RESOURCE: scope({ named_by_parent_key: true }),
+      ENTRY: scope({ named_by_parent_key: true }),
       local: scope(),
     },
     declarations: [
       declaration('$.locals.*', 'local', { key_token: localKeyToken }),
-      declaration('$.*.*', 'RESOURCE', {
+      declaration('$.*.*', 'ENTRY', {
         skip_keys: ['schema_version', 'cloud', 'env', 'locals', 'outputs', 'sync'],
         exclude_candidates: ['defaults'],
         key_token: 'last_word',
         name_spelling: 'dashes_as_underscores',
       }),
     ],
-    references: resourceReferences(),
+    references: entryReferences(),
     ...fields,
   });
 }
 
-const config = configText(resourcesEntry());
+const config = configText(sampleEntry());
 
 const root = '/repo/mock-stack';
 const common = `${root}/mock.yml`;
@@ -184,7 +184,7 @@ test('a modeline that fails falls through to the published schema', async () => 
     '/repo/disk/mock.yml': 'name: from-disk\n',
   };
   const ws = workspace(files, async (url) => (url.endsWith('fallback.json') ? schema : null));
-  const relative = configText(dslEntry('resources', { schema_search_paths: ['schema.json'] }));
+  const relative = configText(dslEntry('sample', { schema_search_paths: ['schema.json'] }));
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   await ws.sync('file:///repo/only/mock.yml', '/repo/only/mock.yml', files['/repo/only/mock.yml']);
   const diags = ws.problems('file:///repo/only/mock.yml');
@@ -249,7 +249,7 @@ test('two DSLs, a parse error, and a DSL without layers', async () => {
 });
 
 test('loading past the pin capacity evicts the oldest unpinned stack', async () => {
-  const plain = configText(dslEntry('resources', {
+  const plain = configText(dslEntry('sample', {
     layers: {
       overlay_folders: ['one'],
       common_layer_discovery: 'parent',
@@ -279,7 +279,7 @@ test('a missing modeline walks the schema search path from the file', async () =
   };
   const ws = workspace(files, async () => null);
   await ws.setConfigs([{
-    text: configText(dslEntry('resources', {
+    text: configText(dslEntry('sample', {
       schema_search_paths: ['.schema/sample.schema.json', 'one/.schema/sample.schema.json', 1],
     })),
     dir: '/repo',
@@ -389,7 +389,7 @@ test('each overlay\'s fold is validated, each error placed in the file that wrot
     [two]: `${modeline('../schema.json')}mocktype:\n  name mock-shared:\n    size: 2\n`,
   };
   const ws = workspace(files);
-  await ws.setConfigs([{ text: configText(resourcesEntry({ validator: validatorRules })), dir: '/repo' }]);
+  await ws.setConfigs([{ text: configText(sampleEntry({ validator: validatorRules })), dir: '/repo' }]);
   for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   await visitStack(ws, one);
   assert.deepEqual(validationMessages(ws, one), [
@@ -401,7 +401,7 @@ test('each overlay\'s fold is validated, each error placed in the file that wrot
   await ws.sync(`file://${one}`, one, `${files[one]}  broken: [\n`);
   assert.deepEqual(validationMessages(ws, one), []);
   const unruled = workspace(files);
-  await unruled.setConfigs([{ text: configText(resourcesEntry()), dir: '/repo' }]);
+  await unruled.setConfigs([{ text: configText(sampleEntry()), dir: '/repo' }]);
   for (const filePath of [common, one, two]) await unruled.sync(`file://${filePath}`, filePath, files[filePath]);
   await visitStack(unruled, two);
   assert.deepEqual(validationMessages(unruled, two), [[2, '`name` is required']]);
@@ -431,7 +431,7 @@ test('hover on a key that sets a field of its entry documents the entry, then th
     [one]: `${modeline}mocktype:\n  id mock-one:\n    size: 1\n  id mock-two:\n    id: mock-own\n  extra:\n    size: 2\n`,
   };
   const ws = workspace(files);
-  await ws.setConfigs([{ text: configText(resourcesEntry({ validator: validatorRules })), dir: '/repo' }]);
+  await ws.setConfigs([{ text: configText(sampleEntry({ validator: validatorRules })), dir: '/repo' }]);
   for (const filePath of [common, one]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   const hoverOf = (needle) => ws.hover(`file://${one}`, at(files[one], needle)).contents.value;
   const entryOf = (key) => `\`\`\`\n${key}: object    [optional]\n\`\`\`\n\nA mock entry.`;
@@ -453,7 +453,7 @@ test('a schema that changes on disk revalidates every file reading it, the commo
     [one]: `${modeline('../schema.json')}mocktype:\n  shared:\n    name: mock\n    size: 1\n`,
   };
   const ws = workspace(files);
-  await ws.setConfigs([{ text: configText(resourcesEntry({ validator: validatorRules })), dir: '/repo' }]);
+  await ws.setConfigs([{ text: configText(sampleEntry({ validator: validatorRules })), dir: '/repo' }]);
   for (const filePath of [common, one]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   await visitStack(ws, one);
   assert.deepEqual(validationMessages(ws, common), [[3, '`mode` must be one of `"fast"`, `"slow"` (one)']]);
@@ -468,9 +468,9 @@ test('a schema that changes on disk revalidates every file reading it, the commo
 });
 
 test('an overlay schema that changes drops that overlay from the common layer\'s error, the other overlay\'s schema kept', async () => {
-  const modeline = '# yaml-language-server: $schema=.schema/resources.schema.json\n';
-  const oneSchemaPath = `${root}/one/.schema/resources.schema.json`;
-  const twoSchemaPath = `${root}/two/.schema/resources.schema.json`;
+  const modeline = '# yaml-language-server: $schema=.schema/sample.schema.json\n';
+  const oneSchemaPath = `${root}/one/.schema/sample.schema.json`;
+  const twoSchemaPath = `${root}/two/.schema/sample.schema.json`;
   const files = {
     [oneSchemaPath]: validatedStackSchema,
     [twoSchemaPath]: validatedStackSchema,
@@ -479,7 +479,7 @@ test('an overlay schema that changes drops that overlay from the common layer\'s
     [two]: `${modeline}mocktype:\n  name mock-own:\n    size: 2\n    mode: fast\n`,
   };
   const ws = workspace(files);
-  await ws.setConfigs([{ text: configText(resourcesEntry({ validator: validatorRules })), dir: '/repo' }]);
+  await ws.setConfigs([{ text: configText(sampleEntry({ validator: validatorRules })), dir: '/repo' }]);
   for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   await visitStack(ws, common);
   assert.deepEqual(validationMessages(ws, common), []);
@@ -497,15 +497,15 @@ test('an overlay schema that changes drops that overlay from the common layer\'s
 });
 
 test('a common layer field hover shows each overlay schema\'s documentation, the overlays that agree sharing one section', async () => {
-  const modeline = '# yaml-language-server: $schema=.schema/resources.schema.json\n';
+  const modeline = '# yaml-language-server: $schema=.schema/sample.schema.json\n';
   const schemaWith = (sizeDescription) => JSON.stringify({
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     properties: { mocktype: { additionalProperties: { properties: { size: { type: 'integer', description: sizeDescription } } } } },
   });
   const files = {
-    [`${root}/one/.schema/resources.schema.json`]: schemaWith('[optional] Mock size.'),
-    [`${root}/two/.schema/resources.schema.json`]: schemaWith('[required] Mock size, now required.'),
-    [`${root}/three/.schema/resources.schema.json`]: schemaWith('[optional] Mock size.'),
+    [`${root}/one/.schema/sample.schema.json`]: schemaWith('[optional] Mock size.'),
+    [`${root}/two/.schema/sample.schema.json`]: schemaWith('[required] Mock size, now required.'),
+    [`${root}/three/.schema/sample.schema.json`]: schemaWith('[optional] Mock size.'),
     [common]: 'mocktype:\n  shared:\n    size: 1\n',
     [one]: `${modeline}mocktype: {}\n`,
     [two]: `${modeline}mocktype: {}\n`,
@@ -519,7 +519,7 @@ test('a common layer field hover shows each overlay schema\'s documentation, the
     `${overlayHeadingOf('two')}\n\n\`\`\`\nsize: integer    [required]\n\`\`\`\n\nMock size, now required.`,
   ].join('\n\n'));
   assert.equal(ws.hover(`file://${one}`, at(files[one], 'mocktype')).contents.value, '```\nmocktype    [optional]\n```');
-  const twoSchemaPath = `${root}/two/.schema/resources.schema.json`;
+  const twoSchemaPath = `${root}/two/.schema/sample.schema.json`;
   files[twoSchemaPath] = schemaWith('[optional] Mock size.');
   await ws.schemasChanged([twoSchemaPath]);
   assert.equal(
@@ -529,17 +529,17 @@ test('a common layer field hover shows each overlay schema\'s documentation, the
 });
 
 test('a common layer field hover names the overlays whose schema has no such field, and drops them once it does', async () => {
-  const modeline = '# yaml-language-server: $schema=.schema/resources.schema.json\n';
+  const modeline = '# yaml-language-server: $schema=.schema/sample.schema.json\n';
   const schemaWith = (properties) => JSON.stringify({
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     properties: { mocktype: { additionalProperties: { properties, additionalProperties: false } } },
   });
   const sized = schemaWith({ size: { type: 'integer', description: '[optional] Mock size.' } });
-  const twoSchemaPath = `${root}/two/.schema/resources.schema.json`;
+  const twoSchemaPath = `${root}/two/.schema/sample.schema.json`;
   const files = {
-    [`${root}/one/.schema/resources.schema.json`]: sized,
+    [`${root}/one/.schema/sample.schema.json`]: sized,
     [twoSchemaPath]: schemaWith({}),
-    [`${root}/three/.schema/resources.schema.json`]: schemaWith({}),
+    [`${root}/three/.schema/sample.schema.json`]: schemaWith({}),
     [common]: 'mocktype:\n  shared:\n    size: 1\n',
     [one]: `${modeline}mocktype: {}\n`,
     [two]: `${modeline}mocktype: {}\n`,
@@ -591,7 +591,7 @@ test('the modeline\'s schema path links to the schema it names, a path from the 
 });
 
 test('a schema written after the file opened replaces the missing one, and a new version replaces it again', async () => {
-  const layered = configText(dslEntry('resources', {
+  const layered = configText(dslEntry('sample', {
     schema_search_paths: ['.schema/mock.schema.json', 'one/.schema/mock.schema.json'],
     layers: {
       overlay_folders: ['one', 'two'],
@@ -798,7 +798,7 @@ test('completion in a DSL without layers offers the whole file', async () => {
   assert.deepEqual(ws.completion('file:///repo/flat.yml', { line: 2, character: 11 }).map((item) => item.label), ['local.db']);
 });
 
-test('a resource keyed by a local is offered by the local\'s value, as a ref names it', async () => {
+test('an entry keyed by a local is offered by the local\'s value, as a ref names it', async () => {
   const files = {
     [common]: 'locals:\n  alias: mock-thing\nmocktype:\n  name ${local.alias}: {}\n  name ${local.missing}: {}\n',
   };
@@ -810,7 +810,7 @@ test('a resource keyed by a local is offered by the local\'s value, as a ref nam
   assert.deepEqual(labels, ['ref mocktype.mock_thing', 'ref mocktype.user']);
 });
 
-test('a local the overlay overrides names the resource the overlay\'s fold sees', async () => {
+test('a local the overlay overrides names the entry the overlay\'s fold sees', async () => {
   const files = {
     [common]: 'locals:\n  alias: common-thing\nmocktype:\n  name ${local.alias}: {}\n',
     [one]: 'locals:\n  alias: overlay-thing\nmocktype:\n  user:\n    source: ref \n',
@@ -971,7 +971,7 @@ test('every placeholder is a builtin or a reference the config allows, and the r
 test('a ref with a builtin in its name keeps the builtin\'s own tokens', async () => {
   const text = 'mocktype:\n  user:\n    source: ref mocktype.${env}_thing\n';
   const ws = workspace({ [common]: text }, async () => schema);
-  const placeholderNames = configText(resourcesEntry({ references: resourceReferences('[a-z0-9_${}]+') }));
+  const placeholderNames = configText(sampleEntry({ references: entryReferences('[a-z0-9_${}]+') }));
   await ws.setConfigs([{ text: placeholderNames, dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, text);
   const tokens = ws.semanticTokens(`file://${common}`).map((token) => [token.character, token.length, token.type]);
@@ -1024,7 +1024,7 @@ test('a request for an open file waits for its analysis, and builds a stack nobo
 });
 
 function functionsConfig(definitions) {
-  return configText(resourcesEntry({ function: markerFunction({ definitions }) }, 'first_word'));
+  return configText(sampleEntry({ function: markerFunction({ definitions }) }, 'first_word'));
 }
 
 const functionsSchema = JSON.stringify({
@@ -1099,7 +1099,7 @@ test('a changed config reaches every resident stack, and drops the stacks it no 
   await visitStack(ws, otherCommon);
   ws.close(`file://${one}`);
   ws.takeEvicted();
-  const narrowed = configText(resourcesEntry({ file_includes: ['**/mock-stack/**/mock.yml'] }));
+  const narrowed = configText(sampleEntry({ file_includes: ['**/mock-stack/**/mock.yml'] }));
   await ws.setConfigs([{ text: narrowed, dir: '/repo' }]);
   assert.deepEqual(ws.cache.get(common).data.dsl.fileIncludes, ['**/mock-stack/**/mock.yml']);
   assert.equal(ws.cache.get(otherCommon), null);

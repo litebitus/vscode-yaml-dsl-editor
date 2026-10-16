@@ -16,9 +16,9 @@ const mockSchemas = {
     additionalProperties: false,
     definitions: { mock_tree: mockTree },
     properties: {
-      resource: {
+      entry: {
         type: 'object',
-        description: '[optional] mock resource',
+        description: '[optional] mock entry',
         properties: {
           description: { type: 'string', description: 'a field named description' },
           tree: { $ref: '#/definitions/mock_tree' },
@@ -33,10 +33,10 @@ const mockSchemas = {
     additionalProperties: false,
     definitions: { mock_tree: mockTree },
     properties: {
-      resource: {
+      entry: {
         type: 'object',
         title: 'reworded',
-        description: '[optional] reworded mock resource',
+        description: '[optional] reworded mock entry',
         properties: {
           description: { type: 'string', $comment: 'reworded' },
           tree: { $ref: '#/definitions/mock_tree', examples: [{ name: 'mock' }] },
@@ -51,7 +51,7 @@ const mockSchemas = {
     additionalProperties: false,
     definitions: { mock_tree: mockTree },
     properties: {
-      resource: {
+      entry: {
         type: 'object',
         properties: {
           summary: { type: 'string' },
@@ -70,48 +70,48 @@ function checksOf() {
 
 test('the node at a path follows properties and refs, is open where the schema allows any key, and absent where it forbids one', () => {
   const schema = mockSchemas['mock-base'];
-  assert.equal(schemaNodeAt(schema, ['resource', 'tree', 'children', 0, 'name']).type, 'string');
-  assert.equal(schemaNodeAt(schema, ['resource', 'anything']), true);
+  assert.equal(schemaNodeAt(schema, ['entry', 'tree', 'children', 0, 'name']).type, 'string');
+  assert.equal(schemaNodeAt(schema, ['entry', 'anything']), true);
   assert.equal(schemaNodeAt(schema, ['open', 'anything', 3]), true);
   assert.equal(schemaNodeAt(schema, ['unknown']), null);
 });
 
 test('annotations do not change a node\'s fingerprint, a field named like one does', () => {
   const checks = checksOf();
-  const base = checks.nodeCheck('mock-base', ['resource']);
+  const base = checks.nodeCheck('mock-base', ['entry']);
   assert.equal(base.state, NODE_STATES.constrained);
-  assert.equal(checks.nodeCheck('mock-reworded', ['resource']).fingerprint, base.fingerprint);
-  assert.notEqual(checks.nodeCheck('mock-renamed-field', ['resource']).fingerprint, base.fingerprint);
-  assert.equal(checks.nodeCheck('mock-base', ['resource']).fingerprint, base.fingerprint);
+  assert.equal(checks.nodeCheck('mock-reworded', ['entry']).fingerprint, base.fingerprint);
+  assert.notEqual(checks.nodeCheck('mock-renamed-field', ['entry']).fingerprint, base.fingerprint);
+  assert.equal(checks.nodeCheck('mock-base', ['entry']).fingerprint, base.fingerprint);
 });
 
 test('a recursive ref is fingerprinted without looping', () => {
   const checks = checksOf();
-  const tree = checks.nodeCheck('mock-base', ['resource', 'tree']);
-  assert.equal(tree.fingerprint, checks.nodeCheck('mock-reworded', ['resource', 'tree']).fingerprint);
+  const tree = checks.nodeCheck('mock-base', ['entry', 'tree']);
+  assert.equal(tree.fingerprint, checks.nodeCheck('mock-reworded', ['entry', 'tree']).fingerprint);
 });
 
 test('a path the schema forbids, an open path and a missing schema each have their own state', () => {
   const checks = checksOf();
   assert.equal(checks.nodeCheck('mock-base', ['unknown']).state, NODE_STATES.notAllowed);
   assert.equal(checks.nodeCheck('mock-base', ['open']).state, NODE_STATES.open);
-  assert.equal(checks.nodeCheck(null, ['resource']).state, NODE_STATES.noSchema);
-  assert.equal(checks.nodeCheck('mock-missing', ['resource']).state, NODE_STATES.noSchema);
+  assert.equal(checks.nodeCheck(null, ['entry']).state, NODE_STATES.noSchema);
+  assert.equal(checks.nodeCheck('mock-missing', ['entry']).state, NODE_STATES.noSchema);
 });
 
 const messageFailure = (text) => ({ kind: FAILURE_KINDS.message, text, alternatives: [] });
 
 test('the opt-out is checked against the node and fails with the schema\'s own messages', () => {
   const checks = checksOf();
-  assert.deepEqual(checks.nodeCheck('mock-base', ['resource']).optOutFailures(), []);
+  assert.deepEqual(checks.nodeCheck('mock-base', ['entry']).optOutFailures(), []);
   assert.deepEqual(checks.nodeCheck('mock-base', ['open']).optOutFailures(), []);
-  assert.deepEqual(checks.nodeCheck('mock-base', ['resource', 'description']).optOutFailures(), [
+  assert.deepEqual(checks.nodeCheck('mock-base', ['entry', 'description']).optOutFailures(), [
     messageFailure('must be string'),
   ]);
   assert.deepEqual(checks.nodeCheck('mock-base', ['unknown']).optOutFailures(), [
     messageFailure('the schema does not allow it'),
   ]);
-  assert.deepEqual(checks.nodeCheck(null, ['resource']).optOutFailures(), []);
+  assert.deepEqual(checks.nodeCheck(null, ['entry']).optOutFailures(), []);
 });
 
 const alternativeSchemas = {
@@ -157,11 +157,11 @@ test('a failed anyOf lists its alternatives, a not failure reads as the descript
   ]);
 });
 
-function markedSchemaOf(resource) {
+function markedSchemaOf(entry) {
   return {
     type: 'object',
     definitions: { mock_value: { type: 'string', description: 'a value shape, never a marker' } },
-    properties: { resource },
+    properties: { entry },
   };
 }
 
@@ -208,24 +208,24 @@ function markedChecksOf() {
 
 test('a field\'s requirement marker decides its key over the parent\'s required array', () => {
   const checks = markedChecksOf();
-  assert.deepEqual(checks.nodeCheck('marker-adds', ['resource']).optOutFailures(), [
+  assert.deepEqual(checks.nodeCheck('marker-adds', ['entry']).optOutFailures(), [
     messageFailure("must have required property 'name'"),
   ]);
-  assert.deepEqual(checks.nodeCheck('marker-removes', ['resource']).optOutFailures(), [
+  assert.deepEqual(checks.nodeCheck('marker-removes', ['entry']).optOutFailures(), [
     messageFailure("must have required property 'kind'"),
   ]);
-  assert.deepEqual(checks.nodeCheck('marker-removes-in-branch', ['resource']).optOutFailures(), []);
+  assert.deepEqual(checks.nodeCheck('marker-removes-in-branch', ['entry']).optOutFailures(), []);
 });
 
 test('a conditionally required field is reported, not failed, and its marker counts in the fingerprint', () => {
   const checks = markedChecksOf();
-  const conditional = checks.nodeCheck('marker-conditional', ['resource']);
+  const conditional = checks.nodeCheck('marker-conditional', ['entry']);
   assert.deepEqual(conditional.optOutFailures(), []);
-  assert.deepEqual(conditional.conditionallyRequiredFields(), ['resource.name']);
-  const plain = checks.nodeCheck('marker-conditional-plain', ['resource']);
+  assert.deepEqual(conditional.conditionallyRequiredFields(), ['entry.name']);
+  const plain = checks.nodeCheck('marker-conditional-plain', ['entry']);
   assert.deepEqual(plain.conditionallyRequiredFields(), []);
   assert.notEqual(plain.fingerprint, conditional.fingerprint);
-  assert.deepEqual(checks.nodeCheck(null, ['resource']).conditionallyRequiredFields(), []);
+  assert.deepEqual(checks.nodeCheck(null, ['entry']).conditionallyRequiredFields(), []);
 });
 
 const validatedSchema = {
@@ -344,7 +344,7 @@ test('a dependency its key does not meet is marked on that key, worded as what t
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     $defs: {
       mock_call_form: { type: 'object', not: { propertyNames: { not: { pattern: ' fn\\.' } } } },
-      mock_resource: {
+      mock_entry: {
         type: 'object',
         properties: {
           queue: { type: 'string', description: '[optional] Mock queue.' },
@@ -359,7 +359,7 @@ test('a dependency its key does not meet is marked on that key, worded as what t
         },
       },
     },
-    properties: { mocktype: { type: 'object', additionalProperties: { $ref: '#/$defs/mock_resource' } } },
+    properties: { mocktype: { type: 'object', additionalProperties: { $ref: '#/$defs/mock_entry' } } },
   };
   const checks = createSchemaChecks(() => dependentSchema);
   const messagesOf = (primary) => checks.documentProblems('mock-dependent', { mocktype: { primary } })

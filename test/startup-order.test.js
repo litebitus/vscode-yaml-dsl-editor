@@ -13,7 +13,7 @@ const OTHER_TEXT = 'queue:\n  events: ref queue.mock_dlq\n';
 const GLOBAL_STORAGE = '/mock-global-storage';
 const MOCK_BUILD_HASH = 'mock-build-hash';
 
-const mockConfig = configText(dslEntry('resources', {
+const mockConfig = configText(dslEntry('sample', {
   scopes: { queue: scope() },
   declarations: [declaration('$.*.*', 'queue')],
   references: [reference('^ref queue\\.(?<name>[a-z_]+)$', 'queue')],

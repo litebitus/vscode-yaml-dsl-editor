@@ -77,7 +77,7 @@ function fakeVscode(options = {}) {
       workspaceFolders: options.folders === undefined ? [{ uri: { fsPath: '/repo' } }] : options.folders,
       textDocuments: options.documents || [],
       fs: {
-        readFile: options.readFile || (async () => Buffer.from(configText(dslEntry('resources')))),
+        readFile: options.readFile || (async () => Buffer.from(configText(dslEntry('sample')))),
       },
       openTextDocument: options.openTextDocument,
       getConfiguration() {
@@ -625,9 +625,9 @@ function lastPaint(painted, kind) {
   return painted.filter((item) => item.kind === kind).at(-1);
 }
 
-const referenceScopes = { local: scope(), RESOURCE: scope({ named_by_parent_key: true }) };
+const referenceScopes = { local: scope(), ENTRY: scope({ named_by_parent_key: true }) };
 const referenceRules = [
-  reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_.${}]+)', 'RESOURCE', {
+  reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_.${}]+)', 'ENTRY', {
     text_after_name_allowed: true,
     scope_group: 'type',
   }),
@@ -776,7 +776,7 @@ test('every ref is underlined from the text before the server classifies it, onc
     '  - ref iam_role.redshift.arn',
     '  label: local.db',
     '  note: not a ref',
-    '  Resource: ["%s/*", [ref data_source.bucket.arn], ref data_source.key.arn]',
+    '  Targets: ["%s/*", [ref data_source.bucket.arn], ref data_source.key.arn]',
   ].join('\n');
   const painted = [];
   const doc = documentOf(text);

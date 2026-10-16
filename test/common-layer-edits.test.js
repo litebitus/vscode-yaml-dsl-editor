@@ -26,7 +26,7 @@ function appliedEdits(text, edits) {
 const optOut = (indent) => [`${' '.repeat(indent)}events: {}`];
 const ALPHABETICAL = { order: 'alphabetical', firstKeys: [], lastKeys: [] };
 const SIGNIFICANCE = { order: 'significance', firstKeys: [], lastKeys: [] };
-const RESOURCE_SIGNIFICANCE = {
+const TOP_LEVEL_SIGNIFICANCE = {
   order: 'significance',
   firstKeys: ['schema_version', 'env', 'locals'],
   lastKeys: ['data_source', 'outputs'],
@@ -62,15 +62,15 @@ test('significance places a key where the overlays holding it place it, the firs
 
 test('significance keeps first_keys at the top and last_keys at the bottom, other keys between them', () => {
   const common = mapOf(['schema_version', 'locals', 'airflow', 'data_source']);
-  assert.equal(placementIn(common, 'env', RESOURCE_SIGNIFICANCE, []).before.key, 'locals');
-  assert.equal(placementIn(common, 'outputs', RESOURCE_SIGNIFICANCE, []).after.key, 'data_source');
-  assert.equal(placementIn(common, 'iam_role', RESOURCE_SIGNIFICANCE, []).before.key, 'data_source');
+  assert.equal(placementIn(common, 'env', TOP_LEVEL_SIGNIFICANCE, []).before.key, 'locals');
+  assert.equal(placementIn(common, 'outputs', TOP_LEVEL_SIGNIFICANCE, []).after.key, 'data_source');
+  assert.equal(placementIn(common, 'iam_role', TOP_LEVEL_SIGNIFICANCE, []).before.key, 'data_source');
   const devOrder = ['schema_version', 'env', 'locals', 'airflow', 'iam_role', 'connectivity', 'data_source'];
-  assert.equal(placementIn(common, 'iam_role', RESOURCE_SIGNIFICANCE, [devOrder]).after.key, 'airflow');
-  const resourcesOnly = mapOf(['schema_version', 'airflow', 'connectivity']);
-  assert.equal(placementIn(resourcesOnly, 'iam_role', RESOURCE_SIGNIFICANCE, [devOrder]).before.key, 'connectivity');
-  assert.equal(placementIn(mapOf(['outputs']), 'data_source', RESOURCE_SIGNIFICANCE, []).before.key, 'outputs');
-  assert.equal(placementIn(mapOf(['airflow']), 'schema_version', RESOURCE_SIGNIFICANCE, []).before.key, 'airflow');
+  assert.equal(placementIn(common, 'iam_role', TOP_LEVEL_SIGNIFICANCE, [devOrder]).after.key, 'airflow');
+  const entriesOnly = mapOf(['schema_version', 'airflow', 'connectivity']);
+  assert.equal(placementIn(entriesOnly, 'iam_role', TOP_LEVEL_SIGNIFICANCE, [devOrder]).before.key, 'connectivity');
+  assert.equal(placementIn(mapOf(['outputs']), 'data_source', TOP_LEVEL_SIGNIFICANCE, []).before.key, 'outputs');
+  assert.equal(placementIn(mapOf(['airflow']), 'schema_version', TOP_LEVEL_SIGNIFICANCE, []).before.key, 'airflow');
 });
 
 test('a key\'s spacing is the blank lines around it in the first source holding it', () => {
@@ -85,7 +85,7 @@ test('a key\'s spacing is the blank lines around it in the first source holding 
 test('a key no source holds takes a blank line above and below when it spans lines, and none when it is one line', () => {
   const doc = docOf('schema_version: "3"\nrds:\n  capacity: mock\n');
   const unsourced = (parentMap, parentPath, newKey) => ({
-    ...placementIn(parentMap, newKey, RESOURCE_SIGNIFICANCE, []),
+    ...placementIn(parentMap, newKey, TOP_LEVEL_SIGNIFICANCE, []),
     spacing: null,
   });
   const block = insertionUnder(doc, ['locals'], ['locals'], (indent) => [

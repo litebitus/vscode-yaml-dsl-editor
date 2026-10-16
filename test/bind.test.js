@@ -10,7 +10,7 @@ const {
   configText,
 } = require('./config-builders');
 
-const resourcesConfig = configText(dslEntry('resources'));
+const sampleConfig = configText(dslEntry('sample'));
 
 function fakeConnection() {
   const handlers = {};
@@ -148,7 +148,7 @@ test('document events analyze and custom requests answer', async () => {
   });
   await connection.handlers['yaml-dsl/config']({
     entries: [{
-      text: configText(dslEntry('resources', { schema_search_paths: ['schema.json'] })),
+      text: configText(dslEntry('sample', { schema_search_paths: ['schema.json'] })),
       dir: '/repo',
     }],
   });
@@ -209,7 +209,7 @@ test('the server watches each schema path it reads and reloads a schema that cha
     capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true } } },
   });
   await connection.handlers['yaml-dsl/config']({
-    entries: [{ text: resourcesConfig, dir: '/repo' }],
+    entries: [{ text: sampleConfig, dir: '/repo' }],
   });
   const text = '# yaml-language-server: $schema=.schema/mock.schema.json\nname: plain\n';
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
@@ -252,7 +252,7 @@ test('a client without relative-pattern watching gets no registration', async ()
   const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
   connection.handlers.initialize({ capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true } } } });
   await connection.handlers['yaml-dsl/config']({
-    entries: [{ text: resourcesConfig, dir: '/repo' }],
+    entries: [{ text: sampleConfig, dir: '/repo' }],
   });
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => 'name: plain\n' } });
   await workspace.whenIdle();
@@ -264,7 +264,7 @@ test('an analysis that changes a stack tells the client which documents to repai
   const documents = fakeDocuments();
   const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
   await connection.handlers['yaml-dsl/config']({
-    entries: [{ text: resourcesConfig, dir: '/repo' }],
+    entries: [{ text: sampleConfig, dir: '/repo' }],
   });
   const text = 'name: plain\n';
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
@@ -284,14 +284,14 @@ test('completion answers editor items that replace what was typed', async () => 
   const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
   const config = configText(dslEntry('note', {
     file_includes: ['**/note.yml'],
-    scopes: { local: scope(), RESOURCE: scope({ named_by_parent_key: true }) },
+    scopes: { local: scope(), ENTRY: scope({ named_by_parent_key: true }) },
     declarations: [
       declaration('$.locals.*', 'local'),
-      declaration('$.*.*', 'RESOURCE', { skip_keys: ['locals'] }),
+      declaration('$.*.*', 'ENTRY', { skip_keys: ['locals'] }),
     ],
     references: [
       reference('^local\\.(?<name>[a-z]+)$', 'local'),
-      reference('^ref (?<type>[a-z]+)\\.(?<name>[a-z]+)', 'RESOURCE', {
+      reference('^ref (?<type>[a-z]+)\\.(?<name>[a-z]+)', 'ENTRY', {
         text_after_name_allowed: true,
         scope_group: 'type',
       }),
@@ -314,9 +314,9 @@ test('completion answers editor items that replace what was typed', async () => 
     newText: 'local.db',
   });
   assert.deepEqual(local.documentation, { kind: 'markdown', value: '```yaml-dsl\n  db: mock-value\n```' });
-  const [resource] = await complete(5, 14);
-  assert.equal(resource.label, 'ref thing.one');
-  assert.equal(resource.kind, 18);
+  const [offered] = await complete(5, 14);
+  assert.equal(offered.label, 'ref thing.one');
+  assert.equal(offered.kind, 18);
   assert.equal(connection.handlers.initialize().capabilities.completionProvider.triggerCharacters.join(''), ' .{');
   const bare = bind(fakeConnection(), fakeDocuments(), { readFile: async () => null, fetchText: async () => null });
   assert.deepEqual(bare.completion('file:///repo/none.yml', { line: 0, character: 0 }), []);
@@ -491,7 +491,7 @@ test('a file the editor opens is analyzed once, though the library reports the o
 });
 
 test('a layer no editor has open is watched while its stack is loaded, and a change to it is analyzed again', async () => {
-  const layeredConfig = configText(dslEntry('resources', {
+  const layeredConfig = configText(dslEntry('sample', {
     layers: {
       overlay_folders: ['dev', 'staging'],
       common_layer_discovery: 'parent',
@@ -530,7 +530,7 @@ test('a layer no editor has open is watched while its stack is loaded, and a cha
 });
 
 test('the server answers a layer file\'s overlays and the diff of a selection across them', async () => {
-  const layeredConfig = configText(dslEntry('resources', {
+  const layeredConfig = configText(dslEntry('sample', {
     layers: {
       overlay_folders: ['dev', 'staging'],
       common_layer_discovery: 'parent',

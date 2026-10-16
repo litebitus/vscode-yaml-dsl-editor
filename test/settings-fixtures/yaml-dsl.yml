@@ -30,7 +30,7 @@ dsls:
         later_items_of_declaring_list: false
         named_by_parent_key: false
         builtin_names: []
-      RESOURCE:
+      ENTRY:
         regions: ["$"]
         later_items_of_declaring_list: false
         named_by_parent_key: true
@@ -53,12 +53,12 @@ dsls:
         name_spelling: dashes_as_underscores
         meta_argument_name: null
         declares_every_name: false
-        scope_name: RESOURCE
+        scope_name: ENTRY
     references:
       - pattern: "^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)"
         positions: [whole_scalar]
         text_after_name_allowed: true
-        scope_name: RESOURCE
+        scope_name: ENTRY
         scope_group: type
         name_group: name
       - pattern: "^local\\.(?<name>[a-z0-9_]+)$"

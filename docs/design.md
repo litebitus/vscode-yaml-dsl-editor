@@ -261,7 +261,7 @@ Under this entry, `concern-group/overlay-1/concern-1/mock-dsl.yml` takes `concer
 An author editing one of those files sees only that file, so the language server buffers the stack in the editor view:
 
 - Each overlay's folded document is the common layer merged with that overlay.
-- Shared config lives in the common layer, a local that a resource references included.
+- Shared config lives in the common layer, a local that an entry references included.
 - While any file of the stack is active, refs and locals resolve in that file's fold.
 - Across overlays the editor diffs the folded documents.
 
@@ -446,9 +446,9 @@ A local is a named value. `locals.scope_name` names the scope whose declarations
 
 In `mock-dsl.yml`:
 
-- A ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. Its scope is `<type>`, the mapping key enclosing the resource.
+- A ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. Its scope is `<type>`, the mapping key enclosing the declaration.
 - A local is a key under `locals`, referenced as a whole scalar `local.<name>` or as `${local.<name>}` inside a scalar.
-- A value shared by resources is a local in the common layer.
+- A value shared by entries is a local in the common layer.
 
 ### Classes
 
@@ -509,8 +509,8 @@ The list holds what the file's fold sees and what is visible from the cursor:
 | inside a placeholder | every reference a placeholder body may be, builtins included |
 | after a call marker in a key | the vocabulary, each entry with its signature |
 
-- A resource keyed by a local is offered under the local's value, the spelling a ref uses for it.
-- A ref completes up to the resource name; the field path after it is the author's.
+- A declaration keyed by a local is offered under the local's value, the spelling a ref uses for it.
+- A ref completes up to the declared name; the field path after it is the author's.
 - The list opens as the reference starts and narrows on every character, by the editor's fuzzy match against everything typed since the reference began.
 - Each entry names the declaring file and shows the declaration as authored.
 
@@ -623,7 +623,7 @@ A requirement marker is the extension's standard for saying whether a key must b
 - The schema is what a document is validated against; a document that breaks it holds a validation error.
 - When the schema is not enough to understand a field or a shape, the schema gains an extension point and the grammar publishes it; the extension does not grow a special case for that object. No such point is added before a field or a shape requires one.
 - The schema is not the engine's checks, which are a separate pass. A check can require a group of fields only when another field has a certain value, allow a field for only one mode, or allow exactly one of two fields; the published schema has no such table, and an extension point is not a transcription of these checks.
-- A field may be filled from the common layer while the editor looks at one file, so a `required` array on the resource alone does not say whether the folded document is complete.
+- A field may be filled from the common layer while the editor looks at one file, so a `required` array on the entry alone does not say whether the folded document is complete.
 
 ## JSON Schema drafts
 
@@ -863,7 +863,7 @@ A move takes one unit whole. `layers.duplicate_check` places the unit:
 
 - A scalar or list above that depth is a unit of its own.
 - Nothing inside a unit moves on its own, and nothing above it moves as one block, so a unit never ends up split between the common layer and an overlay.
-- In the resource DSL the unit is a resource, `type.name`, two levels deep.
+- With `depth: 2`, an entry keyed under its type, `<type>.<name>`, is one unit.
 
 Values are compared as written:
 
@@ -1129,17 +1129,17 @@ One `yaml-dsl.yml` at the root of a workspace folder. The extension ships its JS
 ```yaml
 version: "1"
 dsls:
-  - id: resource
-    file_includes: ["**/resources.yml"]
+  - id: sample
+    file_includes: ["**/sample.yml"]
     file_excludes: []
     schema_search_paths:
-      - .terraform/modules/resources_yaml/resources.schema.json
-      - dev/.terraform/modules/resources_yaml/resources.schema.json
+      - .schema/sample.schema.json
+      - dev/.schema/sample.schema.json
     layers:
       overlay_folders: [dev, staging]
       common_layer_discovery: ancestor
       common_layer_files:
-        resources.yml: ["{concern}.resources.yml", resources.yml]
+        sample.yml: ["{concern}.sample.yml", sample.yml]
       duplicate_check:
         depth: 2
         key_depths: {}
@@ -1216,7 +1216,7 @@ dsls:
         later_items_of_declaring_list: false
         named_by_parent_key: false
         builtin_names: [env, region]
-      RESOURCE:
+      ENTRY:
         regions: ["$"]
         later_items_of_declaring_list: false
         named_by_parent_key: true
@@ -1244,12 +1244,12 @@ dsls:
         name_spelling: dashes_as_underscores
         meta_argument_name: null
         declares_every_name: false
-        scope_name: RESOURCE
+        scope_name: ENTRY
     references:
       - pattern: "^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_${}]+)"
         positions: [whole_scalar]
         text_after_name_allowed: true
-        scope_name: RESOURCE
+        scope_name: ENTRY
         scope_group: type
         name_group: name
       - pattern: "^local\\.(?<name>[a-z0-9_]+)$"

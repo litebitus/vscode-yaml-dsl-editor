@@ -44,7 +44,7 @@ function dslWith(keySortOrders) {
 const SIGNIFICANCE_NAME_FIRST = [{ path: '$.*.*', skip_keys: [], order: 'significance', first_keys: ['name'], last_keys: [] }];
 const noHeldKeys = () => [];
 
-test('Enter after an empty resource key fills the fields marked required or listed in required without a marker', () => {
+test('Enter after an empty entry key fills the fields marked required or listed in required without a marker', () => {
   const filled = requiredFieldsToFill({
     text: 'queue:\n  alerts:\n    \n',
     keyLine: 1,
@@ -101,7 +101,7 @@ test('an alphabetical key sort order sorts the filled fields, and no entry keeps
   assert.deepEqual(fill(dslWith([])), ['name', 'mode', 'kms_key_arn', 'settings']);
 });
 
-test('a field the common layer already gives the resource is not filled again', () => {
+test('a field the common layer already gives the entry is not filled again', () => {
   const filled = requiredFieldsToFill({
     text: 'queue:\n  alerts:\n',
     keyLine: 1,

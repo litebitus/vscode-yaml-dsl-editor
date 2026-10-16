@@ -3,6 +3,7 @@ const path = require('path');
 const { shownDocument, fixtureCopy, positionInText, hoverTextBecomes } = require('./editor-hints');
 const {
   SCHEMA_FOLDER,
+  SCHEMA_FILE,
   labelSchemaText,
   writeSchemaFolder,
   writeOverlays,
@@ -52,7 +53,7 @@ suite('schema reload', () => {
     const closedSchema = JSON.parse(labelSchemaText('Label of two'));
     closedSchema.properties.mocktype.additionalProperties = { type: 'object', additionalProperties: false };
     fs.writeFileSync(
-      path.join(stack, 'two', SCHEMA_FOLDER, 'resources.schema.json'),
+      path.join(stack, 'two', SCHEMA_FOLDER, SCHEMA_FILE),
       JSON.stringify(closedSchema),
     );
     fs.writeFileSync(path.join(stack, 'mock.yml'), 'mocktype:\n  shared:\n    label: mock\n');

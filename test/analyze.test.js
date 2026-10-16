@@ -68,7 +68,7 @@ const refRule = {
   pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)',
   positions: ['whole_scalar'],
   textAfterNameAllowed: true,
-  scopeName: 'RESOURCE',
+  scopeName: 'ENTRY',
   scopeGroup: 'type',
   nameGroup: 'name',
 };
@@ -87,13 +87,13 @@ const declaredScope = (fields = {}) => ({
   builtinNames: [],
   ...fields,
 });
-const stackScopes = { local: declaredScope(), RESOURCE: declaredScope({ namedByParentKey: true }) };
+const stackScopes = { local: declaredScope(), ENTRY: declaredScope({ namedByParentKey: true }) };
 const zero = { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
 
 function typed(name, file, extra = {}) {
   return {
     scope: 'mocktype',
-    scopeName: 'RESOURCE',
+    scopeName: 'ENTRY',
     name,
     file,
     keyRange: zero,

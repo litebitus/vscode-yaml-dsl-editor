@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const SCHEMA_FOLDER = path.join('.terraform', 'modules', 'resources_yaml');
-const MODELINE = `# yaml-language-server: $schema=${SCHEMA_FOLDER.split(path.sep).join('/')}/resources.schema.json\n`;
+const SCHEMA_FOLDER = path.join('.schema', 'sample');
+const SCHEMA_FILE = 'sample.schema.json';
+const MODELINE = `# yaml-language-server: $schema=${SCHEMA_FOLDER.split(path.sep).join('/')}/${SCHEMA_FILE}\n`;
 
 function labelSchemaText(labelDescription) {
   return JSON.stringify({
@@ -22,7 +23,7 @@ function labelSchemaText(labelDescription) {
 function writeSchemaFolder(overlayFolder, labelDescription) {
   const schemaFolder = path.join(overlayFolder, SCHEMA_FOLDER);
   fs.mkdirSync(schemaFolder, { recursive: true });
-  fs.writeFileSync(path.join(schemaFolder, 'resources.schema.json'), labelSchemaText(labelDescription));
+  fs.writeFileSync(path.join(schemaFolder, SCHEMA_FILE), labelSchemaText(labelDescription));
 }
 
 function writeOverlays(stack, labelDescriptionsByOverlay) {
@@ -39,4 +40,4 @@ function overlayHeadingOf(labels, theme = 'dark') {
   return `<span style="color:${color};"><strong>${labels}</strong></span>`;
 }
 
-module.exports = { SCHEMA_FOLDER, labelSchemaText, writeSchemaFolder, writeOverlays, overlayHeadingOf };
+module.exports = { SCHEMA_FOLDER, SCHEMA_FILE, labelSchemaText, writeSchemaFolder, writeOverlays, overlayHeadingOf };

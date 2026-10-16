@@ -11,21 +11,21 @@ const {
   parsedDsl,
 } = require('./config-builders');
 
-const dsl = parsedDsl(dslEntry('resource', {
+const dsl = parsedDsl(dslEntry('sample', {
   layers: {
     overlay_folders: ['dev', 'staging'],
     common_layer_discovery: 'ancestor',
     duplicate_check: { depth: 2, key_depths: {}, skip_keys: ['schema_version'] },
   },
   locals: { scope_name: 'local' },
-  scopes: { local: scope(), RESOURCE: scope({ named_by_parent_key: true }) },
+  scopes: { local: scope(), ENTRY: scope({ named_by_parent_key: true }) },
   declarations: [
     declaration('$.locals.*', 'local', { key_token: 'first_word' }),
-    declaration('$.*.*', 'RESOURCE', { skip_keys: ['locals'], key_token: 'last_word' }),
+    declaration('$.*.*', 'ENTRY', { skip_keys: ['locals'], key_token: 'last_word' }),
   ],
   references: [
     reference('^local\\.(?<name>[a-z0-9_]+)$', 'local'),
-    reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)', 'RESOURCE', {
+    reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)', 'ENTRY', {
       scope_group: 'type',
       text_after_name_allowed: true,
     }),

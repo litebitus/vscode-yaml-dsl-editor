@@ -26,7 +26,7 @@ const {
 const completeConfig = `
 version: "1"
 dsls:
-  - id: resources
+  - id: sample
     file_includes: ["**/mock.yml", 1]
     file_excludes: ["**/skip/**"]
     schema_search_paths: [https://example.test/schema.json]
@@ -82,7 +82,7 @@ dsls:
         later_items_of_declaring_list: false
         named_by_parent_key: false
         builtin_names: [env, 1]
-      RESOURCE:
+      ENTRY:
         regions: ["$"]
         later_items_of_declaring_list: false
         named_by_parent_key: true
@@ -115,7 +115,7 @@ dsls:
         name_spelling: dashes_as_underscores
         meta_argument_name: null
         declares_every_name: false
-        scope_name: RESOURCE
+        scope_name: ENTRY
       - path: "$.steps[*].*"
         skip_keys: []
         exclude_candidates: []
@@ -129,7 +129,7 @@ dsls:
       - pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)'
         positions: [whole_scalar]
         text_after_name_allowed: true
-        scope_name: RESOURCE
+        scope_name: ENTRY
         scope_group: type
         name_group: name
       - pattern: '^local\\.(?<name>[a-z0-9_]+)$'
@@ -143,24 +143,24 @@ dsls:
 test('a complete config states every field and keeps them', () => {
   const parsed = parseConfig(completeConfig);
   assert.equal(parsed.error, null);
-  const [resources] = parsed.dsls;
-  assert.deepEqual(resources.fileIncludes, ['**/mock.yml']);
+  const [sample] = parsed.dsls;
+  assert.deepEqual(sample.fileIncludes, ['**/mock.yml']);
   const keySortOrderFields = (entry) => [entry.path, entry.skipKeys, entry.order, entry.firstKeys, entry.lastKeys];
-  assert.deepEqual(resources.keySortOrders.map(keySortOrderFields), [
+  assert.deepEqual(sample.keySortOrders.map(keySortOrderFields), [
     ['$.locals', [], 'alphabetical', [], []],
     ['$..*', ['locals'], 'significance', [], []],
     ['$', [], 'significance', ['schema_version', 'locals'], ['outputs']],
   ]);
-  assert.deepEqual(resources.fileExcludes, ['**/skip/**']);
-  assert.deepEqual(resources.schemaSearchPaths, ['https://example.test/schema.json']);
-  assert.deepEqual(resources.layers, {
+  assert.deepEqual(sample.fileExcludes, ['**/skip/**']);
+  assert.deepEqual(sample.schemaSearchPaths, ['https://example.test/schema.json']);
+  assert.deepEqual(sample.layers, {
     overlayFolders: ['one'],
     commonLayerDiscovery: 'ancestor',
     commonLayerFiles: { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] },
     duplicateCheck: { depth: 3, keyDepths: { data_source: 2 }, skipKeys: ['schema_version'] },
   });
-  assert.equal(resources.placeholder.pattern, '\\$\\{(?<body>[^}]*)\\}');
-  assert.deepEqual(resources.placeholder.unscannedPaths, [
+  assert.equal(sample.placeholder.pattern, '\\$\\{(?<body>[^}]*)\\}');
+  assert.deepEqual(sample.placeholder.unscannedPaths, [
     { path: '$.build', tokens: [{ kind: 'name', key: 'build' }], skipKeys: [], includesSubtree: false },
     {
       path: '$.build..*',
@@ -169,44 +169,44 @@ test('a complete config states every field and keeps them', () => {
       includesSubtree: false,
     },
   ]);
-  assert.deepEqual(resources.function.definitions, ['terraform', 'schema']);
-  assert.deepEqual(resources.function.callResultReferencePositions, ['whole_scalar']);
-  assert.equal(resources.function.callsNotAllowedAt[1].includesSubtree, true);
-  assert.deepEqual(resources.function.markerFunction, {
+  assert.deepEqual(sample.function.definitions, ['terraform', 'schema']);
+  assert.deepEqual(sample.function.callResultReferencePositions, ['whole_scalar']);
+  assert.equal(sample.function.callsNotAllowedAt[1].includesSubtree, true);
+  assert.deepEqual(sample.function.markerFunction, {
     callMarker: 'fn.',
     splatOperator: '*',
     callsWithoutNameAllowed: true,
   });
-  assert.deepEqual(resources.locals, { scopeName: 'local' });
-  assert.deepEqual(resources.validator, {
+  assert.deepEqual(sample.locals, { scopeName: 'local' });
+  assert.deepEqual(sample.validator, {
     mergeBaseKeys: ['defaults'],
     childValuesFromParentKey: [{ pattern: '^(?<field>[a-z_]+) (?<value>[a-z0-9-]+)$' }],
   });
-  assert.deepEqual(resources.scopes.GLOBAL, {
+  assert.deepEqual(sample.scopes.GLOBAL, {
     regions: [[]],
     laterItemsOfDeclaringList: false,
     namedByParentKey: false,
     builtinNames: ['env'],
   });
-  assert.equal(resources.scopes.RESOURCE.namedByParentKey, true);
-  assert.deepEqual(resources.scopes.step.regions, []);
-  assert.equal(resources.scopes.step.laterItemsOfDeclaringList, true);
-  assert.deepEqual(resources.declarations.map((rule) => rule.nameSource), ['key', 'key', 'meta_argument']);
-  assert.deepEqual(resources.declarations[1].skipKeys, ['locals']);
-  assert.deepEqual(resources.declarations[1].excludeCandidates, ['defaults']);
-  assert.equal(resources.declarations[1].keyToken, 'last_word');
-  assert.equal(resources.declarations[1].nameSpelling, 'dashes_as_underscores');
-  assert.equal(resources.declarations[2].metaArgumentName, 'id');
-  assert.equal(resources.declarations[2].keyToken, null);
-  assert.deepEqual(resources.references[0], {
+  assert.equal(sample.scopes.ENTRY.namedByParentKey, true);
+  assert.deepEqual(sample.scopes.step.regions, []);
+  assert.equal(sample.scopes.step.laterItemsOfDeclaringList, true);
+  assert.deepEqual(sample.declarations.map((rule) => rule.nameSource), ['key', 'key', 'meta_argument']);
+  assert.deepEqual(sample.declarations[1].skipKeys, ['locals']);
+  assert.deepEqual(sample.declarations[1].excludeCandidates, ['defaults']);
+  assert.equal(sample.declarations[1].keyToken, 'last_word');
+  assert.equal(sample.declarations[1].nameSpelling, 'dashes_as_underscores');
+  assert.equal(sample.declarations[2].metaArgumentName, 'id');
+  assert.equal(sample.declarations[2].keyToken, null);
+  assert.deepEqual(sample.references[0], {
     pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)',
     positions: ['whole_scalar'],
     textAfterNameAllowed: true,
-    scopeName: 'RESOURCE',
+    scopeName: 'ENTRY',
     scopeGroup: 'type',
     nameGroup: 'name',
   });
-  assert.equal(resources.references[1].textAfterNameAllowed, false);
+  assert.equal(sample.references[1].textAfterNameAllowed, false);
 });
 
 test('a block the config leaves out is a feature the DSL does not have', () => {
@@ -457,7 +457,7 @@ dsls:
         later_items_of_declaring_list: false
         named_by_parent_key: false
         builtin_names: []
-      RESOURCE:
+      ENTRY:
         regions: ["$"]
         later_items_of_declaring_list: false
         named_by_parent_key: true
@@ -494,7 +494,7 @@ dsls:
       - pattern: '^y'
         positions: [whole_scalar]
         text_after_name_allowed: false
-        scope_name: RESOURCE
+        scope_name: ENTRY
         scope_group: null
         name_group: name
       - pattern: '^z'
@@ -552,7 +552,7 @@ dsls:
     'bare.references[2].scope_group is required',
     'bare.references[2].name_group is required',
     'bare.references[2]: scope undeclared is not declared in scopes',
-    'bare.references[3].scope_group is required: RESOURCE is named by a parent key',
+    'bare.references[3].scope_group is required: ENTRY is named by a parent key',
     'bare.references[4].scope_group must be null: listed is not named by a parent key',
     'lists.layers must be a mapping',
     'lists.placeholder must be a mapping',
@@ -599,13 +599,13 @@ test('file_includes and file_excludes decide the files a DSL owns, and two owner
   const claim = claimFile('/repo/mock.yml', [owner('a', ['**/*.yml']), owner('b', ['**/mock.yml'])]);
   assert.equal(claim.status, 'many');
   assert.deepEqual(claim.ids, ['a', 'b']);
-  const shared = owner('resources', ['**/resources.yml']);
-  const here = claimFile('/repo/a/resources.yml', [{ ...shared, dir: '/repo/a' }, { ...shared, dir: '/repo/b' }]);
+  const shared = owner('sample', ['**/sample.yml']);
+  const here = claimFile('/repo/a/sample.yml', [{ ...shared, dir: '/repo/a' }, { ...shared, dir: '/repo/b' }]);
   assert.equal(here.status, 'one');
   assert.equal(here.dsl.dir, '/repo/a');
-  assert.equal(claimFile('/repo/c/resources.yml', [{ ...shared, dir: '/repo/a' }]).status, 'none');
-  assert.equal(claimFile('/repo-a/resources.yml', [{ ...shared, dir: '/repo' }]).status, 'none');
-  assert.equal(claimFile('/repo/a/resources.yml', [{ ...shared, dir: '/' }]).status, 'none');
+  assert.equal(claimFile('/repo/c/sample.yml', [{ ...shared, dir: '/repo/a' }]).status, 'none');
+  assert.equal(claimFile('/repo-a/sample.yml', [{ ...shared, dir: '/repo' }]).status, 'none');
+  assert.equal(claimFile('/repo/a/sample.yml', [{ ...shared, dir: '/' }]).status, 'none');
   assert.equal(claimFile('/repo/readme.md', [{ ...shared, dir: '/repo' }]).status, 'none');
 });
 

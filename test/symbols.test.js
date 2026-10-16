@@ -29,9 +29,9 @@ test('a key names a symbol by a token, spelled as the rule says, in a declared o
   ].join('\n');
   const analyzed = doc(text, {
     function: markerFunction(),
-    scopes: { RESOURCE: scope({ named_by_parent_key: true }), local: scope() },
+    scopes: { ENTRY: scope({ named_by_parent_key: true }), local: scope() },
     declarations: [
-      declaration('$.*.*', 'RESOURCE', {
+      declaration('$.*.*', 'ENTRY', {
         skip_keys: ['schema_version', 'locals'],
         exclude_candidates: ['defaults'],
         key_token: 'last_word',
@@ -46,7 +46,7 @@ test('a key names a symbol by a token, spelled as the rule says, in a declared o
   assert.deepEqual([local.valueText, local.valueIsScalar, local.call], ['mock-value', true, false]);
   assert.equal(analyzed.symbols.find((symbol) => symbol.name === 'operator_key').call, true);
   assert.deepEqual(analyzed.symbols[0].documentPath, ['mocktype', 'primary']);
-  assert.deepEqual([analyzed.symbols[0].scopeName, local.scopeName], ['RESOURCE', 'local']);
+  assert.deepEqual([analyzed.symbols[0].scopeName, local.scopeName], ['ENTRY', 'local']);
 });
 
 test('a name can come from a value or from a meta argument, one symbol per listed id', () => {
@@ -139,9 +139,9 @@ test('references are found in each position their rule allows, and refused in th
   ].join('\n');
   const analyzed = doc(text, {
     placeholder: placeholder(),
-    scopes: { RESOURCE: scope({ named_by_parent_key: true }), local: scope(), thing: scope() },
+    scopes: { ENTRY: scope({ named_by_parent_key: true }), local: scope(), thing: scope() },
     references: [
-      reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)', 'RESOURCE', {
+      reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)', 'ENTRY', {
         text_after_name_allowed: true,
         scope_group: 'type',
       }),

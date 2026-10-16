@@ -13,7 +13,7 @@ const {
 
 const OVERLAYS = ['dev', 'staging', 'production'];
 
-const config = configText(dslEntry('resource', {
+const config = configText(dslEntry('sample', {
   file_includes: ['**/mock.yml'],
   layers: {
     overlay_folders: OVERLAYS,
@@ -426,7 +426,7 @@ test('a stack without a common layer file is offered moves, and applying one cre
   assert.match(moved.edit.documentChanges[commonEdit].edits[0].newText, /^locals:\n {2}queue_size: 1\n/);
 });
 
-const concernConfig = configText(dslEntry('resource', {
+const concernConfig = configText(dslEntry('sample', {
   file_includes: ['**/mock.yml'],
   layers: {
     overlay_folders: OVERLAYS,

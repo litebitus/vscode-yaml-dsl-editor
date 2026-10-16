@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { createWorkspace } = require('../lib/workspace');
 const { dslEntry, configText } = require('./config-builders');
 
-const config = configText(dslEntry('resource', {
+const config = configText(dslEntry('sample', {
   file_includes: ['**/mock.yml'],
   layers: {
     overlay_folders: ['overlay-1', 'overlay-2', 'overlay-3'],

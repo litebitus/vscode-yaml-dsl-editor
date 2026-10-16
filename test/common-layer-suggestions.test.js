@@ -25,7 +25,7 @@ const common = '/repo/mock.yml';
 const overlayPath = (name) => `/repo/${name}/mock.yml`;
 const noSchemaChecks = createSchemaChecks(() => null);
 
-const resourceKeySortOrders = [
+const entryKeySortOrders = [
   { path: '$.locals', skip_keys: [], order: 'alphabetical', first_keys: [], last_keys: [] },
   { path: '$..*', skip_keys: ['locals'], order: 'significance', first_keys: [], last_keys: [] },
   {
@@ -46,15 +46,15 @@ function unitLayers(depth, keyDepths = { data_source: 2, locals: 2 }) {
 }
 
 function layeredDsl(fields = {}, localPositions = ['whole_scalar', 'whole_placeholder', 'placeholder_in_text']) {
-  return parsedDsl(dslEntry('resource', {
+  return parsedDsl(dslEntry('sample', {
     layers: unitLayers(3),
-    key_sort_orders: resourceKeySortOrders,
+    key_sort_orders: entryKeySortOrders,
     placeholder: placeholder(),
     locals: { scope_name: 'local' },
-    scopes: { local: scope(), RESOURCE: scope({ named_by_parent_key: true }) },
+    scopes: { local: scope(), ENTRY: scope({ named_by_parent_key: true }) },
     declarations: [
       declaration('$.locals.*', 'local', { key_token: 'first_word' }),
-      declaration('$.*.*', 'RESOURCE', { skip_keys: ['locals'], key_token: 'last_word' }),
+      declaration('$.*.*', 'ENTRY', { skip_keys: ['locals'], key_token: 'last_word' }),
     ],
     references: [reference('^local\\.(?<name>[a-z0-9_]+)$', 'local', { positions: localPositions })],
     ...fields,
@@ -726,12 +726,12 @@ test('a block whose opt-out leaves out a conditionally required field stays a mo
   assert.ok(suggestion.edits.size > 0);
 });
 
-const resourceUnits = () => layeredDsl({ layers: unitLayers(2) });
+const entryUnits = () => layeredDsl({ layers: unitLayers(2) });
 
-test('a resource moves whole: its keys never move one by one, and a list an overlay lacks is its one difference', () => {
+test('an entry moves whole: its keys never move one by one, and a list an overlay lacks is its one difference', () => {
   const lacking = 'queue:\n  invoke:\n    name: mock-invoke\n    retention_seconds: 60\n';
   const held = `${lacking}    publishers:\n      - mock-role\n`;
-  const stack = stackOf(resourceUnits(), texts('schema_version: "3"\n', {
+  const stack = stackOf(entryUnits(), texts('schema_version: "3"\n', {
     dev: lacking,
     staging: held,
     uat: held,
@@ -770,7 +770,7 @@ test('a list whose items differ in number is one difference, declared on the lin
     ...hosts.map((host) => `      - ${host}`),
     '',
   ].join('\n');
-  const stack = stackOf(resourceUnits(), texts('', {
+  const stack = stackOf(entryUnits(), texts('', {
     dev: holder(['mock-a']),
     staging: holder(['mock-a', 'mock-b']),
     uat: holder(['mock-a', 'mock-b']),
@@ -799,7 +799,7 @@ test('a scalar an overlay lacks takes its schema default as the one difference, 
   };
   const checks = createSchemaChecks((schemaHash) => schemas[schemaHash]);
   const stackWith = (schemaName) => {
-    const stack = stackOf(resourceUnits(), texts('', { dev: lacking, staging: held, uat: held }));
+    const stack = stackOf(entryUnits(), texts('', { dev: lacking, staging: held, uat: held }));
     stack.schemas = new Map(OVERLAYS.map((name) => [overlayPath(name), { hash: schemaName }]));
     return stack;
   };

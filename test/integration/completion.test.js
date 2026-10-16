@@ -39,7 +39,7 @@ async function typedAtEnd(editor, text) {
 }
 
 suite('completion', () => {
-  test('a ref started in an overlay offers the common layer\'s resources', async () => {
+  test('a ref started in an overlay offers the common layer\'s declarations', async () => {
     const editor = await shownDocument(path.join(stackCopy(), 'one', 'mock.yml'));
     const cursor = await typedAtEnd(editor, '\n    other: ref mo');
     assert.ok((await completionLabelsAt(editor.document, cursor)).includes('ref mocktype.primary'));
@@ -47,7 +47,7 @@ suite('completion', () => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
-  test('a ref started inside a quote offers the common layer\'s resources', async () => {
+  test('a ref started inside a quote offers the common layer\'s declarations', async () => {
     const editor = await shownDocument(path.join(stackCopy(), 'one', 'mock.yml'));
     const cursor = await typedAtEnd(editor, '\n    other: "ref mo');
     assert.ok((await completionLabelsAt(editor.document, cursor)).includes('ref mocktype.primary'));
@@ -168,7 +168,7 @@ suite('schema completion', () => {
 });
 
 suite('required fields', () => {
-  test('Enter after an empty resource key fills its required fields, the cursor at the first value, undone in one step', async () => {
+  test('Enter after an empty entry key fills its required fields, the cursor at the first value, undone in one step', async () => {
     const editor = await shownDocument(path.join(fixtureCopy('required-fields'), 'mock.yml'));
     const doc = editor.document;
     const keyLine = doc.getText().split('\n').indexOf('  alerts:');

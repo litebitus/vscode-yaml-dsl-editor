@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Docs: the design doc and README speak of entries and a sample DSL, no longer of one DSL's resources.
+
 ## 0.7.0 - 2026-10-15
 
 - Hover: fixed tooltips breaking lines in the middle of words.
