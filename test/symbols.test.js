@@ -238,3 +238,17 @@ test('a DSL with no placeholder block scans no placeholders', () => {
   assert.deepEqual(analyzed.references, []);
   assert.deepEqual(analyzed.placeholders, []);
 });
+
+test('a rule reading anywhere in a scalar reads it with its tag, and matches nothing inside the tag alone', () => {
+  const text = 'a: !Ref mock_bucket\nb:\n  Ref: mock_bucket\nc: !Ref other\n';
+  const analyzed = doc(text, {
+    tag_keys: [{ tag: '!Ref', key: 'Ref' }],
+    scopes: { ENTRY: scope() },
+    references: [
+      reference('!Ref (?<name>mock_[a-z]+)', 'ENTRY', { positions: ['anywhere_in_scalar'] }),
+      reference('(?<name>!Ref) ', 'ENTRY', { positions: ['anywhere_in_scalar'] }),
+    ],
+  });
+  const names = analyzed.references.map((ref) => [ref.groups.name, text.slice(ref.span.groups[0].start, ref.span.groups[0].end)]);
+  assert.deepEqual(names, [['mock_bucket', 'mock_bucket'], ['mock_bucket', 'mock_bucket']]);
+});

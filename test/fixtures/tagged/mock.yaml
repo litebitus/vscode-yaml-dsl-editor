@@ -1,0 +1,8 @@
+Resources:
+  MockBucket:
+    Type: Mock::Bucket
+  MockQueue:
+    Properties:
+      Short: !Ref MockBucket
+      Long:
+        Ref: MockBucket

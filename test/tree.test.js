@@ -75,3 +75,33 @@ test('the key range at a path is the last key of that name, or an item\'s range,
   assert.equal(keyRangeAt(tree, ['a', 'b', 'deeper']), null);
   assert.equal(keyRangeAt(tree, []), null);
 });
+
+test('a node carrying a listed tag reads as a map holding its key, the tag its key range, and the value expanded', () => {
+  const tagKeys = [{ tag: '!Ref', key: 'Ref' }, { tag: '!If', key: 'Fn::If' }, { tag: '!Select', key: 'Fn::Select' }];
+  const text = 'a: !Ref Mock\nb: !If [mock, !Ref Other, "c"]\nd: !Select\n  - 0\n  - mock\ne: &kept !Ref Kept\nf: *kept\ng: !Unlisted mock\nh:\n  Ref: Mock\n';
+  const parsed = parseYaml(text, undefined, tagKeys);
+  const [a, b, d, e, f, g] = parsed.tree.entries.map((entry) => entry.value);
+  assert.equal(a.kind, 'map');
+  assert.equal(a.flow, true);
+  assert.equal(a.entries[0].key, 'Ref');
+  assert.equal(text.slice(a.entries[0].keyStart, a.entries[0].keyEnd), '!Ref');
+  assert.equal(text.slice(a.start, a.end), '!Ref Mock');
+  assert.equal(a.entries[0].value.value, 'Mock');
+  assert.equal(b.entries[0].key, 'Fn::If');
+  assert.equal(b.entries[0].value.items[1].entries[0].key, 'Ref');
+  assert.equal(text.slice(d.entries[0].keyStart, d.entries[0].keyEnd), '!Select');
+  assert.equal(text.slice(e.entries[0].keyStart, e.entries[0].keyEnd), '!Ref');
+  assert.equal(f.entries[0].value.value, 'Kept');
+  assert.equal(g.kind, 'scalar');
+  assert.deepEqual(parsed.value, {
+    a: { Ref: 'Mock' },
+    b: { 'Fn::If': ['mock', { Ref: 'Other' }, 'c'] },
+    d: { 'Fn::Select': [0, 'mock'] },
+    e: { Ref: 'Kept' },
+    f: { Ref: 'Kept' },
+    g: 'mock',
+    h: { Ref: 'Mock' },
+  });
+  assert.deepEqual(parsed.errors, []);
+  assert.equal(parseYaml('a: !Ref Mock\n').value.a, 'Mock');
+});

@@ -652,3 +652,31 @@ test('the shipped schema of the config is a draft 2020-12 schema stating the val
   assert.deepEqual(definitions.key_sort_order.properties.order.enum, KEY_SORT_ORDERS);
   assert.deepEqual(Object.keys(definitions.scopes.patternProperties), [LOGICAL_SCOPE_NAME.source]);
 });
+
+test('tag_keys pairs each tag with the key it stands for, and a DSL without reads none', () => {
+  const tagged = parseConfig(configText(dslEntry('sample', {
+    tag_keys: [{ tag: '!Ref', key: 'Ref' }, { tag: '!GetAtt', key: 'Fn::GetAtt' }],
+  })));
+  assert.equal(tagged.ok, true);
+  assert.deepEqual(tagged.dsls[0].tagKeys, [{ tag: '!Ref', key: 'Ref' }, { tag: '!GetAtt', key: 'Fn::GetAtt' }]);
+  assert.deepEqual(parseConfig(configText(dslEntry('sample'))).dsls[0].tagKeys, []);
+  const problemsOf = (tagKeys) => parseConfig(configText(dslEntry('sample', { tag_keys: tagKeys }))).error;
+  assert.equal(problemsOf('!Ref'), 'sample.tag_keys must be a list of tag and key pairs');
+  assert.equal(problemsOf(['!Ref']), 'sample.tag_keys[0] must be a mapping with tag and key');
+  assert.equal(
+    problemsOf([{ tag: 'Ref', key: 'Ref' }]),
+    'sample.tag_keys[0].tag is required: a YAML tag as written, such as !Ref',
+  );
+  assert.equal(
+    problemsOf([{ tag: '!Ref' }]),
+    'sample.tag_keys[0].key is required: the key the tagged node stands for',
+  );
+  assert.equal(
+    problemsOf([{ tag: '!Ref', key: 'Ref' }, { tag: '!Ref', key: 'Other' }]),
+    'sample.tag_keys[1].tag !Ref is listed more than once',
+  );
+  assert.equal(
+    problemsOf([{ tag: '!Ref', key: 'Ref' }, { tag: '!Other', key: 'Ref' }]),
+    'sample.tag_keys[1].key Ref is listed more than once',
+  );
+});

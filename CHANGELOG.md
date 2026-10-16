@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Config: a `yaml-dsl.yml` in any folder of the workspace governs the files below it, and `{config_root}/` starts a glob or schema path at its folder.
+- Config: `tag_keys` reads a YAML tag as the key it stands for, so `!Ref Mock` and `Ref: Mock` are one reference, one field and one value.
 - Docs: the design doc and README speak of entries and a sample DSL, no longer of one DSL's resources.
 
 ## 0.7.0 - 2026-10-15

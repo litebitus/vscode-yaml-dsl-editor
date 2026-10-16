@@ -50,6 +50,27 @@
           "items": { "type": "string", "minLength": 1 },
           "description": "Schemas tried in order when a file names none, or the one it names is not on disk. Each path is relative to the file, or to the config's folder when it starts with {config_root}/; a URL is fetched."
         },
+        "tag_keys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["tag", "key"],
+            "additionalProperties": false,
+            "properties": {
+              "tag": {
+                "type": "string",
+                "pattern": "^![^\\s!]+$",
+                "description": "The YAML tag as written, such as !Ref."
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The key the tagged node stands for, such as Ref."
+              }
+            }
+          },
+          "description": "YAML tags that stand for keys: a tagged node reads as a map holding the key, the node its value."
+        },
         "layers": { "$ref": "#/$defs/layers" },
         "placeholder": { "$ref": "#/$defs/placeholder" },
         "function": { "$ref": "#/$defs/function" },

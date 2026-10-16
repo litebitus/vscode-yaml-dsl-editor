@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "Resources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "Type": { "type": "string" },
+          "Properties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "Ref": { "type": "string", "description": "The logical ID a reference reads." }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1375,3 +1375,110 @@ test('a stack worked out in the background reports the files holding a deprecate
   const flagged = reports.flatMap((stackReport) => stackReport.files.map((file) => [file.uri, file.warning]));
   assert.deepEqual(flagged, [['file:///repo/warn/mock.yml', true], ['file:///repo/kept/mock.yml', false]]);
 });
+
+const taggedPath = '/repo/tagged/mock.yaml';
+const taggedSchema = JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  properties: {
+    Resources: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        properties: {
+          Type: { type: 'string' },
+          Properties: {
+            type: 'object',
+            additionalProperties: {
+              type: 'object',
+              properties: {
+                Ref: { type: 'string', description: 'The logical ID a reference reads.' },
+                'Fn::GetAtt': { type: 'string' },
+                'Fn::Sub': { type: 'string' },
+              },
+              additionalProperties: false,
+            },
+          },
+        },
+      },
+    },
+  },
+});
+const taggedText = [
+  'Resources:',
+  '  MockBucket:',
+  '    Type: Mock::Bucket',
+  '  MockQueue:',
+  '    Properties:',
+  '      Short: !Ref MockBucket',
+  '      Long:',
+  '        Ref: MockBucket',
+  '      Attribute: !GetAtt MockBucket.Arn',
+  '      Missing: !Ref MockMissing',
+  '      Text: !Sub "arn:${MockBucket}"',
+  '      Wrong: !Ref [MockBucket]',
+  '',
+].join('\n');
+const taggedConfig = configText(dslEntry('tagged', {
+  file_includes: ['**/mock.yaml'],
+  schema_search_paths: ['schema.json'],
+  tag_keys: [{ tag: '!Ref', key: 'Ref' }, { tag: '!GetAtt', key: 'Fn::GetAtt' }, { tag: '!Sub', key: 'Fn::Sub' }],
+  placeholder: placeholder(),
+  scopes: { LOGICAL_ID: scope() },
+  declarations: [declaration('$.Resources.*', 'LOGICAL_ID')],
+  references: [
+    reference('^!Ref (?<name>[A-Za-z0-9]+)$', 'LOGICAL_ID'),
+    reference('^!GetAtt (?<name>[A-Za-z0-9]+)\\.', 'LOGICAL_ID', { text_after_name_allowed: true }),
+    reference('^(?<name>[A-Za-z0-9]+)$', 'LOGICAL_ID', { positions: inPlaceholders }),
+  ],
+}));
+
+async function taggedWorkspace(text = taggedText) {
+  const ws = workspace({ [taggedPath]: text, '/repo/tagged/schema.json': taggedSchema });
+  await ws.setConfigs([{ text: taggedConfig, dir: '/repo' }]);
+  await ws.sync(`file://${taggedPath}`, taggedPath, text);
+  return ws;
+}
+
+test('a reference reads its scalar with its tag, in the short form and under the key the tag stands for', async () => {
+  const ws = await taggedWorkspace();
+  const uri = `file://${taggedPath}`;
+  assert.deepEqual(ws.references(uri).map((reference) => reference.kind), ['local', 'local', 'local', 'error', 'local']);
+  const declared = rangeOf(taggedText, 'MockBucket');
+  for (const needle of ['!Ref MockBucket', 'Ref: MockBucket', '!GetAtt MockBucket']) {
+    const definition = ws.definition(uri, place(taggedText, needle, needle.indexOf('MockBucket') + 1));
+    assert.deepEqual(definition.range, declared);
+  }
+  const renamed = textsAfter({ [taggedPath]: taggedText }, ws.rename(uri, place(taggedText, 'Ref: MockBucket', 6), 'MockStore').edit);
+  assert.match(renamed[taggedPath], /^ {2}MockStore:$/m);
+  assert.match(renamed[taggedPath], /Short: !Ref MockStore$/m);
+  assert.match(renamed[taggedPath], /^ {8}Ref: MockStore$/m);
+  assert.match(renamed[taggedPath], /Attribute: !GetAtt MockStore\.Arn$/m);
+  assert.match(renamed[taggedPath], /Text: !Sub "arn:\$\{MockStore\}"$/m);
+});
+
+test('a tag documents and validates as the key it stands for', async () => {
+  const ws = await taggedWorkspace();
+  const uri = `file://${taggedPath}`;
+  assert.match(ws.hover(uri, place(taggedText, '!Ref MockBucket', 1)).contents.value, /The logical ID a reference reads\./);
+  const wrongLine = at(taggedText, 'Wrong').line;
+  assert.equal(ws.problems(uri).some((problem) => problem.range.start.line === wrongLine), true);
+  const otherLines = ws.problems(uri).filter((problem) => ![wrongLine, at(taggedText, 'MockMissing').line]
+    .includes(problem.range.start.line));
+  assert.deepEqual(otherLines, []);
+});
+
+test('completion offers a name in the short form with its tag and under the key the tag stands for without', async () => {
+  const text = `${taggedText}      Typed: !Ref Mock\n      TypedLong:\n        Ref: Mock\n`;
+  const ws = await taggedWorkspace(text);
+  const uri = `file://${taggedPath}`;
+  const labelsAfter = (needle) => {
+    const position = place(text, needle, needle.length);
+    return ws.completion(uri, position).map((item) => item.label).sort();
+  };
+  assert.deepEqual(labelsAfter('Typed: !Ref Mock'), ['!Ref MockBucket', '!Ref MockQueue']);
+  const longPosition = place(text, '        Ref: Mock\n', '        Ref: Mock'.length);
+  const long = ws.completion(uri, longPosition);
+  assert.deepEqual(long.map((item) => item.label).sort(), ['MockBucket', 'MockQueue']);
+  assert.deepEqual(long[0].range.start, { line: longPosition.line, character: '        Ref: '.length });
+});

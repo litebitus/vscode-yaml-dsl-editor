@@ -388,7 +388,7 @@ Every path in the config is a JSONPath query (RFC 9535) in this subset:
 
 ## YAML tags
 
-A DSL whose YAML tags stand for keys lists them in `tag_keys`, `[]` for a DSL without:
+A DSL whose YAML tags stand for keys lists them in `tag_keys`; a DSL without it reads tags as YAML does:
 
 | Field | Meaning |
 |---|---|
