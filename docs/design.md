@@ -743,6 +743,11 @@ The validator's core compiles each schema once with its draft's validator, and r
 
 A `pattern` or `patternProperties` key is a regular expression built with the `u` flag, as JSON Schema says.
 
+A part of a schema is compiled on its own, its `$ref` and `$dynamicRef` starting with `#` resolving in the schema, and the schema itself is compiled at most once:
+
+- a branch's `if`, so choosing a branch compiles only what the condition reaches;
+- a node's own keywords, which the schema checks validate an opt-out against.
+
 ### Validation
 
 Each document is validated against its schema, with the requirement markers deciding which fields are required:
@@ -983,7 +988,7 @@ A potential move is information: its gutter mark is the info mark, its hint star
 
 A block the walk finds passes two schema checks before it is offered:
 
-1. Every overlay with a file, holding the block or not, reads the node at the block's path in its own schema, and those nodes must be the same. A node is compared by a hash of it with its references resolved, its annotations (`description`, `title`, `examples`, `$comment`) set aside and its requirement marker kept, cached per schema node.
+1. Every overlay with a file, holding the block or not, reads the node at the block's path in its own schema, and those nodes must be the same. Nodes of one schema are the same when they are one node. Nodes of different schemas are compared by a hash of each with its references resolved, its annotations (`description`, `title`, `examples`, `$comment`) set aside and its requirement marker kept, worked out when first compared and cached per schema node.
 2. Each opt-out passes the node at its own path in the schema of the overlay that takes it: `{}`, `[]` or the default, with requiredness read from the requirement markers.
 
 A block that fails either check is a potential move with no link:

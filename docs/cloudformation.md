@@ -106,7 +106,7 @@ The template schema is generated from them. The template's own sections are writ
 
 ### Generator
 
-`scripts/cloudformation-schema/` reads one Region's zip, the Region its argument, and writes `examples/schemas/cloudformation-<format version>.schema.json` in draft 2020-12. Its tests cover each transformation:
+`scripts/cloudformation-schema/`, run by `make cloudformation-schema` with the Region in `CLOUDFORMATION_REGION`, reads one Region's zip and writes `examples/schemas/cloudformation-<format version>.schema.json` in draft 2020-12. Its tests cover each transformation:
 
 | From the provider schemas | In the template schema |
 |---|---|

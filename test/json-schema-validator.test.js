@@ -168,3 +168,38 @@ test('a pattern is built with the u flag, so a Unicode property escape and a cod
     ], draftUri);
   }
 });
+
+test('a branch condition is compiled alone, so a part of the schema that cannot compile leaves it read', () => {
+  const condition = { properties: { kind: { const: 'mock-bucket' } }, required: ['kind'] };
+  const schema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: { broken: { type: 'string', pattern: '(' } },
+    allOf: [{ if: condition, then: { required: ['bucket'] } }],
+  };
+  const validator = schemaValidatorFor(schema);
+  assert.equal(validator.conditionHolds(condition, { kind: 'mock-bucket' }), true);
+  assert.equal(validator.conditionHolds(condition, { kind: 'mock-queue' }), false);
+  assert.deepEqual(validator.documentFailures({}).map((failure) => failure.keyword), [SCHEMA_COMPILE_KEYWORD]);
+});
+
+test('a part of the schema compiled alone resolves its references in the schema, and data keeps its $ref keys', () => {
+  for (const draftUri of DRAFT_URIS) {
+    const definitionsKeyword = draftUri.includes('draft-07') ? 'definitions' : '$defs';
+    const condition = { $ref: `#/${definitionsKeyword}/mock_kind` };
+    const schema = {
+      $schema: draftUri,
+      [definitionsKeyword]: { mock_kind: { properties: { kind: { const: 'mock-bucket' } }, required: ['kind'] } },
+      properties: { size: { type: 'integer', minimum: 1 } },
+      allOf: [{ if: condition, then: { required: ['bucket'] } }],
+    };
+    const validator = schemaValidatorFor(schema);
+    assert.equal(validator.conditionHolds(condition, { kind: 'mock-bucket' }), true, draftUri);
+    assert.equal(validator.conditionHolds(condition, { kind: 'mock-queue' }), false, draftUri);
+    const part = validator.compileRootPart({
+      properties: { size: { $ref: '#/properties/size' }, marker: { const: { $ref: '#/mock' } } },
+    });
+    assert.equal(part({ size: 2, marker: { $ref: '#/mock' } }), true, draftUri);
+    assert.equal(part({ size: 0 }), false, draftUri);
+    assert.equal(part({ marker: { $ref: 'yaml-dsl-editor-root#/mock' } }), false, draftUri);
+  }
+});

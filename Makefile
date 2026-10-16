@@ -7,6 +7,7 @@
 #   export OVSX_PAT=...       # Open VSX token (ovsx reads this env var)
 
 BUMP ?= patch
+CLOUDFORMATION_REGION ?= us-east-1
 VSIX = yaml-dsl-editor.vsix
 # lazy (=) so it re-reads package.json after bump has run
 VERSION = $(shell node -p "require('./package.json').version")
@@ -15,7 +16,7 @@ EXT_ID = $(PUBLISHER).$(shell node -p "require('./package.json').name")
 ANTIGRAVITY_EXECUTABLE = /Applications/Antigravity IDE.app/Contents/MacOS/Electron
 CURSOR_EXECUTABLE = /Applications/Cursor.app/Contents/MacOS/Cursor
 
-.PHONY: test test-all test-antigravity test-cursor package install-cursor install-antigravity publish preflight bump push publish-ovsx publish-vsce uninstall
+.PHONY: test test-all test-antigravity test-cursor cloudformation-schema package install-cursor install-antigravity publish preflight bump push publish-ovsx publish-vsce uninstall
 
 test:
 	node --test --test-timeout=5000 --test-force-exit --experimental-test-coverage \
@@ -41,6 +42,9 @@ test-cursor:
 	@if [ -x "$(CURSOR_EXECUTABLE)" ]; then \
 		TARGET_IDE_LABEL=cursor TARGET_IDE_EXECUTABLE="$(CURSOR_EXECUTABLE)" npx vscode-test; \
 	else echo "test-cursor skipped: $(CURSOR_EXECUTABLE) is not installed"; fi
+
+cloudformation-schema:
+	node scripts/cloudformation-schema/generate-schema.js $(CLOUDFORMATION_REGION)
 
 package: test-all
 	vsce package -o $(VSIX)

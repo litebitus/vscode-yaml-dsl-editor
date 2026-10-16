@@ -80,15 +80,29 @@ test('annotations do not change a node\'s fingerprint, a field named like one do
   const checks = checksOf();
   const base = checks.nodeCheck('mock-base', ['entry']);
   assert.equal(base.state, NODE_STATES.constrained);
-  assert.equal(checks.nodeCheck('mock-reworded', ['entry']).fingerprint, base.fingerprint);
-  assert.notEqual(checks.nodeCheck('mock-renamed-field', ['entry']).fingerprint, base.fingerprint);
-  assert.equal(checks.nodeCheck('mock-base', ['entry']).fingerprint, base.fingerprint);
+  assert.equal(checks.nodeCheck('mock-reworded', ['entry']).sameNodeAs(base), true);
+  assert.equal(checks.nodeCheck('mock-renamed-field', ['entry']).sameNodeAs(base), false);
+  assert.equal(checks.nodeCheck('mock-base', ['entry']).sameNodeAs(base), true);
 });
 
 test('a recursive ref is fingerprinted without looping', () => {
   const checks = checksOf();
   const tree = checks.nodeCheck('mock-base', ['entry', 'tree']);
-  assert.equal(tree.fingerprint, checks.nodeCheck('mock-reworded', ['entry', 'tree']).fingerprint);
+  assert.equal(tree.sameNodeAs(checks.nodeCheck('mock-reworded', ['entry', 'tree'])), true);
+});
+
+test('a node of one schema is the same node as itself without a fingerprint, '
+  + 'and nodes of different schemas, or no schema, are compared by state and fingerprint', () => {
+  const unhashable = { type: 'object', properties: { entry: { type: 'object', properties: { size: { const: 1n } } } } };
+  const checks = createSchemaChecks((schemaHash) => ({ ...mockSchemas, 'mock-unhashable': unhashable })[schemaHash]);
+  const entry = checks.nodeCheck('mock-unhashable', ['entry']);
+  assert.equal(entry.sameNodeAs(checks.nodeCheck('mock-unhashable', ['entry'])), true);
+  assert.throws(() => entry.fingerprint(), /BigInt/);
+  const tags = checks.nodeCheck('mock-base', ['entry', 'tags']);
+  assert.equal(checks.nodeCheck('mock-base', ['entry']).sameNodeAs(tags), false);
+  assert.equal(checks.nodeCheck(null, ['entry']).sameNodeAs(checks.nodeCheck('mock-missing', ['entry'])), true);
+  assert.equal(checks.nodeCheck(null, ['entry']).sameNodeAs(checks.nodeCheck('mock-base', ['entry'])), false);
+  assert.equal(checks.nodeCheck('mock-base', ['open']).sameNodeAs(checks.nodeCheck('mock-reworded', ['open'])), true);
 });
 
 test('a path the schema forbids, an open path and a missing schema each have their own state', () => {
@@ -112,6 +126,20 @@ test('the opt-out is checked against the node and fails with the schema\'s own m
     messageFailure('the schema does not allow it'),
   ]);
   assert.deepEqual(checks.nodeCheck(null, ['entry']).optOutFailures(), []);
+});
+
+test('a node\'s own keywords resolve their references anywhere in the schema, not only in its definitions', () => {
+  const schema = {
+    type: 'object',
+    properties: {
+      shared_name: { type: 'string' },
+      entry: { type: 'object', properties: { name: { $ref: '#/properties/shared_name' } } },
+    },
+  };
+  const checks = createSchemaChecks((schemaHash) => (schemaHash === 'mock-shared' ? schema : null));
+  const entry = checks.nodeCheck('mock-shared', ['entry']);
+  assert.deepEqual(entry.optOutFailures({ name: 'mock-name' }), []);
+  assert.deepEqual(entry.optOutFailures({ name: 1 }), [messageFailure('must be string')]);
 });
 
 const alternativeSchemas = {
@@ -224,7 +252,7 @@ test('a conditionally required field is reported, not failed, and its marker cou
   assert.deepEqual(conditional.conditionallyRequiredFields(), ['entry.name']);
   const plain = checks.nodeCheck('marker-conditional-plain', ['entry']);
   assert.deepEqual(plain.conditionallyRequiredFields(), []);
-  assert.notEqual(plain.fingerprint, conditional.fingerprint);
+  assert.equal(plain.sameNodeAs(conditional), false);
   assert.deepEqual(checks.nodeCheck(null, ['entry']).conditionallyRequiredFields(), []);
 });
 

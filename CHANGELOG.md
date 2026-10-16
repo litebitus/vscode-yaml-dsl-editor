@@ -9,6 +9,7 @@
 - Paths: the JSONPath steps `['name']` and `..name`.
 - Schemas: a modeline's `#` or `#/pointer` marks a fragment, validated at the node it names with no key required.
 - Schemas: a `pattern` is built with the `u` flag, as JSON Schema says.
+- Performance: choosing a branch, comparing overlays' schema nodes and checking an opt-out no longer each compile or hash a whole large schema.
 - Examples: the CloudFormation schema, generated from AWS's resource provider schemas by `scripts/cloudformation-schema/`.
 - Docs: the design doc and README speak of entries and a sample DSL, no longer of one DSL's resources.
 

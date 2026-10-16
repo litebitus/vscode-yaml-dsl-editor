@@ -204,6 +204,10 @@ F5 (Extension Development Host). There is no compile step. The extension is plai
 
 `make test` runs the unit suite and its coverage gate. `make test-all` runs that suite, then downloads each exact version in `vscodeTestVersions` in `package.json` and runs `test/integration` in it. It does not use an editor installed on the machine. `make test-antigravity` and `make test-cursor` run `test/integration` in the Antigravity IDE and Cursor installed under `/Applications`, and are skipped when that editor is not installed. `make package` runs `test-all` before it builds the `.vsix`.
 
+### Example schemas
+
+`make cloudformation-schema` regenerates `examples/schemas/cloudformation-2010-09-09.schema.json` from the resource provider schemas of the Region in `CLOUDFORMATION_REGION`.
+
 ### Publish
 
 Open VSX listing: https://open-vsx.org/extension/lite2073/yaml-dsl-editor
