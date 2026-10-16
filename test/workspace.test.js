@@ -134,7 +134,8 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.match(localHover.contents.value, /db:/);
   assert.equal(ws.definition('file://' + common, at(files[common], 'local.db')).path, common);
   const field = ws.hover('file://' + common, at(files[common], 'label'));
-  assert.deepEqual(field.contents, { kind: 'markdown', value: '\\[optional\\] Mock label\\.' });
+  const labelDocumentation = '```\nlabel: string_or_ref    [optional]\n```\n\nMock label.';
+  assert.deepEqual(field.contents, { kind: 'markdown', value: labelDocumentation });
 
   const within = ws.hover(oneUri, at(files[one], 'local.db'));
   assert.match(within.contents.value, /mock-stack\/mock\.yml:\d+/);
@@ -153,7 +154,7 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.deepEqual(ws.links(foldUri), []);
   assert.deepEqual(ws.links('file://missing'), []);
   const foldHover = ws.hover(foldUri, at(folded, 'label'));
-  assert.equal(foldHover.contents.value, '\\[optional\\] Mock label\\.');
+  assert.equal(foldHover.contents.value, labelDocumentation);
   const foldDef = ws.definition(foldUri, at(folded, 'ref mocktype.primary'));
   assert.equal(foldDef.path, common);
 
@@ -203,7 +204,7 @@ test('a modeline that fails falls through to the published schema', async () => 
   const edited = '# yaml-language-server: $schema=schema.json\nname: edited\n';
   await ws.sync('file:///repo/disk/mock.yml', '/repo/disk/mock.yml', edited);
   const field = ws.hover('file:///repo/disk/mock.yml', at(edited, 'name'));
-  assert.equal(field.contents.value, 'the name');
+  assert.equal(field.contents.value, '```\nname    [optional]\n```\n\nthe name');
   const boom = workspace({}, async () => schema, async () => { throw new Error('boom'); });
   await boom.setConfigs([{ text: config, dir: '/repo' }]);
   await boom.sync('file:///repo/boom/mock.yml', '/repo/boom/mock.yml', '# yaml-language-server: $schema=missing.json\nname: plain\n');
@@ -288,13 +289,14 @@ test('a missing modeline walks the schema search path from the file', async () =
   await ws.sync('file://' + common, common, text);
   assert.ok(ws.reads.includes('/repo/mock-app/.schema/sample.schema.json'));
   assert.ok(ws.reads.includes(found));
-  assert.equal(ws.hover('file://' + common, at(text, 'name')).contents.value, 'from the side stack');
+  const fromSideStack = '```\nname    [optional]\n```\n\nfrom the side stack';
+  assert.equal(ws.hover('file://' + common, at(text, 'name')).contents.value, fromSideStack);
   const overlayPath = '/repo/mock-app/one/mock.yml';
   await ws.sync('file://' + overlayPath, overlayPath, text);
-  assert.equal(ws.hover('file://' + overlayPath, at(text, 'name')).contents.value, 'from the side stack');
+  assert.equal(ws.hover('file://' + overlayPath, at(text, 'name')).contents.value, fromSideStack);
   const named = '# yaml-language-server: $schema=missing.json\n' + text;
   await ws.sync('file://' + common, common, named);
-  assert.equal(ws.hover('file://' + common, at(named, 'name')).contents.value, 'from the side stack');
+  assert.equal(ws.hover('file://' + common, at(named, 'name')).contents.value, fromSideStack);
   const bare = '/repo/bare/mock.yml';
   const bareText = 'name: plain\n';
   await ws.setConfigs([{ text: configText(dslEntry('sample')), dir: '/repo' }]);
@@ -457,6 +459,38 @@ test('an overlay schema that changes drops that overlay from the common layer\'s
   assert.deepEqual(validationMessages(ws, common), [[1, '`mode` is required (one)']]);
 });
 
+test('a common layer field hover shows each overlay schema\'s documentation, the overlays that agree sharing one section', async () => {
+  const modeline = '# yaml-language-server: $schema=.schema/resources.schema.json\n';
+  const schemaWith = (sizeDescription) => JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: { mocktype: { additionalProperties: { properties: { size: { type: 'integer', description: sizeDescription } } } } },
+  });
+  const files = {
+    [`${root}/one/.schema/resources.schema.json`]: schemaWith('[optional] Mock size.'),
+    [`${root}/two/.schema/resources.schema.json`]: schemaWith('[required] Mock size, now required.'),
+    [`${root}/three/.schema/resources.schema.json`]: schemaWith('[optional] Mock size.'),
+    [common]: 'mocktype:\n  shared:\n    size: 1\n',
+    [one]: `${modeline}mocktype: {}\n`,
+    [two]: `${modeline}mocktype: {}\n`,
+    [three]: `${modeline}mocktype: {}\n`,
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  for (const filePath of [common, one, two, three]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
+    '`one`, `three`\n\n```\nsize: integer    [optional]\n```\n\nMock size.',
+    '`two`\n\n```\nsize: integer    [required]\n```\n\nMock size, now required.',
+  ].join('\n\n---\n\n'));
+  assert.equal(ws.hover(`file://${one}`, at(files[one], 'mocktype')).contents.value, '```\nmocktype    [optional]\n```');
+  const twoSchemaPath = `${root}/two/.schema/resources.schema.json`;
+  files[twoSchemaPath] = schemaWith('[optional] Mock size.');
+  await ws.schemasChanged([twoSchemaPath]);
+  assert.equal(
+    ws.hover(`file://${common}`, at(files[common], 'size')).contents.value,
+    '```\nsize: integer    [optional]\n```\n\nMock size.',
+  );
+});
+
 test('the modeline\'s schema path links to the schema it names, a path from the file\'s folder or a URL as written', async () => {
   const urlModeline = '# yaml-language-server: $schema=https://example.test/mock.schema.json\n';
   const files = {
@@ -527,7 +561,7 @@ test('a schema written after the file opened replaces the missing one, and a new
   await ws.schemasChanged([schemaPath]);
   assert.equal(unavailable(onePath), false);
   assert.equal(unavailable(commonPath), false);
-  assert.equal(ws.hover(`file://${onePath}`, at(files[onePath], 'name')).contents.value, 'version one');
+  assert.equal(ws.hover(`file://${onePath}`, at(files[onePath], 'name')).contents.value, '```\nname    [optional]\n```\n\nversion one');
   assert.equal(ws.cache.schemaCount(), 1);
 
   const reads = ws.reads.length;
@@ -537,8 +571,9 @@ test('a schema written after the file opened replaces the missing one, and a new
 
   files[schemaPath] = JSON.stringify({ properties: { name: { description: 'version two' } } });
   await ws.schemasChanged([schemaPath]);
-  assert.equal(ws.hover(`file://${onePath}`, at(files[onePath], 'name')).contents.value, 'version two');
-  assert.equal(ws.hover(`file://${commonPath}`, at(files[commonPath], 'name')).contents.value, 'version two');
+  const versionTwo = '```\nname    [optional]\n```\n\nversion two';
+  assert.equal(ws.hover(`file://${onePath}`, at(files[onePath], 'name')).contents.value, versionTwo);
+  assert.equal(ws.hover(`file://${commonPath}`, at(files[commonPath], 'name')).contents.value, versionTwo);
   assert.equal(ws.cache.schemaCount(), 2);
 
   delete files[schemaPath];

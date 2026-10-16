@@ -38,36 +38,41 @@ async function draftDocument(draftFolder) {
   return (await shownDocument(path.join(fixtures, 'drafts', draftFolder, 'mock.yml'))).document;
 }
 
+const FIRST_OF_PAIR = '```\npair[0]\n```\n\nthe first of the pair';
+const LATER_ITEM = '```\npair[1]\n```\n\nevery later item';
+const NAMED_LABEL = '```\nlabel    [optional]\n```\n\nthe named label';
+const OLD_USE_PAIR = '```\nold    [optional]\n```\n\nuse pair';
+
 suite('JSON Schema drafts', () => {
   test('draft-07 hovers a tuple item, its additionalItems and a plain-name $id anchor, and ignores deprecated', async () => {
     const doc = await draftDocument('draft-07');
-    assert.equal(await hoverTextAt(doc, 'first'), 'the first of the pair');
-    assert.equal(await hoverTextAt(doc, '2\n'), 'every later item');
-    assert.equal(await hoverTextAt(doc, 'label'), 'the named label');
-    assert.equal(await hoverTextAt(doc, 'old'), 'use pair');
+    assert.equal(await hoverTextAt(doc, 'first'), FIRST_OF_PAIR);
+    assert.equal(await hoverTextAt(doc, '2\n'), LATER_ITEM);
+    assert.equal(await hoverTextAt(doc, 'label'), NAMED_LABEL);
+    assert.equal(await hoverTextAt(doc, 'old'), OLD_USE_PAIR);
   });
 
   test('draft 2019-09 hovers an $anchor reference, and its warning is the hover of a deprecated field\'s key and value', async () => {
     const doc = await draftDocument('draft-2019-09');
-    assert.equal(await hoverTextAt(doc, 'first'), 'the first of the pair');
-    assert.equal(await hoverTextAt(doc, 'label'), 'the named label');
+    assert.equal(await hoverTextAt(doc, 'first'), FIRST_OF_PAIR);
+    assert.equal(await hoverTextAt(doc, 'label'), NAMED_LABEL);
     await hoverTextBecomes(doc, positionInText(doc, 'old'), DEPRECATED_OLD_WARNING);
     await hoverTextBecomes(doc, positionInText(doc, 'old: ', 'old: '.length), DEPRECATED_OLD_WARNING);
   });
 
   test('draft 2020-12 hovers prefixItems, items and a $dynamicRef, and its warning is the hover of a deprecated field\'s key and value', async () => {
     const doc = await draftDocument('draft-2020-12');
-    assert.equal(await hoverTextAt(doc, 'first'), 'the first of the pair');
-    assert.equal(await hoverTextAt(doc, '2\n'), 'every later item');
-    assert.equal(await hoverTextAt(doc, 'label'), 'the named label');
+    assert.equal(await hoverTextAt(doc, 'first'), FIRST_OF_PAIR);
+    assert.equal(await hoverTextAt(doc, '2\n'), LATER_ITEM);
+    assert.equal(await hoverTextAt(doc, 'label'), NAMED_LABEL);
     await hoverTextBecomes(doc, positionInText(doc, 'old'), DEPRECATED_OLD_WARNING);
     await hoverTextBecomes(doc, positionInText(doc, 'old: ', 'old: '.length), DEPRECATED_OLD_WARNING);
   });
 
   test('a schema declaring an older draft is read as draft-07', async () => {
     const doc = await draftDocument('draft-04');
-    assert.equal(await hoverTextAt(doc, 'first'), 'the first of the pair');
-    assert.equal(await hoverTextAt(doc, 'old'), 'use pair');
+    assert.equal(await hoverTextAt(doc, 'first'), FIRST_OF_PAIR);
+    assert.equal(await hoverTextAt(doc, 'old'), OLD_USE_PAIR);
   });
 
   test('a schema declaring a draft the editor does not read gives no field hover', async () => {

@@ -183,7 +183,7 @@ What the extension holds is a copy of what the files say: a resident stack's ana
 | a layer file of a resident stack changes on disk while no editor has it open | on the change | the file is read again | background |
 | a layer file is deleted from disk | on the deletion | the file leaves the stack, even while an editor holds it with no unsaved edits, and comes back when it returns to disk | background |
 | a layer file's editor closes | on the close | the file is read from disk again, so discarded edits, or a file gone from disk, leave the stack with what the disk holds | background |
-| a path a resident file's schema search reads changes on disk | on the change | that file's schema reloads, and its stack is analyzed and validated again; a schema on disk changes when its stack is initialized again | background |
+| a path a resident file's schema search reads changes on disk | on the change | that file's schema reloads, its stack is analyzed and validated again, and its hover documentation reads the new schema, the common layer's for that overlay; a schema on disk changes when its stack is initialized again | background |
 | an overlay's schema reloads | on the reload | the common layer's validation errors are worked out again, each naming exactly the overlays whose current schema its value fails | background |
 | a `yaml-dsl.yml` is saved, created or deleted, or a workspace folder is added or removed | on the change | the configs reload; every resident stack is analyzed again under them, and a stack they no longer claim is dropped | background |
 | a file's text on disk differs from the hash its kept suggestions were worked out from | at startup, and when the file changes on disk | its kept suggestions are dropped, and its stack is worked out again without entering the cache | background |
@@ -193,6 +193,7 @@ What the extension holds is a copy of what the files say: a resident stack's ana
 These hold through every change:
 
 - A stack never opened, and with nothing kept, is never processed.
+- Hover documentation is worked out on each request from the schema loaded now; a schema's parser, validator and renderer are kept with that schema and leave with it.
 - A save, or a change that edits no text, keeps a file's suggestions and its painted marks.
 - An evicted stack's kept suggestions stay shown until the stack is analyzed again.
 - A click on a kept suggestion works its stack out afresh before writing anything.
@@ -570,8 +571,18 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 - Hover walks the YAML path through `properties`, then `patternProperties`, then what the schema's draft reads for a key `properties` does not list.
 - On an object that carries both a `$ref` and a `description`, it keeps that `description`, then follows the `$ref` only to keep walking.
-- The tooltip is the description kept at the field, requirement marker included. The composite's description is the value shape and is not the tooltip.
-- The tooltip shows the description's text as written, markdown characters included, and wraps at word boundaries.
+- The tooltip documents the field, as a javadoc documents a method:
+
+| Part | Shows |
+|---|---|
+| signature | the field's name, its effective forms after following `$ref`, `allOf` and each `anyOf`/`oneOf` alternative, each named by the definition it refers to or by its type, and its requirement |
+| description | the description kept at the field, rendered as markdown; the composite's description is the value shape and is not shown |
+| accepts | one line per form, with its constraints, when the field has more than one form |
+| tags | one line per constraint, when it has one form: values, default, pattern, bounds, lengths, items, deprecated |
+| conditions | each `if`/`then`/`else` on the object, as when and otherwise; and on a field, its parent's that name it, cut to what they say about the field |
+
+- The draft's renderer reads its own keywords, as its parser and validator do; a part it cannot read in words names a condition the schema states.
+- In the common layer the tooltip documents the field in each overlay's schema; overlays whose documentation is the same share one section, headed by their names.
 
 ### Requirement markers
 
@@ -626,7 +637,7 @@ A schema's draft:
 
 ### Parsers
 
-Each draft has a parser and a validator named after it, over one shared core each. The parser's core:
+Each draft has a parser, a validator and a renderer named after it, over one shared core each. The parser's core:
 
 - picks the parser from `$schema`;
 - resolves references;
