@@ -45,4 +45,10 @@ suite('CloudFormation templates', () => {
     const repeated = await hoverTextOf(doc, positionInText(doc, 'MockTable'));
     assert.equal(repeated.split('*When*').length, 2, repeated);
   });
+
+  test('an intrinsic function in an output\'s value is documented', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-template.yaml'))).document;
+    await hoverTextHolds(doc, positionInText(doc, '!GetAtt', 1),'Returns the value of an attribute of a resource');
+  });
 });

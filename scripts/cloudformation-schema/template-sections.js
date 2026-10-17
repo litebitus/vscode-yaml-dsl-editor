@@ -10,7 +10,7 @@ const REGISTRY_RESOURCE_TYPE_PATTERN = '^(?!AWS::|Alexa::)'
 const conditionFunction = { $ref: '#/$defs/ConditionFunction' };
 const transformValue = { $ref: '#/$defs/Transform' };
 const forEachLoop = { $ref: '#/$defs/ForEach' };
-const anyValue = {};
+const anyValue = { $ref: '#/$defs/AnyValue' };
 const stringOrFunction = orIntrinsicFunction({ type: 'string' });
 const listOrFunction = orIntrinsicFunction({ type: 'array' });
 
@@ -244,7 +244,7 @@ const OUTPUT = {
       type: 'string',
       maxLength: 1024,
     },
-    Value: { description: 'The value of the output.' },
+    Value: { description: 'The value of the output.', ...anyValue },
     Export: {
       description: 'Exports the output for other stacks to import.',
       type: 'object',
@@ -396,6 +396,7 @@ function templateSectionsOf(resourceTypes) {
         propertyNames: { enum: Object.keys(INTRINSIC_FUNCTIONS) },
       },
       ConditionFunction: exactlyOneKey(CONDITION_FUNCTIONS, 'A condition function, whose value is its arguments.'),
+      AnyValue: orIntrinsicFunction({ additionalProperties: anyValue, items: anyValue }),
     },
   };
 }

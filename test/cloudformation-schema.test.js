@@ -144,6 +144,33 @@ test('a property under a list item or an object is documented and offered, '
   assert.deepEqual(Object.keys(parser.fieldsAt([...properties, 'BucketName'])).includes('Ref'), true);
 });
 
+test('an intrinsic function at any depth of an open value is validated and documented, from one shared definition', () => {
+  const { schema } = templateSchemaOf(mockProviders(), { region: 'mock-region-1', downloadDate: '2026-01-01' });
+  const anyValue = { $ref: '#/$defs/AnyValue' };
+  assert.deepEqual(schema.$defs.AnyValue, orIntrinsicFunctionOf({ additionalProperties: anyValue, items: anyValue }));
+  assert.deepEqual(schema.$defs.Output.properties.Value, { description: 'The value of the output.', ...anyValue });
+  assert.deepEqual(schema.$defs.IntrinsicFunction.properties['Fn::If'].prefixItems.slice(1), [anyValue, anyValue]);
+  const template = {
+    Resources: {
+      MockQueue: {
+        Type: 'AWS::Mock::Queue',
+        Properties: { DelaySeconds: { 'Fn::If': ['MockOn', { mockKey: [{ 'Fn::GetAtt': 'MockQueue.Arn' }] }, 1] } },
+      },
+    },
+    Outputs: { MockOut: { Value: { mockKey: { 'Fn::GetAtt': 'MockQueue.Arn' } } } },
+  };
+  const validator = schemaValidatorFor(schema);
+  assert.deepEqual(failureKeywordsOf(validator, template), []);
+  const badArguments = structuredClone(template);
+  badArguments.Outputs.MockOut.Value.mockKey['Fn::GetAtt'] = 1;
+  assert.deepEqual(failureKeywordsOf(validator, badArguments), [['Outputs.MockOut.Value.mockKey.Fn::GetAtt', 'anyOf']]);
+  const parser = schemaParserForDocument(schema, template);
+  const nested = ['Resources', 'MockQueue', 'Properties', 'DelaySeconds', 'Fn::If', 1, 'mockKey', 0, 'Fn::GetAtt'];
+  const described = 'Returns the value of an attribute of a resource in the template.';
+  assert.equal(parser.fieldDescription(nested), described);
+  assert.equal(parser.fieldDescription(['Outputs', 'MockOut', 'Value', 'mockKey', 'Fn::GetAtt']), described);
+});
+
 test('a resource\'s Type selects its service\'s branch and then its type\'s, for validation, fields and hover', () => {
   const mockTopic = {
     typeName: 'AWS::MockOther::Topic',

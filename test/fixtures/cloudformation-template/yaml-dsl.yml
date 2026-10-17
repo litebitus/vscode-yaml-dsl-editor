@@ -5,6 +5,7 @@ dsls:
     file_excludes: []
     schema_search_paths: ["{config_root}/../../../examples/schemas/cloudformation-2010-09-09.schema.json"]
     tag_keys:
+      - { tag: "!GetAtt", key: "Fn::GetAtt" }
       - { tag: "!Ref", key: Ref }
     performance:
       compiled_schema_cache: true

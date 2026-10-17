@@ -122,6 +122,8 @@ The template schema is generated from them. The template's own sections are writ
 | a pattern | kept when the `u` flag reads it, else without its identity escapes; one neither reads is left out and listed when the generator runs |
 | a description | carried as written, so hover shows AWS's text |
 
+A value the template reference leaves open, such as an output's `Value` or an `Fn::If` branch, refers to one shared definition, `AnyValue`: an intrinsic function call at any depth in it reads as the function, so its arguments are validated and documented.
+
 `Type` also takes a custom resource type, `Custom::<name>`, and a registry type, `<organization>::<service>::<resource>`, whose `Properties` the schema leaves open.
 
 The hand-written part covers each top-level section and its entries: `Parameters` with their types and constraints, `Mappings`, `Conditions` built from condition functions, `Resources` with their resource attributes such as `DependsOn`, `Condition` and `DeletionPolicy`, and `Outputs` with `Value`, `Export` and `Condition`.

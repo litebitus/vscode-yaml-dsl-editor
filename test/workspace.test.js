@@ -1048,7 +1048,15 @@ function functionsConfig(definitions) {
 
 const functionsSchema = JSON.stringify({
   ...JSON.parse(schema),
-  'x-yaml-dsl-functions': { ssm: [{ name: 'parameter', type: 'text', required: true, repeated: false }] },
+  'x-yaml-dsl-functions': {
+    ssm: {
+      description: 'Reads the mock parameter.',
+      arguments: [
+        { name: 'parameter', type: 'text', required: true, repeated: false, description: 'The mock parameter name.' },
+      ],
+      return: { type: 'text', description: 'The mock parameter\'s value.' },
+    },
+  },
 });
 
 test('calls are checked against Terraform and the schema once both vocabularies are known', async () => {
@@ -1075,12 +1083,20 @@ test('calls are checked against Terraform and the schema once both vocabularies 
   await ws.sync(`file://${common}`, common, text);
   const messages = () => ws.problems(`file://${common}`).map((problem) => problem.message);
   assert.deepEqual(messages(), ['a call result is not allowed as placeholder_in_text']);
-  answer({ function_signatures: { upper: { parameters: [{ name: 'str', type: 'string' }] } } });
+  answer({ function_signatures: { upper: { return_type: 'string', parameters: [{ name: 'str', type: 'string' }] } } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(loaded, ['terraform']);
   await ws.whenAnalyzed(`file://${common}`);
   assert.deepEqual(messages(), ['unknown function nope', 'a call result is not allowed as placeholder_in_text']);
-  assert.equal(ws.hover(`file://${common}`, at(text, 'ssm')).contents.value, 'ssm\\(parameter: text\\)');
+  assert.equal(
+    ws.hover(`file://${common}`, at(text, 'ssm')).contents.value,
+    '```\nssm(parameter: text): text\n```\n\nReads the mock parameter.\n\n- `parameter`: The mock parameter name.'
+      + '\n\n*Returns:* `text`: The mock parameter\'s value.',
+  );
+  assert.equal(
+    ws.hover(`file://${common}`, at(text, 'upper')).contents.value,
+    '```\nupper(str: text): text\n```\n\n*Returns:* `text`',
+  );
   assert.equal(ws.hover(`file://${common}`, at(text, 'nope')).contents.value, 'nope');
   const callTokens = ws.semanticTokens(`file://${common}`)
     .filter((token) => token.line === 1)
@@ -1090,8 +1106,8 @@ test('calls are checked against Terraform and the schema once both vocabularies 
   await ws.sync(`file://${common}`, common, typing);
   const offered = ws.completion(`file://${common}`, { line: 3, character: 8 });
   assert.deepEqual(offered.map((item) => [item.label, item.kind, item.detail]), [
-    ['fn.upper', 'function', 'upper(str: text)'],
-    ['fn.ssm', 'function', 'ssm(parameter: text)'],
+    ['fn.upper', 'function', 'upper(str: text): text'],
+    ['fn.ssm', 'function', 'ssm(parameter: text): text'],
   ]);
 });
 

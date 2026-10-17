@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "x-yaml-dsl-functions": {
+    "ssm": {
+      "description": "Returns the **mock** parameter's value.",
+      "arguments": [
+        { "name": "parameter", "type": "text", "required": true, "repeated": false, "description": "The mock parameter name." }
+      ],
+      "return": { "type": "text", "description": "The mock **value**." }
+    },
+    "legacy": [
+      { "name": "value", "type": "text", "required": true, "repeated": false }
+    ]
+  }
+}

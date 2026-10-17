@@ -17,3 +17,6 @@ Resources:
           KeyType: HASH
       ProvisionedThroughput:
         ReadCapacityUnits: 5
+Outputs:
+  MockQueueArn:
+    Value: !GetAtt MockQueue.Arn

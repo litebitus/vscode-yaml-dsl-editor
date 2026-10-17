@@ -1246,11 +1246,17 @@ A placeholder splices a value into a scalar or a key, whole or as part of a long
 
 - While a source has not answered the vocabulary is open, and an unknown function is a problem only once every source has.
 - Every call is checked: its function against the vocabulary, its argument count against the function's arity, and each literal argument against its type. A reference or a call standing as an argument is not typed.
-- Hover on a function shows its signature.
+- Hover on a function shows its signature, its description, each argument's description and what it returns, read as markdown; a function with no `return` shows `none`.
 
 ## The function table
 
-A schema publishes a DSL's functions as a mapping of function name to its arguments in call order. The extension ships the table's JSON Schema at `schemas/x-yaml-dsl-functions.schema.json`.
+A schema publishes a DSL's functions as a mapping of function name to its description, its arguments and what it returns. The extension ships the table's JSON Schema at `schemas/x-yaml-dsl-functions.schema.json`.
+
+| Function field | Meaning |
+|---|---|
+| `description` | what the function does, in markdown |
+| `arguments` | its arguments in call order |
+| `return` | what it returns: `type`, one of the argument types, and `description`, in markdown; left out, the function returns nothing |
 
 | Argument field | Meaning |
 |---|---|
@@ -1258,13 +1264,20 @@ A schema publishes a DSL's functions as a mapping of function name to its argume
 | `type` | `text`, `number`, `whole_number`, `boolean`, `list`, `map` or `any` |
 | `required` | whether it is required; optional arguments follow the required ones |
 | `repeated` | whether it takes every remaining value; a repeated argument is last |
+| `description` | what the argument holds, in markdown |
+
+Every field but `return` is required.
 
 ```json
 "x-yaml-dsl-functions": {
-  "format": [
-    { "name": "layout", "type": "text", "required": true, "repeated": false },
-    { "name": "operands", "type": "any", "required": false, "repeated": true }
-  ]
+  "format": {
+    "description": "Fills the layout's placeholders with the operands, in order.",
+    "arguments": [
+      { "name": "layout", "type": "text", "required": true, "repeated": false, "description": "The text holding the placeholders." },
+      { "name": "operands", "type": "any", "required": false, "repeated": true, "description": "The values put in the placeholders, in order." }
+    ],
+    "return": { "type": "text", "description": "The layout with each placeholder filled." }
+  }
 }
 ```
 
@@ -1278,6 +1291,8 @@ Terraform's signatures are read into the same table:
 | a map or object | `map` |
 | `dynamic` | `any` |
 | a variadic parameter | a repeated optional argument |
+| a function's or parameter's `description` | its `description` |
+| a function's `return_type` | its `return.type`, with no `description` |
 
 ## What the workspace defines
 

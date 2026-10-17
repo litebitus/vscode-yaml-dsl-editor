@@ -14,6 +14,7 @@
 - Schemas: a `pattern` is built with the `u` flag, as JSON Schema says.
 - Performance: choosing a branch, comparing overlays' schema nodes and checking an opt-out no longer each compile or hash a whole large schema.
 - Performance: documents are validated in a worker, so a large schema's compile never holds hover, completion or suggestions.
+- Functions: the function table states each function's and argument's description and the function's `return`, shown on hover, Terraform's included; a function mapped straight to its argument list is deprecated.
 - Config: `validator.allow_quoted_values` validates a quoted boolean or number as the value it spells.
 - Config: `performance.compiled_schema_cache` keeps a DSL's compiled schema in the extension's storage for later sessions.
 - Examples: the CloudFormation schema, generated from AWS's resource provider schemas by `scripts/cloudformation-schema/`.

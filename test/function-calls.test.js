@@ -9,6 +9,7 @@ const {
   terraformVocabulary,
   schemaVocabulary,
   signatureText,
+  functionDocumentationOf,
   callProblems,
 } = require('../lib/function-calls');
 
@@ -25,25 +26,40 @@ const functionConfig = {
   markerFunction,
 };
 
+function mockArgument(name, type, required, repeated) {
+  return { name, type, required, repeated, description: `The mock ${name}.` };
+}
+
+function mockFunction(name, ...functionArguments) {
+  return { description: `Mock ${name} function.`, arguments: functionArguments };
+}
+
 const table = {
-  format: [
-    { name: 'layout', type: 'text', required: true, repeated: false },
-    { name: 'operands', type: 'any', required: false, repeated: true },
-  ],
-  range: [
-    { name: 'start', type: 'whole_number', required: true, repeated: false },
-    { name: 'stop', type: 'whole_number', required: true, repeated: false },
-    { name: 'step', type: 'whole_number', required: true, repeated: false },
-  ],
-  ssm: [{ name: 'parameter', type: 'text', required: true, repeated: false }],
-  toggle: [
-    { name: 'flag', type: 'boolean', required: true, repeated: false },
-    { name: 'ratio', type: 'number', required: false, repeated: false },
-  ],
-  shape: [
-    { name: 'items', type: 'list', required: true, repeated: false },
-    { name: 'fields', type: 'map', required: true, repeated: false },
-  ],
+  format: {
+    ...mockFunction(
+      'format',
+      mockArgument('layout', 'text', true, false),
+      mockArgument('operands', 'any', false, true),
+    ),
+    return: { type: 'text', description: 'The mock formatted text.' },
+  },
+  range: mockFunction(
+    'range',
+    mockArgument('start', 'whole_number', true, false),
+    mockArgument('stop', 'whole_number', true, false),
+    mockArgument('step', 'whole_number', true, false),
+  ),
+  ssm: mockFunction('ssm', mockArgument('parameter', 'text', true, false)),
+  toggle: mockFunction(
+    'toggle',
+    mockArgument('flag', 'boolean', true, false),
+    mockArgument('ratio', 'number', false, false),
+  ),
+  shape: mockFunction(
+    'shape',
+    mockArgument('items', 'list', true, false),
+    mockArgument('fields', 'map', true, false),
+  ),
 };
 
 const isExpression = (text, isKey) => (
@@ -124,8 +140,10 @@ test("Terraform's function metadata becomes a vocabulary", () => {
   const vocabulary = terraformVocabulary({
     function_signatures: {
       join: {
-        parameters: [{ name: 'separator', type: 'string' }],
-        variadic_parameter: { name: 'lists', type: ['list', 'string'] },
+        description: 'Mock join.',
+        return_type: 'string',
+        parameters: [{ name: 'separator', type: 'string', description: 'The mock separator.' }],
+        variadic_parameter: { name: 'lists', type: ['list', 'string'], description: 'The mock lists.' },
       },
       jsonencode: { parameters: [{ name: 'val', type: 'dynamic' }] },
       max: { variadic_parameter: { name: 'numbers', type: 'number' } },
@@ -134,23 +152,34 @@ test("Terraform's function metadata becomes a vocabulary", () => {
       setfn: { parameters: [{ name: 'items', type: ['set', 'string'] }] },
     },
   });
-  assert.deepEqual(vocabulary.join, [
-    { name: 'separator', type: 'text', required: true, repeated: false },
-    { name: 'lists', type: 'list', required: false, repeated: true },
-  ]);
-  assert.deepEqual(vocabulary.jsonencode[0].type, 'any');
-  assert.deepEqual(vocabulary.max, [{ name: 'numbers', type: 'number', required: false, repeated: true }]);
-  assert.deepEqual(vocabulary.lookup.map((parameter) => parameter.type), ['map', 'boolean']);
-  assert.deepEqual(vocabulary.tuplefn.map((parameter) => parameter.type), ['list', 'map']);
-  assert.deepEqual(vocabulary.setfn[0].type, 'list');
+  assert.deepEqual(vocabulary.join, {
+    description: 'Mock join.',
+    arguments: [
+      { name: 'separator', type: 'text', required: true, repeated: false, description: 'The mock separator.' },
+      { name: 'lists', type: 'list', required: false, repeated: true, description: 'The mock lists.' },
+    ],
+    return: { type: 'text', description: null },
+  });
+  const argumentTypesOf = (functionName) => vocabulary[functionName].arguments.map((parameter) => parameter.type);
+  assert.deepEqual(argumentTypesOf('jsonencode'), ['any']);
+  assert.deepEqual(vocabulary.max, {
+    description: null,
+    arguments: [{ name: 'numbers', type: 'number', required: false, repeated: true, description: null }],
+    return: null,
+  });
+  assert.deepEqual(argumentTypesOf('lookup'), ['map', 'boolean']);
+  assert.deepEqual(argumentTypesOf('tuplefn'), ['list', 'map']);
+  assert.deepEqual(argumentTypesOf('setfn'), ['list']);
   assert.equal(terraformVocabulary(null), null);
   assert.equal(terraformVocabulary({ format_version: '1.0' }), null);
 });
 
 test('a schema publishes a function table at a pointer, held to the documented format', () => {
   const schema = { 'x-yaml-dsl-functions': table, 'x-a~b/c': { ssm: table.ssm } };
-  assert.deepEqual(schemaVocabulary(schema, '#/x-yaml-dsl-functions').vocabulary, table);
-  assert.deepEqual(schemaVocabulary(schema, '#/x-a~0b~1c').vocabulary, { ssm: table.ssm });
+  const readTable = Object.fromEntries(Object.entries(table)
+    .map(([functionName, entry]) => [functionName, { ...entry, return: entry.return || null }]));
+  assert.deepEqual(schemaVocabulary(schema, '#/x-yaml-dsl-functions').vocabulary, readTable);
+  assert.deepEqual(schemaVocabulary(schema, '#/x-a~0b~1c').vocabulary, { ssm: readTable.ssm });
   assert.deepEqual(schemaVocabulary(null, '#/x'), { vocabulary: null, problem: null });
   assert.equal(schemaVocabulary(schema, '#/missing').problem, 'the schema publishes no #/missing');
   assert.equal(
@@ -158,39 +187,88 @@ test('a schema publishes a function table at a pointer, held to the documented f
     'the schema publishes no #/x/deep/further',
   );
   const malformed = (published) => schemaVocabulary({ x: published }, '#/x').problem;
-  const argument = (name, required, repeated) => ({ name, type: 'text', required, repeated });
+  const argument = (name, required, repeated) => mockArgument(name, 'text', required, repeated);
+  const withArguments = (...functionArguments) => ({ f: mockFunction('f', ...functionArguments) });
   assert.equal(malformed([]), '#/x is not a mapping of function names');
-  assert.equal(malformed({ 'a-b': [] }), '#/x a-b is not a function name');
-  assert.equal(malformed({ f: 1 }), '#/x f is not a list of arguments');
-  assert.equal(malformed({ f: [{}] }), '#/x f[0].name is required');
-  assert.equal(malformed({ f: [{ name: '' }] }), '#/x f[0].name is required');
+  assert.equal(malformed({ 'a-b': mockFunction('a-b') }), '#/x a-b is not a function name');
+  assert.equal(malformed({ f: 1 }), '#/x f must be a mapping with description and arguments');
+  assert.equal(malformed({ f: { description: 'Mock f.' } }), '#/x f must be a mapping with description and arguments');
+  assert.equal(malformed({ f: { arguments: [] } }), '#/x f.description is required');
+  assert.equal(malformed(withArguments({})), '#/x f.arguments[0].name is required');
+  assert.equal(malformed(withArguments({ name: '' })), '#/x f.arguments[0].name is required');
   assert.equal(
-    malformed({ f: [{ name: 'a', type: 'mock-type' }] }),
-    '#/x f[0].type must be one of text, number, whole_number, boolean, list, map, any',
+    malformed(withArguments({ name: 'a', type: 'mock-type' })),
+    '#/x f.arguments[0].type must be one of text, number, whole_number, boolean, list, map, any',
   );
-  assert.equal(malformed({ f: [{ name: 'a', type: 'text' }] }), '#/x f[0].required must be true or false');
+  assert.equal(malformed(withArguments({ name: 'a', type: 'text' })), '#/x f.arguments[0].required must be true or false');
   assert.equal(
-    malformed({ f: [{ name: 'a', type: 'text', required: true }] }),
-    '#/x f[0].repeated must be true or false',
-  );
-  assert.equal(
-    malformed({ f: [argument('a', false, true), argument('b', false, false)] }),
-    '#/x f[0] repeats but is not the last argument',
+    malformed(withArguments({ name: 'a', type: 'text', required: true })),
+    '#/x f.arguments[0].repeated must be true or false',
   );
   assert.equal(
-    malformed({ f: [argument('a', false, false), argument('b', true, false)] }),
-    '#/x f[1] is required after an optional argument',
+    malformed(withArguments({ name: 'a', type: 'text', required: true, repeated: false })),
+    '#/x f.arguments[0].description is required',
+  );
+  assert.equal(
+    malformed(withArguments(argument('a', false, true), argument('b', false, false))),
+    '#/x f.arguments[0] repeats but is not the last argument',
+  );
+  assert.equal(
+    malformed(withArguments(argument('a', false, false), argument('b', true, false))),
+    '#/x f.arguments[1] is required after an optional argument',
+  );
+  const withReturn = (returned) => ({ f: { ...mockFunction('f'), return: returned } });
+  assert.equal(malformed(withReturn('text')), '#/x f.return must be a mapping with type and description');
+  assert.equal(
+    malformed(withReturn({ type: 'mock-type' })),
+    '#/x f.return.type must be one of text, number, whole_number, boolean, list, map, any',
+  );
+  assert.equal(malformed(withReturn({ type: 'text' })), '#/x f.return.description is required');
+});
+
+test('a function mapped straight to its argument list is still read, with no description', () => {
+  const listed = [
+    { name: 'layout', type: 'text', required: true, repeated: false },
+    { name: 'operands', type: 'any', required: false, repeated: true },
+  ];
+  assert.deepEqual(schemaVocabulary({ x: { format: listed } }, '#/x').vocabulary, {
+    format: {
+      description: null,
+      arguments: listed.map((parameter) => ({ ...parameter, description: null })),
+      return: null,
+    },
+  });
+  assert.equal(
+    schemaVocabulary({ x: { format: [{ name: 'a', type: 'text' }] } }, '#/x').problem,
+    '#/x format[0].required must be true or false',
   );
 });
 
 test('the shipped schema of the table is a draft 2020-12 schema stating the argument types the editor checks', () => {
   const shipped = require('../schemas/x-yaml-dsl-functions.schema.json');
   assert.equal(shipped.$schema, 'https://json-schema.org/draft/2020-12/schema');
-  assert.doesNotThrow(() => new Ajv2020({ strict: false, strictSchema: true }).compile(shipped));
-  assert.deepEqual(shipped.additionalProperties.items.properties.type.enum, ARGUMENT_TYPES);
+  const validate = new Ajv2020({ strict: false, strictSchema: true }).compile(shipped);
+  assert.deepEqual(shipped.$defs.valueType.enum, ARGUMENT_TYPES);
+  assert.equal(validate(table), true, JSON.stringify(validate.errors));
+  assert.equal(validate({ format: [{ name: 'layout', type: 'text', required: true, repeated: false }] }), true);
+  assert.equal(validate({ format: { arguments: [] } }), false);
+  assert.equal(validate({ format: { ...table.format, return: { type: 'text' } } }), false);
 });
 
-test('a signature names each argument, its type, and whether it is optional or repeated', () => {
-  assert.equal(signatureText('format', table.format), 'format(layout: text, ...operands?: any)');
+test('a signature names each argument, its type, whether it is optional or repeated, and what it returns', () => {
+  assert.equal(signatureText('format', table.format), 'format(layout: text, ...operands?: any): text');
   assert.equal(signatureText('toggle', table.toggle), 'toggle(flag: boolean, ratio?: number)');
+});
+
+test('a function is documented by its signature, its description, each described argument and its return', () => {
+  assert.equal(functionDocumentationOf('format', table.format), [
+    '```\nformat(layout: text, ...operands?: any): text\n```',
+    'Mock format function.',
+    '- `layout`: The mock layout.\n- `operands`: The mock operands.',
+    '*Returns:* `text`: The mock formatted text.',
+  ].join('\n\n'));
+  const undescribed = { description: null, arguments: [{ ...table.ssm.arguments[0], description: null }], return: null };
+  assert.equal(functionDocumentationOf('ssm', undescribed), '```\nssm(parameter: text)\n```\n\n*Returns:* none');
+  const typedOnly = { ...undescribed, return: { type: 'text', description: null } };
+  assert.equal(functionDocumentationOf('ssm', typedOnly), '```\nssm(parameter: text): text\n```\n\n*Returns:* `text`');
 });

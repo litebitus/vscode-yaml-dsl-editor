@@ -2,24 +2,64 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://open-vsx.org/extension/lite2073/yaml-dsl-editor/x-yaml-dsl-functions.schema.json",
   "title": "x-yaml-dsl-functions",
-  "description": "A DSL's function table: each function name maps to its arguments in call order.",
+  "description": "A DSL's function table: each function name maps to its description, its arguments in call order and what it returns.",
   "type": "object",
   "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_:]*$" },
   "additionalProperties": {
-    "type": "array",
-    "description": "The function's arguments in call order. Optional arguments follow required ones, and a repeated argument is last.",
-    "items": {
+    "oneOf": [
+      { "$ref": "#/$defs/function" },
+      { "$ref": "#/$defs/argumentList" }
+    ]
+  },
+  "$defs": {
+    "function": {
+      "type": "object",
+      "required": ["description", "arguments"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string", "minLength": 1, "description": "What the function does, in markdown." },
+        "arguments": {
+          "type": "array",
+          "description": "The function's arguments in call order. Optional arguments follow required ones, and a repeated argument is last.",
+          "items": {
+            "allOf": [{ "$ref": "#/$defs/argument" }],
+            "required": ["description"],
+            "properties": {
+              "description": { "type": "string", "minLength": 1, "description": "What the argument holds, in markdown." }
+            }
+          }
+        },
+        "return": {
+          "type": "object",
+          "required": ["type", "description"],
+          "additionalProperties": false,
+          "description": "What the function returns. Left out for a function that returns nothing.",
+          "properties": {
+            "type": { "$ref": "#/$defs/valueType" },
+            "description": { "type": "string", "minLength": 1, "description": "What the returned value holds, in markdown." }
+          }
+        }
+      }
+    },
+    "argumentList": {
+      "type": "array",
+      "deprecated": true,
+      "description": "Deprecated: use a mapping with description and arguments. The function's arguments in call order.",
+      "items": { "$ref": "#/$defs/argument" }
+    },
+    "argument": {
       "type": "object",
       "required": ["name", "type", "required", "repeated"],
       "properties": {
         "name": { "type": "string", "minLength": 1, "description": "Argument name." },
-        "type": {
-          "enum": ["text", "number", "whole_number", "boolean", "list", "map", "any"],
-          "description": "Value the argument takes."
-        },
+        "type": { "$ref": "#/$defs/valueType" },
         "required": { "type": "boolean", "description": "Whether a call must pass the argument." },
         "repeated": { "type": "boolean", "description": "Whether the argument takes every remaining value." }
       }
+    },
+    "valueType": {
+      "enum": ["text", "number", "whole_number", "boolean", "list", "map", "any"],
+      "description": "The kind of value."
     }
   }
 }
