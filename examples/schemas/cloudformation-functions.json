@@ -1,5 +1,12 @@
 {
   "x-yaml-dsl-functions": {
+    "AWS::CodeDeployBlueGreen": {
+      "description": "Generates the resources of an ECS blue/green deployment through CodeDeploy from the template's `Hooks` section.",
+      "arguments": [],
+      "macro": {
+        "kind": "transform"
+      }
+    },
     "AWS::Include": {
       "description": "Inserts the template snippet stored in Amazon S3 in its place, merged with the map holding the call.",
       "arguments": [
@@ -13,6 +20,41 @@
       ],
       "macro": {
         "kind": "merge"
+      }
+    },
+    "AWS::LanguageExtensions": {
+      "description": "Resolves `Fn::ForEach`, `Fn::Length`, `Fn::ToJsonString` and intrinsic functions written where they are otherwise not allowed.",
+      "arguments": [],
+      "macro": {
+        "kind": "transform"
+      }
+    },
+    "AWS::SecretsManager-2020-07-23": {
+      "description": "Generates a rotation Lambda function, in a nested stack, for each `AWS::SecretsManager::RotationSchedule` with `HostedRotationLambda`.",
+      "arguments": [],
+      "macro": {
+        "kind": "transform"
+      }
+    },
+    "AWS::SecretsManager-2024-09-16": {
+      "description": "Generates a rotation Lambda function, in a nested stack, for each `AWS::SecretsManager::RotationSchedule` with `HostedRotationLambda`, upgrading the function on each stack update.",
+      "arguments": [],
+      "macro": {
+        "kind": "transform"
+      }
+    },
+    "AWS::Serverless-2016-10-31": {
+      "description": "Expands the AWS SAM resource types, such as `AWS::Serverless::Function`, into CloudFormation resources.",
+      "arguments": [],
+      "macro": {
+        "kind": "transform"
+      }
+    },
+    "AWS::ServiceCatalog": {
+      "description": "Replaces each `[[servicecatalog:provisionedproduct:<product>:<output_key>]]` string with that provisioned product's output.",
+      "arguments": [],
+      "macro": {
+        "kind": "transform"
       }
     },
     "And": {
@@ -89,6 +131,75 @@
       "return": {
         "type": "list",
         "description": "The CIDR blocks."
+      }
+    },
+    "Contains": {
+      "description": "Is true when a string matches at least one value of a list of strings. Works only in the `Rules` section.",
+      "arguments": [
+        {
+          "name": "values",
+          "type": "list",
+          "required": true,
+          "repeated": false,
+          "description": "The list of strings."
+        },
+        {
+          "name": "value",
+          "type": "text",
+          "required": true,
+          "repeated": false,
+          "description": "The string compared with the list."
+        }
+      ],
+      "return": {
+        "type": "boolean",
+        "description": "`true` when the string matches a value of the list."
+      }
+    },
+    "EachMemberEquals": {
+      "description": "Is true when a string matches every value of a list. Works only in the `Rules` section.",
+      "arguments": [
+        {
+          "name": "values",
+          "type": "list",
+          "required": true,
+          "repeated": false,
+          "description": "The list of strings."
+        },
+        {
+          "name": "value",
+          "type": "text",
+          "required": true,
+          "repeated": false,
+          "description": "The string compared with each value."
+        }
+      ],
+      "return": {
+        "type": "boolean",
+        "description": "`true` when every value equals the string."
+      }
+    },
+    "EachMemberIn": {
+      "description": "Is true when each string of a list matches at least one value of a second list. Works only in the `Rules` section.",
+      "arguments": [
+        {
+          "name": "strings_to_check",
+          "type": "list",
+          "required": true,
+          "repeated": false,
+          "description": "The strings checked."
+        },
+        {
+          "name": "strings_to_match",
+          "type": "list",
+          "required": true,
+          "repeated": false,
+          "description": "The strings each checked string must match one of."
+        }
+      ],
+      "return": {
+        "type": "boolean",
+        "description": "`true` when every checked string is in the second list."
       }
     },
     "Equals": {
@@ -367,6 +478,22 @@
         "description": "`true` when any condition is true."
       }
     },
+    "RefAll": {
+      "description": "Returns every value of an AWS-specific parameter type in the stack's account and Region. Works only in the `Rules` section.",
+      "arguments": [
+        {
+          "name": "parameter_type",
+          "type": "text",
+          "required": true,
+          "repeated": false,
+          "description": "The AWS-specific parameter type, such as `AWS::EC2::VPC::Id`."
+        }
+      ],
+      "return": {
+        "type": "list",
+        "description": "The values of the parameter type."
+      }
+    },
     "Select": {
       "description": "Returns the item of a list at an index.",
       "arguments": [
@@ -457,7 +584,7 @@
       "arguments": [
         {
           "name": "Name",
-          "type": "text",
+          "type": "macro",
           "required": true,
           "repeated": false,
           "description": "The macro's name: `AWS::Include`, another transform, or a macro the account registers."
@@ -473,6 +600,52 @@
       "macro": {
         "kind": "function_call",
         "unmarked_key_paths": ["$.Transform"]
+      }
+    },
+    "ValueOf": {
+      "description": "Returns the value or values of an attribute of a parameter's value. Works only in the `Rules` section.",
+      "arguments": [
+        {
+          "name": "parameter_logical_id",
+          "type": "text",
+          "required": true,
+          "repeated": false,
+          "description": "The parameter's name in the `Parameters` section."
+        },
+        {
+          "name": "attribute",
+          "type": "text",
+          "required": true,
+          "repeated": false,
+          "description": "The attribute, such as `VpcId` or `Tags.<tag_key>`."
+        }
+      ],
+      "return": {
+        "type": "any",
+        "description": "The attribute's value, or a list of values for a parameter holding several."
+      }
+    },
+    "ValueOfAll": {
+      "description": "Returns the values of an attribute for every value of an AWS-specific parameter type. Works only in the `Rules` section.",
+      "arguments": [
+        {
+          "name": "parameter_type",
+          "type": "text",
+          "required": true,
+          "repeated": false,
+          "description": "The AWS-specific parameter type, such as `AWS::EC2::VPC::Id`."
+        },
+        {
+          "name": "attribute",
+          "type": "text",
+          "required": true,
+          "repeated": false,
+          "description": "The attribute, such as `VpcId` or `Tags.<tag_key>`."
+        }
+      ],
+      "return": {
+        "type": "list",
+        "description": "The attribute's values."
       }
     }
   }

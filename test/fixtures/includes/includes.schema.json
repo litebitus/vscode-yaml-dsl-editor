@@ -12,7 +12,7 @@
     "Transform": {
       "description": "Calls the mock macro.",
       "arguments": [
-        { "name": "Name", "type": "text", "required": true, "repeated": false, "description": "The mock macro's name." },
+        { "name": "Name", "type": "macro", "required": true, "repeated": false, "description": "The mock macro's name." },
         { "name": "Parameters", "type": "map", "required": false, "repeated": false, "description": "The mock macro's arguments." }
       ],
       "macro": { "kind": "function_call" }

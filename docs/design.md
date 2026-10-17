@@ -623,7 +623,7 @@ The list holds what the file's fold sees and what is visible from the cursor:
 | the common layer | its own symbols, and those declared in every overlay |
 | inside a placeholder | every reference a placeholder body may be, builtins included |
 | after a call marker in a key | the vocabulary, each entry with its signature |
-| at a `function_call` macro's callee | the vocabulary without the call marker, each entry with its signature |
+| at a `function_call` macro's callee typed `function` or `macro` | the vocabulary's entries of that kind, without the call marker, each with its signature |
 
 - A declaration keyed by a local is offered under the local's value, the spelling a ref uses for it.
 - A ref completes up to the declared name; the field path after it is the author's.
@@ -1266,7 +1266,7 @@ A schema publishes a DSL's functions as a mapping of function name to its descri
 | Argument field | Meaning |
 |---|---|
 | `name` | the argument's name |
-| `type` | `text`, `number`, `whole_number`, `boolean`, `list`, `map` or `any` |
+| `type` | `text`, `number`, `whole_number`, `boolean`, `list`, `map`, `function`, `macro` or `any`; `function` and `macro` hold the name of a table entry of that kind |
 | `required` | whether it is required; optional arguments follow the required ones |
 | `repeated` | whether it takes every remaining value; a repeated argument is last |
 | `description` | what the argument holds, in markdown |
@@ -1315,6 +1315,7 @@ A function computes a value when the document is used. A macro is expanded by th
 | `conditional` | the condition, then every result | the result the condition chooses |
 | `merge` | the content's location, a `text`, or the content, a `map` | the map holding the call, merged over the content |
 | `loop` | the identifier, the collection, the body | the body once per item of the collection, the item standing for the identifier |
+| `transform` | its own, by name | the map holding the call, rewritten by the macro |
 
 An entry whose arguments do not fit its kind is a problem on the modeline line.
 
@@ -1337,6 +1338,7 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 | `conditional` | each result is an outcome, and each validates in the call's position |
 | `merge` | a location no `location_mappings` entry covers, or whose file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem |
 | `loop` | the body is checked once, the identifier standing for its own name; a key in it that names the identifier declares every name it can spell, so `Topic${TopicName}` declares `TopicA`, and a reference to such a name is not a problem |
+| `transform` | always: the map holding the call is checked as written |
 
 ### What an expansion gives
 

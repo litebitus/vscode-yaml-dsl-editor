@@ -91,7 +91,7 @@ suite('CloudFormation templates', () => {
     ].join('\n')), documentation);
   });
 
-  test('a function_call macro\'s callee is completed from every function and macro the table holds', async () => {
+  test('a function_call macro\'s callee typed macro is completed from the table\'s macros only', async () => {
     const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
     const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'));
     const cursor = await typedAfter(editor, 'Resources:', '\n  Fn::Transform:\n    Name: AWS::');
@@ -103,8 +103,9 @@ suite('CloudFormation templates', () => {
       '',
       'Inserts the template snippet stored in Amazon S3 in its place, merged with the map holding the call.',
     ].join('\n')), includeDocumentation);
-    const joinDocumentation = await offeredDocumentationOf(editor.document, cursor, 'Join');
-    assert.ok(joinDocumentation.startsWith('```yaml-dsl-signature\nJoin(delimiter: text, values: list): text'));
+    const labels = (await completionItemsAt(editor.document, cursor))
+      .map((item) => (typeof item.label === 'string' ? item.label : item.label.label));
+    assert.ok(!labels.includes('Join'), labels.join(', '));
   });
 
   test('an intrinsic function in an output\'s value is documented', async () => {
@@ -149,7 +150,7 @@ suite('CloudFormation templates', () => {
     await hoverTextHolds(
       doc,
       positionInText(doc, 'Transform:'),
-      'macro Transform(Name: text, Parameters?: map)',
+      'macro Transform(Name: macro, Parameters?: map)',
     );
     await hoverTextHolds(
       doc,

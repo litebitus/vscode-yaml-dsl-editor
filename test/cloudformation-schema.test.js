@@ -147,7 +147,7 @@ test('the template schema publishes every intrinsic and condition function in it
     ...Object.entries(schema.$defs.condition_func.properties),
   ].filter(([key]) => key.startsWith('Fn::'));
   const calledNames = callShapes.map(([key]) => key.slice('Fn::'.length));
-  const standsAsValue = ([, entry]) => !entry.macro || !['loop', 'merge'].includes(entry.macro.kind);
+  const standsAsValue = ([, entry]) => !entry.macro || ['function_call', 'conditional'].includes(entry.macro.kind);
   const valueNames = Object.entries(published.vocabulary).filter(standsAsValue).map(([name]) => name);
   assert.deepEqual(valueNames.sort(), calledNames.sort());
   assert.deepEqual(published.vocabulary.ForEach.macro, {

@@ -24,7 +24,9 @@
 - Layers: a file an include's location maps to, written or removed after its overlay opened, is followed or left at once.
 - Hover: a field's line shows its name and requirement as code and its type in italics; a definition that chooses between definitions is named by the one the value selects.
 - Completion: a function or macro offered after its call marker is documented as its hover is, and a field a branch restates without a description keeps the description its base states.
-- Completion: a `function_call` macro's callee is offered every function and macro of the table.
+- Functions: an argument or return typed `function` or `macro` holds the name of a table entry of that kind; a `function_call` macro's callee so typed is completed from those entries and checked against them.
+- Macros: a `transform` macro takes the arguments its entry states and expands to the map holding the call, rewritten by the macro; a table entry's name may hold `-`.
+- Examples: CloudFormation's function table holds the `Rules` section's functions and every transform AWS hosts.
 - Hover and completion: a builtin reads `` `<name>`: *builtin* ``, no longer its scope's name.
 - Examples: the CloudFormation schema names its definitions in the engine's words, `ref` apart from `func` and `condition_ref` apart from `condition_func`; `.vscodeignore` leaves dependencies' TypeScript sources, source maps and browser builds out of the package.
 - Config: `validator.allow_quoted_values` validates a quoted boolean or number as the value it spells.

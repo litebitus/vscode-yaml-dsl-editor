@@ -323,20 +323,52 @@ test('a function_call macro\'s callee is written after its callee key, as the ca
   assert.equal(writtenAt(7, 21).length, 1);
 });
 
-test('a callee completion replaces the whole name typed after its key, whatever characters the name holds', () => {
+test('a callee completion offers the table entries of the callee\'s type, replacing the whole name typed', () => {
   const stack = {
     dsl: { references: [], placeholder: null, function: null },
     symbols: [],
-    vocabulary: { table: { 'mock:include': mockFunction('mock:include') } },
+    vocabulary: {
+      table: {
+        'mock:include': {
+          ...mockFunction('mock:include', mockArgument('Location', 'text', true, false)),
+          macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [] },
+        },
+        'mock:join': mockFunction('mock:join'),
+      },
+    },
   };
-  const offeredRangeAt = (lineText) => {
+  const offeredAt = (lineText, calleeType) => {
     const position = { line: 0, character: lineText.length };
-    const [item] = completionsAt(lineText, position, { file: null, documentPath: [], atCallee: true }, stack, null);
-    return [item.label, item.range.start.character];
+    const site = { file: null, documentPath: [], calleeType };
+    return completionsAt(lineText, position, site, stack, null)
+      .map((item) => [item.label, item.range.start.character]);
   };
-  assert.deepEqual(offeredRangeAt('    Name: mock:inc'), ['mock:include', 10]);
-  assert.deepEqual(offeredRangeAt('    Name: '), ['mock:include', 10]);
-  assert.deepEqual(offeredRangeAt('  Fn::Transform: [mock:a,mock:in'), ['mock:include', 25]);
+  assert.deepEqual(offeredAt('    Name: mock:inc', 'macro'), [['mock:include', 10]]);
+  assert.deepEqual(offeredAt('    Name: ', 'macro'), [['mock:include', 10]]);
+  assert.deepEqual(offeredAt('  Fn::Transform: [mock:a,mock:in', 'macro'), [['mock:include', 25]]);
+  assert.deepEqual(offeredAt('    Name: ', 'function'), [['mock:join', 10]]);
+  assert.deepEqual(offeredAt('    Name: ', 'text'), []);
+});
+
+test('a function_call macro\'s callee typed macro or function names a table entry of that kind', () => {
+  const tableMarker = { callMarker: 'Fn::', splatOperator: null, callsWithoutNameAllowed: true };
+  const tableConfig = { ...functionConfig, callsNotAllowedAt: [], markerFunction: tableMarker };
+  const macroCallee = {
+    Transform: {
+      ...mockFunction('Transform', mockArgument('Name', 'macro', true, false)),
+      macro: { kind: 'function_call', nameSuffixPattern: null, unmarkedKeyPaths: [] },
+    },
+    'Mock::Include': {
+      ...mockFunction('Mock::Include'),
+      macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [] },
+    },
+    Join: mockFunction('Join'),
+  };
+  const problemsWith = (text) => problemsFor(text, { table: macroCallee, complete: true }, tableConfig);
+  assert.deepEqual(problemsWith('x:\n  Fn::Transform:\n    Name: Mock::Include\n'), []);
+  assert.deepEqual(problemsWith('x:\n  Fn::Transform:\n    Name: Mock::Registered\n'), []);
+  assert.deepEqual(problemsWith('x:\n  Fn::Transform:\n    Name: Join\n'), ['Transform argument Name expects macro']);
+  assert.deepEqual(problemsWith('x:\n  Fn::Transform: Join\n'), ['Transform argument Name expects macro']);
 });
 
 test('a key at a macro\'s unmarked key path calls the macro without the call marker', () => {
@@ -394,7 +426,7 @@ test('a macro is a table entry with a macro object, taking no return, its argume
   assert.equal(published({ ...loopEntry, macro: 1 }).problem, '#/x f.macro must be a mapping with kind');
   assert.equal(
     published({ ...loopEntry, macro: { kind: 'mock-kind' } }).problem,
-    '#/x f.macro.kind must be one of function_call, conditional, merge, loop',
+    '#/x f.macro.kind must be one of function_call, conditional, merge, loop, transform',
   );
   assert.equal(
     published({ ...loopEntry, macro: { kind: 'loop', name_suffix_pattern: '(' } }).problem,
@@ -421,12 +453,14 @@ test('a macro is a table entry with a macro object, taking no return, its argume
       mockArgument('items', 'any', true, false),
       mockArgument('body', 'any', true, false),
     ),
+    withArguments('transform'),
+    withArguments('transform', textArgument('Location'), mockArgument('Options', 'map', false, false)),
   ];
   for (const entry of fitting) assert.equal(published(entry).problem, null, entry.macro.kind);
   const unfitting = [
     [
       withArguments('function_call', mockArgument('Name', 'map', true, false)),
-      "the callee's name (text), then the callee's arguments (map)",
+      "the callee's name (text, function or macro), then the callee's arguments (map)",
     ],
     [withArguments('conditional', textArgument('condition')), 'the condition, then every result'],
     [
@@ -485,6 +519,9 @@ test('a macro is documented by its signature after macro, its arguments and what
     expansionOf('merge', ['content', 'map']),
     '*Expands to:* the map holding the call, merged over `content`.',
   );
+  assert.equal(expansionOf('transform'), '*Expands to:* the map holding the call, rewritten by the macro.');
+  const transformEntry = { description: 'Mock transform.', arguments: [], macro: { kind: 'transform', nameSuffixPattern: null } };
+  assert.equal(signatureText('Mock::Transform', transformEntry), 'macro Mock::Transform()');
 });
 
 test("Terraform's function metadata becomes a vocabulary", () => {
@@ -544,7 +581,8 @@ test('a schema publishes a function table at a pointer, held to the documented f
   const argument = (name, required, repeated) => mockArgument(name, 'text', required, repeated);
   const withArguments = (...functionArguments) => ({ f: mockFunction('f', ...functionArguments) });
   assert.equal(malformed([]), '#/x is not a mapping of function names');
-  assert.equal(malformed({ 'a-b': mockFunction('a-b') }), '#/x a-b is not a function name');
+  assert.equal(malformed({ 'a.b': mockFunction('a.b') }), '#/x a.b is not a function name');
+  assert.equal(malformed({ 'Mock::Macro-2020-07-23': mockFunction('Mock::Macro-2020-07-23') }), null);
   assert.equal(malformed({ f: 1 }), '#/x f must be a mapping with description and arguments');
   assert.equal(malformed({ f: { description: 'Mock f.' } }), '#/x f must be a mapping with description and arguments');
   assert.equal(malformed({ f: { arguments: [] } }), '#/x f.description is required');
@@ -552,7 +590,7 @@ test('a schema publishes a function table at a pointer, held to the documented f
   assert.equal(malformed(withArguments({ name: '' })), '#/x f.arguments[0].name is required');
   assert.equal(
     malformed(withArguments({ name: 'a', type: 'mock-type' })),
-    '#/x f.arguments[0].type must be one of text, number, whole_number, boolean, list, map, any',
+    '#/x f.arguments[0].type must be one of text, number, whole_number, boolean, list, map, function, macro, any',
   );
   assert.equal(malformed(withArguments({ name: 'a', type: 'text' })), '#/x f.arguments[0].required must be true or false');
   assert.equal(
@@ -575,7 +613,7 @@ test('a schema publishes a function table at a pointer, held to the documented f
   assert.equal(malformed(withReturn('text')), '#/x f.return must be a mapping with type and description');
   assert.equal(
     malformed(withReturn({ type: 'mock-type' })),
-    '#/x f.return.type must be one of text, number, whole_number, boolean, list, map, any',
+    '#/x f.return.type must be one of text, number, whole_number, boolean, list, map, function, macro, any',
   );
   assert.equal(malformed(withReturn({ type: 'text' })), '#/x f.return.description is required');
 });
