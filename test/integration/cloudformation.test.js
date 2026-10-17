@@ -67,6 +67,21 @@ suite('CloudFormation templates', () => {
     );
   });
 
+  test('a Fn::ForEach body is documented where it lands, and its identifier as the loop\'s', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'))).document;
+    await hoverTextHolds(
+      doc,
+      positionInText(doc, 'DisplayName'),
+      'The display name to use for an SNS topic with SMS subscriptions.',
+    );
+    await hoverTextHolds(
+      doc,
+      positionInText(doc, '${TopicName}', 2),
+      '`TopicName`: the identifier of `Fn::ForEach::Topics`, standing for `MockA`, `MockB`',
+    );
+  });
+
   test('the template\'s Transform section calls the Transform macro, documented with its callee', async () => {
     const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
     const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'))).document;

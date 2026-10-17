@@ -78,7 +78,7 @@ A name that only its field marks, such as in `DependsOn`, the first item of `Fn:
 
 ### Placeholders
 
-`${...}` is a placeholder, and `${!...}` is literal text, as `Fn::Sub` reads them.
+`${...}` is a placeholder, and `${!...}` is literal text, as `Fn::Sub` reads them. `&{...}`, written in a `Fn::ForEach` fragment, is a placeholder too.
 
 ### Layers
 

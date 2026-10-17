@@ -35,7 +35,7 @@ dsls:
             - { local: "{config_root}/snippets/", remote: "s3://mock-bucket/snippets/" }
       duplicate_check: { depth: 2, key_depths: {}, skip_keys: [] }
     placeholder:
-      pattern: "\\$\\{(?<body>[^!}][^}]*)\\}"
+      pattern: "[$&]\\{(?<body>[^!}][^}]*)\\}"
       unscanned_paths: []
     function:
       definitions: [schema]

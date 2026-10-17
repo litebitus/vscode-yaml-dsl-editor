@@ -110,3 +110,14 @@ test('a key typed in a tagged map is offered the fields of the key its tag stand
   assert.deepEqual(labelsWith([{ tag: '!Mock', key: 'Fn::Mock' }]), ['label']);
   assert.deepEqual(labelsWith([]), ['Fn::Mock']);
 });
+
+test('a key position reads the schema at the path its place maps to, such as where a loop\'s body lands', () => {
+  const text = 'loop:\n  - [x]\n  - body:\n      ';
+  const position = { line: 3, character: 6 };
+  const landing = (documentPath) => (
+    documentPath[0] === 'loop' ? ['mocktype', ...documentPath.slice(3)] : documentPath
+  );
+  const labels = schemaCompletionsAt(text, position, schema, { schemaPathOf: landing }).map((item) => item.label);
+  assert.ok(labels.includes('label'), labels.join(', '));
+  assert.deepEqual(schemaCompletionsAt(text, position, schema), []);
+});

@@ -1248,6 +1248,110 @@ test('a macro the schema\'s table publishes is called beside sibling keys by its
   );
 });
 
+test('a loop declares its identifier in its body and each item\'s names where its body lands, '
+  + 'each item validated and documented at that place', async () => {
+  const text = [
+    '# yaml-language-server: $schema=schema.json',
+    'Resources:',
+    '  Fn::ForEach::Topics:',
+    '    - TopicName',
+    '    - [MockA, mock-b]',
+    '    - Topic&{TopicName}:',
+    '        Type: mock-type',
+    '        Size: ${TopicName}',
+    '        Label: ${TopicName}',
+    '  MockBucket:',
+    '    Type: mock-type',
+    '    Peer: !Ref TopicMockA',
+    '    Other: !Ref TopicMockC',
+    '',
+  ].join('\n');
+  const loopArgument = (name, type) => ({
+    name,
+    type,
+    required: true,
+    repeated: false,
+    description: `The mock ${name}.`,
+  });
+  const loopSchema = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    'x-yaml-dsl-functions': {
+      ForEach: {
+        description: 'Repeats the mock fragment.',
+        arguments: [
+          loopArgument('identifier', 'text'),
+          loopArgument('collection', 'list'),
+          loopArgument('fragment', 'map'),
+        ],
+        macro: { kind: 'loop', name_suffix_pattern: '::[A-Za-z0-9]+' },
+      },
+    },
+    type: 'object',
+    properties: {
+      Resources: {
+        type: 'object',
+        patternProperties: {
+          '^[A-Za-z0-9-]+$': { $ref: '#/$defs/resource' },
+          '^Fn::ForEach::[A-Za-z0-9]+$': { type: 'array' },
+        },
+        additionalProperties: false,
+      },
+    },
+    $defs: {
+      resource: {
+        type: 'object',
+        required: ['Type'],
+        additionalProperties: false,
+        properties: {
+          Type: { type: 'string', description: 'The mock resource type.' },
+          Size: { type: 'integer' },
+          Label: { type: 'string', pattern: '^[A-Z]' },
+          Peer: {},
+          Other: {},
+        },
+      },
+    },
+  });
+  const loopConfig = configText(dslEntry('mock-template', {
+    tag_keys: [{ tag: '!Ref', key: 'Ref' }],
+    placeholder: { pattern: '[$&]\\{(?<body>[^}]+)\\}', unscanned_paths: [] },
+    scopes: { LOGICAL_ID: scope() },
+    declarations: [declaration('$.Resources.*', 'LOGICAL_ID')],
+    references: [
+      reference('^!Ref (?<name>[A-Za-z0-9-]+)$', 'LOGICAL_ID'),
+      reference('^(?<name>[A-Za-z0-9]+)$', 'LOGICAL_ID', { positions: ['whole_placeholder', 'placeholder_in_text'] }),
+    ],
+    function: {
+      definitions: ['schema'],
+      call_result_reference_positions: [],
+      calls_not_allowed_at: [],
+      marker_function: { call_marker: 'Fn::', splat_operator: null, calls_without_name_allowed: true },
+    },
+  }));
+  const ws = workspace({ [`${root}/schema.json`]: loopSchema, [common]: text });
+  await ws.setConfigs([{ text: loopConfig, dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, text);
+  await visitStack(ws, common);
+  const referenceKinds = ws.references(`file://${common}`)
+    .map((found) => [found.range.start.line, found.range.start.character, found.kind]);
+  assert.deepEqual(referenceKinds, [
+    [5, 13, 'local'],
+    [7, 16, 'local'],
+    [8, 17, 'local'],
+    [11, 15, 'local'],
+    [12, 16, 'error'],
+  ]);
+  const messages = validationMessages(ws, common);
+  assert.deepEqual(messages.map(([line]) => line), [7, 8]);
+  assert.equal(messages[0][1], '`Size` must be integer');
+  assert.match(messages[1][1], / \(for `mock-b`\)$/);
+  assert.equal(
+    ws.hover(`file://${common}`, { line: 7, character: 17 }).contents.value,
+    '`TopicName`: the identifier of `Fn::ForEach::Topics`, standing for `MockA`, `mock-b`',
+  );
+  assert.match(ws.hover(`file://${common}`, { line: 6, character: 9 }).contents.value, /The mock resource type\./);
+});
+
 test('an include\'s key is a function_call macro call, at its marked and unmarked keys, '
   + 'its callee\'s arguments bound by name and its callee documented', async () => {
   const text = [

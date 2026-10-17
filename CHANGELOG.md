@@ -19,6 +19,7 @@
 - Macros: a function table entry with a `macro` object is a macro, called beside sibling keys, after a name suffix its `name_suffix_pattern` matches, and documented by what it expands to; CloudFormation's `Fn::ForEach` is one.
 - Macros: a `function_call` macro binds its arguments by name and its callee's arguments by name, documents its callee on hover, and is also called by a key at its `unmarked_key_paths`; CloudFormation's `Fn::Transform` and `Transform` section are one, and an include's key is a call of it.
 - Macros: CloudFormation's `AWS::Include` is a `merge` macro, so an include's `Parameters` are checked against it and hover documents it.
+- Macros: a `loop` macro declares its identifier in its body and each literal item's names where its body lands; each item is validated, documented and completed at that place, a problem naming the items it holds for; CloudFormation's placeholder pattern reads `&{…}` too.
 - Config: `validator.allow_quoted_values` validates a quoted boolean or number as the value it spells.
 - Config: `performance.compiled_schema_cache` keeps a DSL's compiled schema in the extension's storage for later sessions.
 - Examples: the CloudFormation schema, generated from AWS's resource provider schemas by `scripts/cloudformation-schema/`.

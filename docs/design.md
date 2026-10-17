@@ -1333,7 +1333,7 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 | `function_call` | the call is checked against the macro's own entry alone |
 | `conditional` | each result is an outcome, and each validates in the call's position |
 | `merge` | a location no `location_mappings` entry covers, or whose file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem |
-| `loop` | the body is checked once; a key in it that names the identifier declares every name it can spell, so `Topic${TopicName}` declares `TopicA`, and a reference to such a name is not a problem |
+| `loop` | the body is checked once, the identifier standing for its own name; a key in it that names the identifier declares every name it can spell, so `Topic${TopicName}` declares `TopicA`, and a reference to such a name is not a problem |
 
 ### What an expansion gives
 
@@ -1767,6 +1767,7 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 ## TODO
 
 - A move turns list and map differences into locals, and on a tie the common layer declares a list's local as `[]` and a map's as `{}`.
+- A local holding a list or a map is read as its value, and `local.<name>.<key>` as the value at that path, so hover shows it and a loop's collection may be one.
 - `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.
 - Find All References on a declaration lists every reference to it across the common layer and each overlay.
 - The formatter, as designed under Formatting.

@@ -171,3 +171,21 @@ test('Enter after an empty key fills the required fields of the branch the docum
   assert.deepEqual(fillKeysFor('Mock::Bucket'), ['BucketName']);
   assert.deepEqual(fillKeysFor('Mock::Queue'), ['QueueName']);
 });
+
+test('an empty key\'s required fields are read at the path its place maps to, '
+  + 'its held keys at the written path', () => {
+  const heldAt = [];
+  const filled = requiredFieldsToFill({
+    text: 'loop:\n  - body:\n      alerts:\n        \n',
+    keyLine: 2,
+    schema,
+    dsl: dslWith(SIGNIFICANCE_NAME_FIRST),
+    schemaPathOf: (documentPath) => ['queue', ...documentPath.slice(3)],
+    heldKeysAt: (mapPath) => {
+      heldAt.push(mapPath);
+      return [];
+    },
+  });
+  assert.deepEqual(filled.fields.map((field) => field.key), ['name', 'mode', 'kms_key_arn', 'settings']);
+  assert.deepEqual(heldAt, [['loop', 0, 'body', 'alerts']]);
+});
