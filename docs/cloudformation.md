@@ -189,7 +189,7 @@ In `mock-loops.yaml`:
 
 | Where | What the editor shows |
 |---|---|
-| `Fn::ForEach::Topics` | `!Ref TopicOrders` goes to the body key `Topic&{TopicName}`; hover on `${TopicName}` names the items `Orders` and `Payments`; hover and completion in the body read `AWS::SNS::Topic` |
+| `Fn::ForEach::Topics` | `!Ref TopicOrders` goes to the body key `Topic&{TopicName}`; hover on `${TopicName}` names the items `Orders` and `Payments`; hover and completion in the body read `AWS::SNS::Topic`; typing `${` or `&{` in the body offers `TopicName` beside the logical IDs and builtins |
 | `Fn::ForEach::FifoQueues` | each item validated: `FifoQueue: ${Fifo}` is an error for `maybe` alone, `` `FifoQueue` must be boolean (for `maybe`) `` |
 | `Fn::ForEach::Queues` | items a parameter holds, unknown: the body is checked once, and `!GetAtt QueueAnything.Arn` resolves to `Queue&{QueueName}` |
 | `Fn::ForEach::Regions` | a loop in a loop's body: `!Ref BucketEastLogs` resolves to `Bucket&{Region}&{Kind}` |

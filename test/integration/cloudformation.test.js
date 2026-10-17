@@ -144,6 +144,16 @@ suite('CloudFormation templates', () => {
     );
   });
 
+  test('a placeholder opened in a loop\'s body offers its loop variable, in either of the pattern\'s openings', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'));
+    const documentation = '`TopicName`: the loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `MockB`';
+    const dollarCursor = await typedAfter(editor, 'DisplayName: mock-${TopicName}', '\n          FifoTopic: ${');
+    assert.equal(await offeredDocumentationOf(editor.document, dollarCursor, '${TopicName}'), documentation);
+    const ampersandCursor = await typedAfter(editor, 'FifoTopic: ${', '\n          ContentBasedDeduplication: &{');
+    assert.equal(await offeredDocumentationOf(editor.document, ampersandCursor, '&{TopicName}'), documentation);
+  });
+
   test('a name a loop in another loop\'s body declares resolves to that body\'s key', async () => {
     const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
     const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'))).document;

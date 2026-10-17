@@ -1,6 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { templateFor, fillTemplate, leadingLiteral } = require('../lib/reference-template');
+const {
+  templateFor,
+  templatesFor,
+  fillTemplate,
+  leadingLiteral,
+  placeholderShapesOf,
+  wrapInPlaceholder,
+} = require('../lib/reference-template');
 
 const refRule = {
   pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_${}]+)',
@@ -41,6 +48,17 @@ test('a reference rule becomes a template that writes each symbol as the rule re
   assert.equal(templateFor({ ...localRule, pattern: '^(?<name>[a-z]+)$' }), null);
   const bareRule = { ...localRule, pattern: '^(?<name>[a-z]+)$' };
   assert.equal(templateFor(bareRule, { leadingTextRequired: false }).leadingText, '');
+});
+
+test('a character class of listed characters or ranges yields one template per member', () => {
+  const shapes = placeholderShapesOf({ pattern: '[$&]\\{(?<body>[^}]+)\\}' });
+  assert.deepEqual(shapes.map((shape) => wrapInPlaceholder(shape, 'MockName')), ['${MockName}', '&{MockName}']);
+  const texts = (pattern) => templatesFor({ ...localRule, pattern }).map((template) => fillTemplate(template, localSymbol('m')));
+  assert.deepEqual(texts('^[a-c\\-]\\.(?<name>[a-z]+)'), ['a.m', 'b.m', 'c.m', '-.m']);
+  assert.deepEqual(texts('^[^a]\\.(?<name>[a-z]+)'), []);
+  assert.deepEqual(texts('^[ab]+\\.(?<name>[a-z]+)'), []);
+  assert.deepEqual(texts('^[\\d]\\.(?<name>[a-z]+)'), []);
+  assert.deepEqual(texts('^[ab'), []);
 });
 
 test('a pattern that is not a literal with named groups yields no template', () => {

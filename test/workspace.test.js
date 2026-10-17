@@ -1352,6 +1352,20 @@ test('a loop declares its loop variable in its body and each item\'s names where
     '`TopicName`: the loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
   );
   assert.match(ws.hover(`file://${common}`, { line: 6, character: 9 }).contents.value, /The mock resource type\./);
+  const typed = text.replace('        Label: ${TopicName}', '        Label: &{');
+  await ws.sync(`file://${common}`, common, typed);
+  const offered = ws.completion(`file://${common}`, { line: 8, character: 17 });
+  const loopVariableItem = offered.find((item) => item.label === '&{TopicName}');
+  assert.deepEqual([loopVariableItem.kind, loopVariableItem.documentation], [
+    'variable',
+    '`TopicName`: the loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
+  ]);
+  assert.ok(offered.some((item) => item.label === '&{MockBucket}'));
+  const outside = typed.replace('    Peer: !Ref TopicMockA', '    Peer: ${');
+  await ws.sync(`file://${common}`, common, outside);
+  const outsideLabels = ws.completion(`file://${common}`, { line: 11, character: 12 }).map((item) => item.label);
+  assert.ok(outsideLabels.includes('${MockBucket}'));
+  assert.ok(!outsideLabels.includes('${TopicName}'));
 });
 
 test('an include\'s key is a function_call macro call, at its marked and unmarked keys, '

@@ -613,7 +613,8 @@ Typing the start of a reference opens the list of what it can name.
 
 - Each config reference rule is a literal with named groups, which the editor turns into a template: `^ref (?<type>…)\.(?<name>…)` writes `ref <type>.<name>`.
 - A symbol fills the template, and the result is kept only when the rule's own pattern reads it back as that symbol.
-- A rule whose pattern is not a literal with named groups offers nothing.
+- A character class of listed characters or ranges in the literal gives one template per member, so the placeholder pattern `[$&]\{(?<body>…)\}` opens with `${` and with `&{`.
+- A rule whose pattern holds anything else, such as a negated class, a quantifier or an alternation outside a named group, offers nothing.
 
 The list holds what the file's fold sees and what is visible from the cursor:
 
@@ -621,7 +622,7 @@ The list holds what the file's fold sees and what is visible from the cursor:
 |---|---|
 | an overlay | the common layer's symbols and its own |
 | the common layer | its own symbols, and those declared in every overlay |
-| inside a placeholder | every reference a placeholder body may be, builtins included |
+| inside a placeholder | every reference a placeholder body may be, builtins included, and in a loop's body the loop variable of each loop around it |
 | after a call marker in a key | the vocabulary, each entry with its signature |
 | at a `function_call` macro's callee typed `function` or `macro` | the vocabulary's entries of that kind, without the call marker, each with its signature |
 
