@@ -1,6 +1,13 @@
 # YAML DSL Editor
 
-The editor that makes a YAML DSL authorable.
+Language support for any YAML DSL, declared in one config file, with nothing about a DSL built in.
+
+## Examples
+
+`examples/` is a workspace to open and try the editor, one folder per DSL, each with its own `yaml-dsl.yml`:
+
+- `examples/cloudformation/`: AWS's sample templates, and the editor's own `mock-loops.yaml` and `mock-macros.yaml` showing the macros, read with the CloudFormation schema in `examples/schemas/`.
+- `examples/merge-macro/`: a mock DSL with a common layer and an overlay, showing the merge macro and paths into locals; its README lists what to look at.
 
 ## Features
 
@@ -64,6 +71,16 @@ layers:
   common_layer_files:
     mock-dsl.yml: ["{concern}.mock-dsl.yml", mock-dsl.yml]
 ```
+
+### Functions and macros
+
+A DSL's functions and macros come from its function table: its schema's `x-yaml-dsl-functions`, or Terraform's. A function computes a value when the document is used; a macro is expanded before then, and the editor reads the document as the expansion writes it.
+
+- Hover documents a call by its signature and arguments, and a macro by what it expands to.
+- Calls complete after the call marker, each documented as its hover is.
+- A call the table rejects is marked as you type: an unknown name, or an argument the call is missing or gets wrong.
+- A merge macro merges maps from a local, a path into one, or another file into the map holding the call, and a key in a merged local is documented and completed by the maps it lands in.
+- A loop macro repeats its body once per item: each item is validated, and the names the body declares resolve.
 
 ### Schema hover
 
