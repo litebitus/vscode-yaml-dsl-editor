@@ -21,6 +21,7 @@
 - Macros: CloudFormation's `AWS::Include` is a `merge` macro, so an include's `Parameters` are checked against it and hover documents it.
 - Macros: a `loop` macro declares its identifier in its body and each literal item's names where its body lands; each item is validated, documented and completed at that place, a problem naming the items it holds for; CloudFormation's placeholder pattern reads `&{…}` too.
 - Hover: a function's or macro's signature is colored by its own grammar, the macro keyword, name, arguments and types each apart, never as the open file's YAML.
+- Layers: a file an include's location maps to, written or removed after its overlay opened, is followed or left at once.
 - Hover: a field's line shows its name and requirement as code and its type in italics; a definition that chooses between definitions is named by the one the value selects.
 - Examples: the CloudFormation schema names its definitions in the engine's words, `ref` apart from `func` and `condition_ref` apart from `condition_func`; `.vscodeignore` leaves dependencies' TypeScript sources, source maps and browser builds out of the package.
 - Config: `validator.allow_quoted_values` validates a quoted boolean or number as the value it spells.

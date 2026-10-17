@@ -240,6 +240,7 @@ What the extension holds is a copy of what the files say: a resident stack's ana
 | a layer file is edited in an editor | on the edit | the stack is analyzed again in place, its suggestions once the quiet period ends, and the file's painted marks are cleared until the next report | foreground, then background |
 | a layer file of a resident stack changes on disk while no editor has it open | on the change | the file is read again | background |
 | a layer file is deleted from disk | on the deletion | the file leaves the stack, even while an editor holds it with no unsaved edits, and comes back when it returns to disk | background |
+| the file an include's location maps to is written to or removed from disk | on the change | the include is followed or left, and the stack of the overlay holding it is built again | background |
 | a layer file's editor closes | on the close | the file is read from disk again, so discarded edits, or a file gone from disk, leave the stack with what the disk holds | background |
 | a path a resident file's schema search reads changes on disk | on the change | that file's schema reloads, its stack is analyzed and validated again, and its hover documentation reads the new schema, the common layer's for that overlay; a schema on disk changes when its stack is initialized again | background |
 | an overlay's schema reloads | on the reload | the common layer's validation errors are worked out again, each naming exactly the overlays whose current schema its value fails | background |

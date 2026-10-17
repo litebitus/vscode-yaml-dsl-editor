@@ -20,3 +20,9 @@ Resources:
       TopicArn: !Ref TopicOrders
       Protocol: email
       Endpoint: !Ref TopicMissing
+  SnippetSubscriber:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref TopicPayments
+      Protocol: sqs
+      Endpoint: !GetAtt SnippetQueue.Arn

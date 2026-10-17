@@ -228,6 +228,28 @@ test('an unmapped location declares every name and is an info problem; a common 
   assert.deepEqual(nested.map((problem) => problem.message), ["a common layer's own include is not followed"]);
 });
 
+test('a common layer written to disk after its overlay opened is followed at once, and left again once removed', async () => {
+  const files = { [BUCKET]: bucketText, [SCHEMA]: schema };
+  const ws = await includeWorkspace(files);
+  const uri = `file://${BUCKET}`;
+  await ws.sync(uri, BUCKET, bucketText);
+  const infoMessages = () => ws.problems(uri)
+    .filter((problem) => problem.severity === 'info')
+    .map((problem) => problem.message);
+  assert.equal(infoMessages().length, 1);
+  assert.match(infoMessages()[0], /which does not exist/);
+  assert.ok(ws.layerWatchTargets().some((target) => `${target.base}/${target.pattern}` === SNIPPET));
+  files[SNIPPET] = snippetText;
+  await ws.layersChanged([SNIPPET]);
+  assert.deepEqual(infoMessages(), []);
+  assert.deepEqual(ws.references(uri).map((ref) => ref.kind), ['external']);
+  assert.equal(ws.definition(uri, at(bucketText, '!Ref MockWait', 6)).path, SNIPPET);
+  delete files[SNIPPET];
+  await ws.layersChanged([SNIPPET]);
+  assert.equal(infoMessages().length, 1);
+  assert.match(infoMessages()[0], /which does not exist/);
+});
+
 test('an entry every overlay holds beside the include moves into the common layer at its root', async () => {
   const timers = fakeTimers();
   const ws = await includeWorkspace(stackFiles, timers);

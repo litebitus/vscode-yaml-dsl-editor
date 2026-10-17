@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=../../schemas/cloudformation-2010-09-09.schema.json#/properties/Resources
+SnippetQueue:
+  Type: AWS::SQS::Queue
+  Properties:
+    QueueName: snippet-queue
+SnippetPolicy:
+  Type: AWS::SQS::QueuePolicy
+  Properties:
+    Queues:
+      - !Ref SnippetQueue
+    PolicyDocument:
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service: sns.amazonaws.com
+          Action: sqs:SendMessage
+          Resource: !GetAtt SnippetQueue.Arn
