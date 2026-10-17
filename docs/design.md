@@ -545,6 +545,9 @@ A local is a named value. `locals.scope_name` names the scope whose declarations
 - A local that reaches itself through its references is a problem on its declaration, and its value stays as written.
 - A reference to anything other than a local stays as written inside the value.
 - A key holding a local placeholder is also known by the local's value.
+- `locals.path_separator`, when set, reads the text after a local's name as a path into its value, each step a map key or, where the value is a list, an index counted from 0. The local's reference rule allows text after the name.
+- A path steps through the locals a value references and the maps its merges bring in. Go to definition opens the key at the path.
+- A step the value lacks is an error on the reference: `` `local.defaults` holds no `queues` ``. A step into a value known only when the document is used is no problem.
 - Moving a block into the common layer writes each difference as a local.
 
 ## Navigating references
@@ -562,7 +565,7 @@ A local is a named value. `locals.scope_name` names the scope whose declarations
 In `mock-dsl.yml`:
 
 - A ref is a whole scalar `ref <type>.<name>`, with an optional field path after the name. Its scope is `<type>`, the mapping key enclosing the declaration.
-- A local is a key under `locals`, referenced as a whole scalar `local.<name>` or as `${local.<name>}` inside a scalar.
+- A local is a key under `locals`, referenced as a whole scalar `local.<name>` or as `${local.<name>}` inside a scalar, with an optional path `.<key>…` after the name.
 - A value shared by entries is a local in the common layer.
 
 ### Classes
@@ -643,6 +646,7 @@ The file's schema completes keys and values, read by the parser of the schema's 
 
 - A field's row shows its requirement marker and description, cut to the row's width, and the full text shows beside the list; a field the parent's `required` array lists is `[required]`.
 - A deprecated field is struck through in a draft that reads `deprecated`.
+- A key in a common layer local that a merge reads completes the fields every overlay's schema states the same at every map the local lands in.
 - Word completion is off in DSL files, so the list holds only what the schema and the references offer; a user's own `editor.wordBasedSuggestions` for the language still wins.
 - A field's value forms are its schema with references, `allOf`, and each `anyOf` or `oneOf` alternative resolved.
 - A field whose every value form is a map or a list inserts its key and a new line indented one level; any other field inserts `key: `, and opens the list of its values when it has any.
@@ -705,6 +709,7 @@ A schema for this kind of value is built this way. This extension reads the sche
 - The draft's renderer reads its own keywords, as its parser and validator do; without a value, a part it cannot read in words names a condition the schema states.
 - A key that sets a field of its entry, by the `validator`'s `child_values_from_parent_key`, documents its entry, then the field it sets, as that field's own tooltip would, under `*Sets* <field> *to* <value>:`. An entry that writes the field itself documents its entry alone.
 - In the common layer the tooltip documents the field in each overlay's schema; overlays whose documentation is the same share one section, headed by their names, and overlays whose schema has no such field are named last, as not a field.
+- A key in a common layer local that a merge reads is documented by each overlay's schema at each map the local lands in. A section's heading names `overlay:path` terms: overlays merging at the same paths are grouped and the paths' common prefix is factored, as `{dev,prod}:queue.{orders,payments}`, and a long heading wraps only between terms.
 - A section's heading is its overlays' names in bold, in the theme's `overlayHeadingForeground`.
 - A description's HTML is shown as text, so a tag written in prose reads as written.
 
@@ -1321,7 +1326,7 @@ The editor follows the preprocessing, so it reads the document as it will be: an
 | `transform` | none | the map holding the call, rewritten by the macro |
 
 - A role names one of the entry's arguments, so arguments sit in whatever order the DSL writes them. An argument no role names is one the editor does not read.
-- A call binds its arguments by name when its value is a map holding argument names, by position when it is a list, and otherwise as the first argument.
+- A call binds its arguments by name when its value is a map holding argument names, by position when it is a list, and otherwise as the first argument, and its arguments are checked as they bind.
 - An entry whose roles are missing, name no argument, or name an argument of the wrong type is a problem on the modeline line. Only a `merge` macro's content may be repeated.
 
 `examples/schemas/cloudformation-functions.json` is CloudFormation's table.
@@ -1353,8 +1358,11 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 - The loop variable is a name the loop declares within its body, read by the DSL's placeholders and reference rules as any name is; an inner loop's loop variable hides an outer one of the same name.
 - The names an expansion declares are declared where they land.
 - A merge whose content is at a location is an include, its location mapped by `layers.overlay_includes`.
-- A merge's contents are merged in order, and the holding map's own keys over them. A content that is a local is read as the local's value in the fold, whichever layer declares it, and a name it declares resolves to the key the local writes.
+- A merge's contents are merged in order, and the holding map's own keys over them. A content that is a local, or a path into one, is read as that value in the fold, whichever layer declares it, and a name it declares resolves to the key the local writes.
 - A problem in what a content supplies is reported at the call's key.
+- A key in a local a merge reads is read at the position it lands: its schema, completion and hover are those of the maps it lands in, at the same path under each.
+- One fold merging a local into maps whose schemas differ is an error at each of those merge calls, the targets listed by schema: `` `local.defaults` is merged into maps with different schemas: `queue.{orders,payments}` and `topic.alerts` ``. The common layer is checked in each overlay's fold, its targets read as `dev:queue.orders`. The local itself is no problem.
+- A loop's collection may be a list a local holds, or a path into a local that holds one.
 
 ### Hover
 
@@ -1420,6 +1428,7 @@ dsls:
         calls_without_name_allowed: true
     locals:
       scope_name: local
+      path_separator: "."
     validator:
       child_values_from_parent_key:
         - pattern: '^(?<field>[a-z][a-z0-9_]*) (?<value>[a-z0-9-]+)$'
@@ -1511,9 +1520,9 @@ dsls:
         scope_name: ENTRY
         scope_group: type
         name_group: name
-      - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
+      - pattern: "^local\\.(?<name>[a-z0-9_]+)"
         positions: [whole_scalar, whole_placeholder, placeholder_in_text]
-        text_after_name_allowed: false
+        text_after_name_allowed: true
         scope_name: local
         scope_group: null
         name_group: name
@@ -1777,9 +1786,8 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 ## TODO
 
 - A move turns list and map differences into locals, and on a tie the common layer declares a list's local as `[]` and a map's as `{}`.
-- A local holding a list or a map is read as its value, and `local.<name>.<key>` as the value at that path, so hover shows it and a loop's collection may be one.
+- The config states what a placeholder form does to the value it puts in, such as CloudFormation's `&{…}` dropping non-alphanumeric characters, so a name written with it is spelled as the expansion spells it.
 - `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.
 - Find All References on a declaration lists every reference to it across the common layer and each overlay.
 - The formatter, as designed under Formatting.
 - The package ships the client, the server and the validation worker each bundled by esbuild, with the code cache keyed by the bundles and ajv's runtime modules bundled in, in place of `lib/` and `node_modules`.
-- (Observing the fix) One undo after "rename everywhere" on an unsaved hand rename takes every overlay back every time; in about one Antigravity integration run in four, the overlay still holds the new name after the undo.

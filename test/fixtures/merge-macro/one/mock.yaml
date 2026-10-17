@@ -11,3 +11,6 @@ mocktype:
       - local.mock_defaults
   missing:
     mode: fast
+topictype:
+  alerts:
+    fn.merge: local.mock_defaults

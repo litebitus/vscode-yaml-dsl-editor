@@ -6,21 +6,12 @@ const {
   shownDocument,
   positionInText,
   hoverTextOf,
+  hoverTextHolds,
   completionItemsAt,
   definitionLineAt,
+  typedAfter,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
-
-async function hoverTextHolds(doc, position, expected) {
-  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
-  let text = '';
-  while (Date.now() < deadline) {
-    text = await hoverTextOf(doc, position);
-    if (text.includes(expected)) return;
-    await new Promise((resolve) => { setTimeout(resolve, 50); });
-  }
-  assert.ok(text.includes(expected), text);
-}
 
 async function offeredDocumentationOf(doc, position, label) {
   const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
@@ -33,13 +24,6 @@ async function offeredDocumentationOf(doc, position, label) {
     await new Promise((resolve) => { setTimeout(resolve, 50); });
   }
   return documentation;
-}
-
-async function typedAfter(editor, needle, text) {
-  const doc = editor.document;
-  const lineEnd = doc.lineAt(positionInText(doc, needle).line).range.end;
-  await editor.edit((edit) => { edit.insert(lineEnd, text); });
-  return doc.lineAt(lineEnd.line + text.split('\n').length - 1).range.end;
 }
 
 suite('CloudFormation templates', () => {

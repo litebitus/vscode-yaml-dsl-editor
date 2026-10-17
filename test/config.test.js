@@ -181,7 +181,7 @@ test('a complete config states every field and keeps them', () => {
     splatOperator: '*',
     callsWithoutNameAllowed: true,
   });
-  assert.deepEqual(sample.locals, { scopeName: 'local' });
+  assert.deepEqual(sample.locals, { scopeName: 'local', pathSeparator: null });
   assert.deepEqual(sample.validator, {
     mergeBaseKeys: ['defaults'],
     childValuesFromParentKey: [{ pattern: '^(?<field>[a-z_]+) (?<value>[a-z0-9-]+)$' }],
@@ -473,7 +473,8 @@ test('first_keys and last_keys are distinct keys, apart from each other, and [] 
   ]) assert.ok(parsed.error.includes(message), message);
 });
 
-test('locals name a declared scope that a key declaration and a reference rule read', () => {
+test('locals name a declared scope that a key declaration and a reference rule read, and may state a path separator',
+() => {
   const localsDsl = (id, fields) => dslEntry(id, {
     scopes: { local: scope(), step: scope() },
     declarations: [declaration('$.locals.*', 'local'), declaration('$.steps.*', 'step', { declares_every_name: true })],
@@ -486,14 +487,25 @@ test('locals name a declared scope that a key declaration and a reference rule r
     localsDsl('nameless', { locals: {} }),
     localsDsl('undeclared', { locals: { scope_name: 'missing' } }),
     localsDsl('unread', { locals: { scope_name: 'step' } }),
+    localsDsl('pathed', { locals: { scope_name: 'local', path_separator: '.' } }),
+    localsDsl('emptyseparator', { locals: { scope_name: 'local', path_separator: '' } }),
   ));
-  assert.deepEqual(parsed.dsls.map((dsl) => dsl.locals), [{ scopeName: 'local' }, null, null, null, null]);
+  assert.deepEqual(parsed.dsls.map((dsl) => dsl.locals), [
+    { scopeName: 'local', pathSeparator: null },
+    null,
+    null,
+    null,
+    null,
+    { scopeName: 'local', pathSeparator: '.' },
+    null,
+  ]);
   for (const message of [
     'mapless.locals must be a mapping with scope_name',
     'nameless.locals.scope_name is required',
     'undeclared.locals: scope missing is not declared in scopes',
     'unread.locals: no declaration rule reads step names from keys',
     'unread.locals: no reference rule reads step',
+    'emptyseparator.locals.path_separator must be text: the text between the steps of a path into a local',
   ]) assert.ok(parsed.error.includes(message), message);
 });
 

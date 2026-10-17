@@ -4,8 +4,13 @@ locals:
   mock_landed:
     landed:
       size: 2
+  mock_nested:
+    inner:
+      size: 4
 mocktype:
   fn.merge: local.mock_landed
   shared:
     fn.merge: local.mock_defaults
     source: ref mocktype.landed
+  nested:
+    fn.merge: local.mock_nested.inner

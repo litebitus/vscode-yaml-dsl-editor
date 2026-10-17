@@ -259,6 +259,11 @@
           "type": "string",
           "minLength": 1,
           "description": "The scope, declared under scopes, whose declarations are the locals."
+        },
+        "path_separator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The text between the steps of a path into a local, read after the local's name. Left out, a local is read whole."
         }
       }
     },

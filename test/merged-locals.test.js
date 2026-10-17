@@ -1,0 +1,180 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { createWorkspace } = require('../lib/workspace');
+const { mergeTargetTermsOf } = require('../lib/merge-target-terms');
+const {
+  scope,
+  declaration,
+  reference,
+  markerFunction,
+  dslEntry,
+  configText,
+} = require('./config-builders');
+
+const mergingEntry = dslEntry('merging', {
+  file_includes: ['**/mock.yml'],
+  schema_search_paths: ['.schema/sample.schema.json'],
+  layers: {
+    overlay_folders: ['one', 'two'],
+    common_layer_discovery: 'ancestor',
+    duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
+  },
+  function: markerFunction({ definitions: ['schema'] }),
+  locals: { scope_name: 'local' },
+  scopes: { local: scope(), ENTRY: scope({ named_by_parent_key: true }) },
+  declarations: [declaration('$.locals.*', 'local'), declaration('$.*.*', 'ENTRY', { skip_keys: ['locals'] })],
+  references: [reference('^local\\.(?<name>[a-z0-9_]+)$', 'local')],
+});
+
+const labelField = { type: 'string', description: '[optional] Mock label.' };
+
+const schemaWith = (sizeDescription) => JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  'x-yaml-dsl-functions': {
+    merge: {
+      description: 'Merges the mock contents.',
+      arguments: [{ name: 'contents', type: 'map', required: true, repeated: true, description: 'The mock contents.' }],
+      macro: { kind: 'merge', content: 'contents', merge_behavior: 'shallow' },
+    },
+  },
+  type: 'object',
+  properties: {
+    locals: { type: 'object' },
+    mocktype: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          size: { type: 'integer', description: sizeDescription },
+          mode: { enum: ['fast', 'slow'], description: '[optional] Mock mode.' },
+          label: labelField,
+        },
+      },
+    },
+    topictype: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          size: { type: 'string', description: '[optional] Mock topic size.' },
+          label: labelField,
+        },
+      },
+    },
+  },
+});
+
+const root = '/repo/mock-stack';
+const common = `${root}/mock.yml`;
+const one = `${root}/one/mock.yml`;
+const two = `${root}/two/mock.yml`;
+const files = {
+  [`${root}/one/.schema/sample.schema.json`]: schemaWith('[required] Mock size.'),
+  [`${root}/two/.schema/sample.schema.json`]: schemaWith('[required] Mock size, in two.'),
+  [common]: [
+    'locals:',
+    '  mock_defaults:',
+    '    size: 1',
+    '    label: mock-label',
+    'mocktype:',
+    '  first:',
+    '    fn.merge: local.mock_defaults',
+    '  second:',
+    '    fn.merge: local.mock_defaults',
+    '',
+  ].join('\n'),
+  [one]: [
+    'topictype:',
+    '  alerts:',
+    '    fn.merge: local.mock_defaults',
+    '',
+  ].join('\n'),
+  [two]: [
+    'locals:',
+    '  mock_own:',
+    '    size: 3',
+    'mocktype:',
+    '  third:',
+    '    fn.merge: local.mock_own',
+    '',
+  ].join('\n'),
+};
+
+function positionAt(text, needle, shift = 0) {
+  const index = text.indexOf(needle) + shift;
+  return {
+    line: text.slice(0, index).split('\n').length - 1,
+    character: index - text.lastIndexOf('\n', index - 1) - 1,
+  };
+}
+
+function headingOf(text) {
+  const joined = [...text].join('⁠').replace(/⁠,⁠ ⁠/g, ', ');
+  const color = 'var(--vscode-yamlDslEditor-dark-overlayHeadingForeground)';
+  return `<span style="color:${color};"><strong>${joined}</strong></span>`;
+}
+
+async function mergingWorkspace() {
+  const ws = createWorkspace({
+    readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
+    fetchText: async () => null,
+  });
+  await ws.setConfigs([{ text: configText(mergingEntry), dir: '/repo' }]);
+  for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  for (const filePath of [common, one, two]) await ws.setActive(filePath);
+  await ws.setActive(null);
+  return ws;
+}
+
+test('merge target terms group the overlays merging at the same paths and factor out the paths\' common prefix', () => {
+  assert.deepEqual(mergeTargetTermsOf([
+    { label: 'dev', path: ['queue', 'orders'] },
+    { label: 'dev', path: ['queue', 'payments'] },
+    { label: 'prod', path: ['queue', 'orders'] },
+    { label: 'prod', path: ['queue', 'payments'] },
+    { label: 'staging', path: ['queue', 'orders'] },
+    { label: 'staging', path: ['topic', 'alerts'] },
+    { label: 'staging', path: ['queue', 'orders'] },
+  ]), ['{dev,prod}:queue.{orders,payments}', 'staging:{queue.orders,topic.alerts}']);
+  assert.deepEqual(mergeTargetTermsOf([{ label: null, path: ['queue', 'orders'] }]), ['queue.orders']);
+});
+
+test('a key in a local the common layer merges is documented by every schema it lands under, a section per '
+  + 'documentation, and completes the fields every schema shares', async () => {
+  const ws = await mergingWorkspace();
+  const hover = ws.hover(`file://${common}`, positionAt(files[common], 'size', 1));
+  assert.equal(hover.contents.value, [
+    `${headingOf('one:mocktype.{first,second}')}\n\n\`size\`: *integer*    \`[required]\`\n\nMock size.`,
+    `${headingOf('one:topictype.alerts')}\n\n\`size\`: *string*    \`[optional]\`\n\nMock topic size.`,
+    `${headingOf('two:mocktype.{first,second}')}\n\n\`size\`: *integer*    \`[required]\`\n\nMock size, in two.`,
+  ].join('\n\n'));
+  const typed = files[common].replace('    label: mock-label\n', '    label: mock-label\n    \n');
+  await ws.sync(`file://${common}`, common, typed);
+  const offered = ws.completion(`file://${common}`, positionAt(typed, '    \nmocktype', 4)).map((item) => item.label);
+  assert.deepEqual(offered.filter((label) => ['size', 'mode', 'label'].includes(label)), ['label']);
+});
+
+test('a key in a local an overlay merges reads that overlay\'s one schema', async () => {
+  const ws = await mergingWorkspace();
+  const hover = ws.hover(`file://${two}`, positionAt(files[two], 'size', 1));
+  assert.equal(hover.contents.value, '`size`: *integer*    `[required]`\n\nMock size, in two.');
+  const typed = files[two].replace('    size: 3\n', '    size: 3\n    \n');
+  await ws.sync(`file://${two}`, two, typed);
+  const offered = ws.completion(`file://${two}`, positionAt(typed, '    \nmocktype', 4)).map((item) => item.label);
+  assert.deepEqual(offered.filter((label) => ['size', 'mode', 'label'].includes(label)), ['size', 'mode', 'label']);
+});
+
+test('a fold merging one local into maps with different schemas is an error at each merge call', async () => {
+  const ws = await mergingWorkspace();
+  const mergeProblemsOf = (filePath) => ws.problems(`file://${filePath}`)
+    .filter((problem) => problem.message.includes('different schemas'))
+    .map((problem) => [problem.range.start.line, problem.message]);
+  const commonMessage = '`local.mock_defaults` is merged into maps with different schemas: '
+    + '`one:mocktype.{first,second}` and `one:topictype.alerts`';
+  assert.deepEqual(mergeProblemsOf(common), [[6, commonMessage], [8, commonMessage]]);
+  assert.deepEqual(mergeProblemsOf(one), [[2, '`local.mock_defaults` is merged into maps with different schemas: '
+    + '`mocktype.{first,second}` and `topictype.alerts`']]);
+  assert.deepEqual(mergeProblemsOf(two), []);
+});

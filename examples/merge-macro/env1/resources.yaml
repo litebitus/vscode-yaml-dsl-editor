@@ -13,3 +13,5 @@ queue:
       - local.slow_queue
   audits:
     encrypted: true
+  notifications:
+    fn.merge: local.dead_letter_queues.orders_failed

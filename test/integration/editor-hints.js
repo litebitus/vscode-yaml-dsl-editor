@@ -84,6 +84,24 @@ async function hoverTextBecomes(doc, position, expected) {
   assert.equal(text, expected);
 }
 
+async function hoverTextHolds(doc, position, expected) {
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+  let text = '';
+  while (Date.now() < deadline) {
+    text = await hoverTextOf(doc, position);
+    if (text.includes(expected)) return;
+    await new Promise((resolve) => { setTimeout(resolve, 50); });
+  }
+  assert.ok(text.includes(expected), text);
+}
+
+async function typedAfter(editor, needle, text) {
+  const doc = editor.document;
+  const lineEnd = doc.lineAt(positionInText(doc, needle).line).range.end;
+  await editor.edit((edit) => { edit.insert(lineEnd, text); });
+  return doc.lineAt(lineEnd.line + text.split('\n').length - 1).range.end;
+}
+
 async function completionItemsAt(doc, position) {
   const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
   let items = [];
@@ -128,6 +146,8 @@ module.exports = {
   positionInText,
   hoverTextOf,
   hoverTextBecomes,
+  hoverTextHolds,
+  typedAfter,
   completionItemsAt,
   definitionLineAt,
   undoInEditorOf,

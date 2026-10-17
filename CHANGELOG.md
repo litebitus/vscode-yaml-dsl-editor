@@ -7,10 +7,13 @@
   - `tag_keys` reads a YAML tag as the key it stands for, so `!Ref Mock` and `Ref: Mock` are one reference, one field and one value.
   - `validator.allow_quoted_values` validates a quoted boolean or number as the value it spells.
   - `performance.compiled_schema_cache` keeps a DSL's compiled schema in the extension's storage for later sessions.
+  - `locals.path_separator` reads the text after a local's name as a path into its value.
 - Ownership
   - Each config's globs are written to an existing workspace settings file's `files.associations`, once in any spelling, so a DSL file opens as YAML DSL before another YAML extension can read it.
 - Layers
   - `common_layer_discovery: overlay_includes` pairs an overlay with the common layers its includes name, each merged where its include sits, and follows a mapped file written or removed after its overlay opened.
+- Locals
+  - A reference reads the value at a path into a local, through the locals and merges it holds; a step the value lacks is an error, and Go to definition opens the key at the path.
 - Paths
   - The JSONPath steps `['name']` and `..name`.
 - Schemas
@@ -23,10 +26,11 @@
   - An argument or return typed `function` or `macro` holds the name of a table entry of that kind, completed from those entries and checked against them.
 - Macros
   - A function table entry with a `macro` object is a macro of kind `function_call`, `merge`, `loop` or `transform`, called beside sibling keys or after a name suffix its `name_suffix_pattern` matches, and documented by what it expands to; a call among sibling keys calls the macro of its name, beside a function of that name.
-  - A `macro` object names the argument that plays each of its kind's roles, so a call binds its arguments by name or by position as the DSL writes them.
+  - A `macro` object names the argument that plays each of its kind's roles, so a call binds and checks its arguments by name or by position as the DSL writes them.
   - A `function_call` macro binds its callee's arguments, documents its callee on hover, and is also called by a key at its `unmarked_key_paths`.
-  - A `merge` macro states its `merge_behavior`, `shallow`, `deep` or `join`, and merges contents from a location or its argument: a local's map is read from the fold and declares its names where it lands, and any other reference supplies the holding map's required fields.
-  - A `loop` macro declares its loop variable in its body and each literal item's names where its body lands; each item is validated, documented and completed there, a problem naming the items it holds for.
+  - A `merge` macro states its `merge_behavior`, `shallow`, `deep` or `join`, and merges contents from a location or its argument: a local's map, or the map at a path into one, is read from the fold, its own merges included, and declares its names where it lands, and any other reference supplies the holding map's required fields.
+  - A key in a local a merge reads is documented and completed by the maps it lands in, in the common layer by each overlay's schema, in sections headed `overlay:path`; one fold merging a local into maps of different schemas is an error at each of its merge calls.
+  - A `loop` macro declares its loop variable in its body and each literal item's names where its body lands, its collection written in the call or held by a local; each item is validated, documented and completed there, a problem naming the items it holds for.
   - A `transform` macro takes the arguments its entry states and expands to the map holding the call, rewritten by the macro.
 - Hover
   - A function's or macro's signature is colored by its own grammar, never as the open file's YAML.

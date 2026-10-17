@@ -199,6 +199,49 @@ test('a merge reads a local from the overlay or the common layer, validates what
   assert.deepEqual(validationMessages(common), []);
 });
 
+test('the fold view documents a field by the branch a merged local\'s value selects', async () => {
+  const branchedSchema = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    'x-yaml-dsl-functions': JSON.parse(schema)['x-yaml-dsl-functions'],
+    type: 'object',
+    properties: {
+      locals: { type: 'object' },
+      mocktype: {
+        type: 'object',
+        additionalProperties: {
+          type: 'object',
+          properties: {
+            mode: { enum: ['fast', 'slow'], description: '[optional] Mock mode.' },
+            label: { type: 'string', description: '[optional] Mock label.' },
+          },
+          if: { properties: { mode: { const: 'fast' } }, required: ['mode'] },
+          then: { properties: { label: { description: '[optional] Fast mock label.' } } },
+        },
+      },
+    },
+  });
+  const foldFiles = {
+    [`${root}/schema.json`]: branchedSchema,
+    [common]: 'locals:\n  mock_fast:\n    mode: fast\n',
+    [one]: 'mocktype:\n  own:\n    fn.merge: local.mock_fast\n    label: mock-label\n',
+  };
+  const ws = createWorkspace({
+    readFile: async (filePath) => (Object.hasOwn(foldFiles, filePath) ? foldFiles[filePath] : null),
+    fetchText: async () => null,
+  });
+  await ws.setConfigs([{ text: configText(mergedEntry), dir: '/repo' }]);
+  for (const filePath of [common, one]) await ws.sync(`file://${filePath}`, filePath, foldFiles[filePath]);
+  const foldUri = `yaml-dsl-fold:${encodeURIComponent(common)}/one`;
+  const folded = ws.foldText(common, 'one');
+  await ws.sync(foldUri, foldUri, folded);
+  const labelIndex = folded.indexOf('label:');
+  const position = {
+    line: folded.slice(0, labelIndex).split('\n').length - 1,
+    character: labelIndex - folded.lastIndexOf('\n', labelIndex - 1),
+  };
+  assert.match(ws.hover(foldUri, position).contents.value, /Fast mock label\./);
+});
+
 const landingEntry = dslEntry('landing', {
   ...mergedEntry,
   id: 'landing',

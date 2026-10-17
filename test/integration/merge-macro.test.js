@@ -5,6 +5,9 @@ const {
   shownDocument,
   positionInText,
   hoverTextBecomes,
+  hoverTextHolds,
+  typedAfter,
+  completionItemsAt,
   definitionLineAt,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
@@ -32,5 +35,28 @@ suite('merge macros', () => {
       await definitionLineAt(doc, positionInText(doc, 'ref mocktype.landed', 4)),
       positionInText(doc, '    landed:').line,
     );
+  });
+
+  test('a reference into a local opens the key at its path', async () => {
+    const doc = (await shownDocument(mergeFixture('mock.yaml'))).document;
+    assert.equal(
+      await definitionLineAt(doc, positionInText(doc, 'local.mock_nested.inner', 2)),
+      positionInText(doc, '    inner:').line,
+    );
+  });
+
+  test('a key in a local the common layer merges is documented by each schema it lands under, and completes the '
+    + 'fields they share', async () => {
+    const editor = await shownDocument(mergeFixture('mock.yaml'));
+    const doc = editor.document;
+    const unbroken = (term) => [...term].join('⁠');
+    const sizePosition = positionInText(doc, 'size: 1', 1);
+    await hoverTextHolds(doc, sizePosition, `${unbroken('one:mocktype.{shared,unknown}')}</strong>`);
+    await hoverTextHolds(doc, sizePosition, `${unbroken('one:topictype.alerts')}</strong>`);
+    await hoverTextHolds(doc, sizePosition, 'The mock topic size.');
+    const cursor = await typedAfter(editor, 'size: 1', '\n    ');
+    const labels = (await completionItemsAt(doc, cursor))
+      .map((item) => (typeof item.label === 'string' ? item.label : item.label.label));
+    assert.deepEqual(labels.filter((label) => ['size', 'mode', 'source'].includes(label)), ['source']);
   });
 });

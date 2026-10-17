@@ -24,6 +24,17 @@
           "source": { "type": "string", "description": "[optional] The mock entry this one reads from." }
         }
       }
+    },
+    "topictype": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "size": { "type": "string", "description": "[optional] The mock topic size." },
+          "source": { "type": "string", "description": "[optional] The mock entry this one reads from." }
+        }
+      }
     }
   }
 }

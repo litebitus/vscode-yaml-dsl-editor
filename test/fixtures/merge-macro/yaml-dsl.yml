@@ -21,6 +21,7 @@ dsls:
         calls_without_name_allowed: true
     locals:
       scope_name: local
+      path_separator: "."
     key_sort_orders: []
     scopes:
       local:
@@ -53,9 +54,9 @@ dsls:
         declares_every_name: false
         scope_name: ENTRY
     references:
-      - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
+      - pattern: "^local\\.(?<name>[a-z0-9_]+)"
         positions: [whole_scalar]
-        text_after_name_allowed: false
+        text_after_name_allowed: true
         scope_name: local
         scope_group: null
         name_group: name
