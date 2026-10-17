@@ -481,7 +481,7 @@ test('a macro is a table entry with a macro object, taking no return, its argume
     ],
     [
       withArguments('loop', textArgument('identifier')),
-      'the identifier (text), the collection (list), the body (map)',
+      'the loop variable (text), the collection (list), the body (map)',
     ],
   ];
   for (const [entry, wording] of unfitting) {
@@ -496,7 +496,7 @@ test('a macro is documented by its signature after macro, its arguments and what
     `\`\`\`yaml-dsl-signature\n${signature}\n\`\`\``,
     'Mock ForEach function.',
     '- `identifier`: The mock identifier.\n- `collection`: The mock collection.\n- `fragment`: The mock fragment.',
-    '*Expands to:* `fragment` once per item of `collection`, the item standing for `identifier`.',
+    '*Expands to:* `fragment` once per item of `collection`, `identifier` bound to the item.',
   ].join('\n\n'));
   const expansionOf = (kind, ...typedNames) => {
     const entry = {

@@ -182,7 +182,18 @@ The schema is `examples/schemas/cloudformation-<format version>.schema.json`, be
 `examples/` is a workspace a user opens to try the editor, one folder per public DSL, each with its own config:
 
 - `examples/cloudformation/yaml-dsl.yml` is the CloudFormation config;
-- `examples/cloudformation/` holds templates from AWS's `aws-cloudformation-templates` repository, unchanged, with its Apache-2.0 license beside them.
+- `examples/cloudformation/` holds templates from AWS's `aws-cloudformation-templates` repository, unchanged, with its Apache-2.0 license beside them;
+- `mock-loops.yaml` and `mock-macros.yaml` are the editor's own, written to show the macros.
+
+In `mock-loops.yaml`:
+
+| Where | What the editor shows |
+|---|---|
+| `Fn::ForEach::Topics` | `!Ref TopicOrders` goes to the body key `Topic&{TopicName}`; hover on `${TopicName}` names the items `Orders` and `Payments`; hover and completion in the body read `AWS::SNS::Topic` |
+| `Fn::ForEach::FifoQueues` | each item validated: `FifoQueue: ${Fifo}` is an error for `maybe` alone, `` `FifoQueue` must be boolean (for `maybe`) `` |
+| `Fn::ForEach::Queues` | items a parameter holds, unknown: the body is checked once, and `!GetAtt QueueAnything.Arn` resolves to `Queue&{QueueName}` |
+| `Fn::ForEach::Regions` | a loop in a loop's body: `!Ref BucketEastLogs` resolves to `Bucket&{Region}&{Kind}` |
+| `ShippingSubscriber` | `!Ref TopicShipping` names no topic a loop declares, an unknown reference |
 
 A later public DSL joins as its own folder under `examples/`, with its own `yaml-dsl.yml`.
 

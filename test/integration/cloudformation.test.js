@@ -125,11 +125,11 @@ suite('CloudFormation templates', () => {
     await hoverTextHolds(
       doc,
       positionInText(doc, 'ForEach::Topics'),
-      '*Expands to:* `fragment` once per item of `collection`, the item standing for `identifier`.',
+      '*Expands to:* `fragment` once per item of `collection`, `identifier` bound to the item.',
     );
   });
 
-  test('a Fn::ForEach body is documented where it lands, and its identifier as the loop\'s', async () => {
+  test('a Fn::ForEach body is documented where it lands, and its loop variable as the loop\'s', async () => {
     const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
     const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'))).document;
     await hoverTextHolds(
@@ -140,8 +140,25 @@ suite('CloudFormation templates', () => {
     await hoverTextHolds(
       doc,
       positionInText(doc, '${TopicName}', 2),
-      '`TopicName`: the identifier of `Fn::ForEach::Topics`, standing for `MockA`, `MockB`',
+      '`TopicName`: the loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `MockB`',
     );
+  });
+
+  test('a name a loop in another loop\'s body declares resolves to that body\'s key', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'))).document;
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    let definitions = [];
+    while (Date.now() < deadline && definitions.length === 0) {
+      definitions = await vscode.commands.executeCommand(
+        'vscode.executeDefinitionProvider',
+        doc.uri,
+        positionInText(doc, '${BucketEastLogs}', 4),
+      ) || [];
+      if (definitions.length === 0) await new Promise((resolve) => { setTimeout(resolve, 50); });
+    }
+    const target = definitions[0].targetRange || definitions[0].range;
+    assert.equal(target.start.line, positionInText(doc, 'Bucket&{Region}&{Kind}').line);
   });
 
   test('the template\'s Transform section calls the Transform macro, documented with its callee', async () => {

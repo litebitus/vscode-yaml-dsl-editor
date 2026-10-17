@@ -6,7 +6,7 @@ const { collectSymbols } = require('../lib/symbols');
 const {
   loopContextOf,
   loopsOf,
-  loopIdentifierAt,
+  loopOfVariableAt,
   expandedTreeOf,
   expandedValueOf,
   expandedPathOf,
@@ -69,9 +69,9 @@ const text = [
 
 const doc = analyzeDocument(text, '/repo/mock.yml', dsl);
 
-test('a loop is a call of a loop macro, with its identifier, its literal items and its body path', () => {
+test('a loop is a call of a loop macro, with its loop variable, its literal items and its body path', () => {
   const loops = loopsOf(doc.tree, context);
-  assert.deepEqual(loops.map((loop) => [loop.key, loop.holdingPath, loop.bodyPath, loop.identifier, loop.items]), [
+  assert.deepEqual(loops.map((loop) => [loop.key, loop.holdingPath, loop.bodyPath, loop.loopVariable, loop.items]), [
     ['Fn::ForEach::Topics', ['Resources'], ['Resources', 'Fn::ForEach::Topics', 2], 'TopicName', ['MockA', 'MockB']],
     [
       'Fn::ForEach::Queues',
@@ -83,17 +83,17 @@ test('a loop is a call of a loop macro, with its identifier, its literal items a
     ['Fn::ForEach::Unknown', ['Resources'], ['Resources', 'Fn::ForEach::Unknown', 2], 'ItemName', null],
   ]);
   assert.equal(loops[1].enclosing, loops[0]);
-  assert.deepEqual(loops[0].identifierRange.start, { line: 2, character: 6 });
+  assert.deepEqual(loops[0].loopVariableRange.start, { line: 2, character: 6 });
   assert.deepEqual(loopsOf(doc.tree, loopContextOf(dsl, {})), []);
 });
 
-test('a name inside a loop\'s body that is its identifier is the innermost loop\'s', () => {
+test('a name inside a loop\'s body that is its loop variable is the innermost loop\'s', () => {
   const loops = loopsOf(doc.tree, context);
   const queueBody = ['Resources', 'Fn::ForEach::Topics', 2, 'Topic${TopicName}', 'Fn::ForEach::Queues', 2, 'x'];
-  assert.equal(loopIdentifierAt(loops, queueBody, 'TopicName'), loops[0]);
-  assert.equal(loopIdentifierAt(loops, queueBody, 'QueueName'), loops[1]);
-  assert.equal(loopIdentifierAt(loops, ['Resources', 'MockBucket'], 'TopicName'), null);
-  assert.equal(loopIdentifierAt(loops, queueBody, 'MockBucket'), null);
+  assert.equal(loopOfVariableAt(loops, queueBody, 'TopicName'), loops[0]);
+  assert.equal(loopOfVariableAt(loops, queueBody, 'QueueName'), loops[1]);
+  assert.equal(loopOfVariableAt(loops, ['Resources', 'MockBucket'], 'TopicName'), null);
+  assert.equal(loopOfVariableAt(loops, queueBody, 'MockBucket'), null);
 });
 
 test('a loop\'s expansion declares each item\'s names where its body lands, '
@@ -132,6 +132,37 @@ test('a loop\'s expansion is written into the map holding it, each item\'s body 
     ['Resources', 'TopicMockA', 'QueueMockAOne', 'Type'],
   );
   assert.deepEqual(expandedPathOf(pathMap, ['Resources', 'MockBucket']), ['Resources', 'MockBucket']);
+});
+
+test('a loop standing directly in another loop\'s body expands once per outer item, its names declared '
+  + 'and its problems placed at its own body', () => {
+  const nestedText = [
+    'Resources:',
+    '  Fn::ForEach::Regions:',
+    '    - Region',
+    '    - [East, West]',
+    '    - Fn::ForEach::Buckets:',
+    '        - Kind',
+    '        - [Logs]',
+    '        - Bucket&{Region}&{Kind}:',
+    '            Type: mock-${Region}',
+    '',
+  ].join('\n');
+  const nested = analyzeDocument(nestedText, '/repo/mock.yml', dsl);
+  const symbols = collectSymbols(expandedTreeOf(nested.tree, context), dsl, '/repo/mock.yml', nestedText);
+  assert.deepEqual(symbols.map((symbol) => [symbol.name, symbol.keyRange.start.line]), [
+    ['BucketEastLogs', 7],
+    ['BucketWestLogs', 7],
+  ]);
+  const { value, pathMap } = expandedValueOf(nested.value, context);
+  assert.deepEqual(value, {
+    Resources: { BucketEastLogs: { Type: 'mock-East' }, BucketWestLogs: { Type: 'mock-West' } },
+  });
+  const problems = sourceProblemsOf([{ path: ['Resources', 'BucketWestLogs', 'Type'], message: 'mock west' }], pathMap);
+  assert.deepEqual(problems.map((problem) => [problem.path, problem.message]), [[
+    ['Resources', 'Fn::ForEach::Regions', 2, 'Fn::ForEach::Buckets', 2, 'Bucket&{Region}&{Kind}', 'Type'],
+    'mock west (for `West` and `Logs`)',
+  ]]);
 });
 
 test('a problem in an expansion is placed at the body\'s source, naming the items it holds for '

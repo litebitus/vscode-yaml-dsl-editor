@@ -1315,7 +1315,7 @@ The editor follows the preprocessing, so it reads the document as it will be: an
 |---|---|---|
 | `function_call` | the callee's name, then the callee's arguments | a call of the macro or function the first argument names, the second its arguments by name |
 | `merge` | the content's location, a `text`, or the contents, each a `map`, in order | the map holding the call, combined with the contents by `merge_behavior` |
-| `loop` | the identifier, the collection, the body | the body once per item of the collection, the item standing for the identifier |
+| `loop` | the loop variable, the collection, the body | the body once per item of the collection, the loop variable bound to the item |
 | `transform` | its own, by name | the map holding the call, rewritten by the macro |
 
 An entry whose arguments do not fit its kind is a problem on the modeline line.
@@ -1338,7 +1338,7 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 |---|---|
 | `function_call` | the call is checked against the macro's own entry alone |
 | `merge` | a location no `location_mappings` entry covers, or whose file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem; a content left to when the document is used supplies every field the holding map requires |
-| `loop` | the body is checked once, the identifier standing for its own name; a key in it that names the identifier declares every name it can spell, so `Topic${TopicName}` declares `TopicA`, and a reference to such a name is not a problem |
+| `loop` | the body is checked once, the loop variable bound to its own name; a key in it that names the loop variable declares every name it can spell, so `Topic${TopicName}` declares `TopicA`, and a reference to such a name is not a problem |
 | `transform` | always: the map holding the call is checked as written |
 
 ### What an expansion gives
@@ -1346,7 +1346,7 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 - The holding map validates with the expansion in place.
 - A loop's body is read at the position its entries land: their schema, completion and hover are the holding map's.
 - A problem in one item's expansion is reported at the body's source, naming the item; one every item shares is reported once.
-- The identifier is a name the loop declares within its body, read by the DSL's placeholders and reference rules as any name is; an inner loop's identifier hides an outer one of the same name.
+- The loop variable is a name the loop declares within its body, read by the DSL's placeholders and reference rules as any name is; an inner loop's loop variable hides an outer one of the same name.
 - The names an expansion declares are declared where they land.
 - A merge whose content is at a location is an include, its location mapped by `layers.overlay_includes`.
 - A merge's contents are merged in order, and the holding map's own keys over them. A content that is a local is read as the local's value in the fold, whichever layer declares it.
@@ -1366,7 +1366,7 @@ macro ForEach(identifier: text, collection: list, fragment: map)
 > - `collection`: The collection to iterate over.
 > - `fragment`: The output key and value repeated for each item.
 >
-> *Expands to:* `fragment` once per item of `collection`, the item standing for `identifier`.
+> *Expands to:* `fragment` once per item of `collection`, `identifier` bound to the item.
 
 ### Phases
 
@@ -1777,4 +1777,5 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 - `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.
 - Find All References on a declaration lists every reference to it across the common layer and each overlay.
 - The formatter, as designed under Formatting.
+- The package ships the client, the server and the validation worker each bundled by esbuild, with the code cache keyed by the bundles and ajv's runtime modules bundled in, in place of `lib/` and `node_modules`.
 - (Observing the fix) One undo after "rename everywhere" on an unsaved hand rename takes every overlay back every time; in about one Antigravity integration run in four, the overlay still holds the new name after the undo.

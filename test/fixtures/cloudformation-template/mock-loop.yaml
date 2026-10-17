@@ -10,3 +10,14 @@ Resources:
           DisplayName: mock-${TopicName}
   MockQueue:
     Type: AWS::SQS::Queue
+  Fn::ForEach::Regions:
+    - Region
+    - [East, West]
+    - Fn::ForEach::Buckets:
+        - Kind
+        - [Logs]
+        - Bucket&{Region}&{Kind}:
+            Type: AWS::S3::Bucket
+Outputs:
+  MockBucketName:
+    Value: !Sub ${BucketEastLogs}

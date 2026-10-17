@@ -19,7 +19,7 @@
 - Macros: a function table entry with a `macro` object is a macro, called beside sibling keys, after a name suffix its `name_suffix_pattern` matches, and documented by what it expands to; CloudFormation's `Fn::ForEach` is one.
 - Macros: a `function_call` macro binds its arguments by name and its callee's arguments by name, documents its callee on hover, and is also called by a key at its `unmarked_key_paths`; CloudFormation's `Fn::Transform` and `Transform` section are one, and an include's key is a call of it.
 - Macros: CloudFormation's `AWS::Include` is a `merge` macro, so an include's `Parameters` are checked against it and hover documents it.
-- Macros: a `loop` macro declares its identifier in its body and each literal item's names where its body lands; each item is validated, documented and completed at that place, a problem naming the items it holds for; CloudFormation's placeholder pattern reads `&{…}` too.
+- Macros: a `loop` macro declares its loop variable in its body and each literal item's names where its body lands; each item is validated, documented and completed at that place, a problem naming the items it holds for; CloudFormation's placeholder pattern reads `&{…}` too.
 - Hover: a function's or macro's signature is colored by its own grammar, the macro keyword, name, arguments and types each apart, never as the open file's YAML.
 - Layers: a file an include's location maps to, written or removed after its overlay opened, is followed or left at once.
 - Hover: a field's line shows its name and requirement as code and its type in italics; a definition that chooses between definitions is named by the one the value selects.

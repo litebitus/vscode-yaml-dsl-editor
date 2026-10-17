@@ -1246,11 +1246,11 @@ test('a macro the schema\'s table publishes is called beside sibling keys by its
       + 'Repeats the mock fragment.\n\n'
       + '- `identifier`: The mock identifier.\n- `collection`: The mock collection.\n'
       + '- `fragment`: The mock fragment.\n\n'
-      + '*Expands to:* `fragment` once per item of `collection`, the item standing for `identifier`.',
+      + '*Expands to:* `fragment` once per item of `collection`, `identifier` bound to the item.',
   );
 });
 
-test('a loop declares its identifier in its body and each item\'s names where its body lands, '
+test('a loop declares its loop variable in its body and each item\'s names where its body lands, '
   + 'each item validated and documented at that place', async () => {
   const text = [
     '# yaml-language-server: $schema=schema.json',
@@ -1349,7 +1349,7 @@ test('a loop declares its identifier in its body and each item\'s names where it
   assert.match(messages[1][1], / \(for `mock-b`\)$/);
   assert.equal(
     ws.hover(`file://${common}`, { line: 7, character: 17 }).contents.value,
-    '`TopicName`: the identifier of `Fn::ForEach::Topics`, standing for `MockA`, `mock-b`',
+    '`TopicName`: the loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
   );
   assert.match(ws.hover(`file://${common}`, { line: 6, character: 9 }).contents.value, /The mock resource type\./);
 });

@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::LanguageExtensions
+Parameters:
+  MockQueueNames:
+    Type: CommaDelimitedList
+Resources:
+  Fn::ForEach::Topics:
+    - TopicName
+    - [Orders, Payments]
+    - Topic&{TopicName}:
+        Type: AWS::SNS::Topic
+        Properties:
+          DisplayName: mock-${TopicName}
+  Fn::ForEach::FifoQueues:
+    - Fifo
+    - ["true", maybe]
+    - FifoQueue&{Fifo}:
+        Type: AWS::SQS::Queue
+        Properties:
+          FifoQueue: ${Fifo}
+  Fn::ForEach::Queues:
+    - QueueName
+    - !Ref MockQueueNames
+    - Queue&{QueueName}:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: mock-${QueueName}
+  Fn::ForEach::Regions:
+    - Region
+    - [East, West]
+    - Fn::ForEach::Buckets:
+        - Kind
+        - [Logs, Data]
+        - Bucket&{Region}&{Kind}:
+            Type: AWS::S3::Bucket
+            Properties:
+              BucketName: mock-${Region}-${Kind}
+  OrdersSubscriber:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref TopicOrders
+      Protocol: sqs
+      Endpoint: !GetAtt QueueAnything.Arn
+  ShippingSubscriber:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref TopicShipping
+      Protocol: email
+      Endpoint: !Ref BucketEastLogs
