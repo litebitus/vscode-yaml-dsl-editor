@@ -36,4 +36,28 @@ suite('file associations', () => {
     fs.writeFileSync(configPath, fs.readFileSync(configPath, 'utf8').replace('*.yaml', '*.yml'));
     await associationsBecome((held) => held[ymlGlob] === 'yaml-dsl' && !Object.hasOwn(held, yamlGlob));
   });
+
+  test('a YAML DSL entry no config states is dropped, another language\'s entry is kept, '
+    + 'and no user entry is copied into the workspace', async () => {
+    const folder = fixtureCopy('associated', 'associated-kept');
+    const yamlGlob = `${folder.replaceAll('\\', '/')}/*.yaml`;
+    await associationsBecome((held) => held[yamlGlob] === 'yaml-dsl');
+    const configPath = path.join(folder, CONFIG_FILE);
+    fs.writeFileSync(configPath, fs.readFileSync(configPath, 'utf8').replace('*.yaml', '*.yml'));
+    await associationsBecome((held) => !Object.hasOwn(held, yamlGlob));
+    const inspected = vscode.workspace.getConfiguration('files').inspect('associations');
+    assert.equal(Object.hasOwn(inspected.workspaceValue, '/mock-stale/**/*.yaml'), false);
+    assert.equal(inspected.workspaceValue['*.mock-workspace'], 'plaintext');
+    assert.equal(Object.hasOwn(inspected.workspaceValue, '*.mock-user'), false);
+    assert.equal(inspected.globalValue['*.mock-user'], 'plaintext');
+  });
+
+  test('a glob the user settings already associate, spelled another way, is not added to the workspace', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath.replaceAll('\\', '/');
+    const copyGlob = `${fixtureCopy('associated', 'associated-spelled').replaceAll('\\', '/')}/*.yaml`;
+    await associationsBecome((held) => held[copyGlob] === 'yaml-dsl');
+    const inspected = vscode.workspace.getConfiguration('files').inspect('associations');
+    assert.equal(inspected.globalValue[`${fixtures}/associated/./*.yaml`], 'yaml-dsl');
+    assert.equal(Object.hasOwn(inspected.workspaceValue, `${fixtures}/associated/*.yaml`), false);
+  });
 });

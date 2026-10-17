@@ -81,6 +81,36 @@ test('without a storage folder no compiled schema is kept', async () => {
   ws.dispose();
 });
 
+test('a DSL\'s validator states the types a quoted value is validated as', async () => {
+  const quotedFileText = 'name: mock\ncount: "12"\nenabled: "true"\n';
+  const quotedSchemaText = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    properties: { name: { type: 'string' }, count: { type: 'integer' }, enabled: { type: 'boolean' } },
+  });
+  const readFile = async (filePath) => (filePath === SCHEMA_PATH ? quotedSchemaText : quotedFileText);
+  const quotedWorkspace = createWorkspace({ readFile, fetchText: async () => null, createValidation: createInProcessValidation });
+  await quotedWorkspace.setConfigs(mockConfigs(
+    dslEntry('mock-quoted', {
+      file_includes: ['{config_root}/quoted/**/mock.yml'],
+      schema_search_paths: ['{config_root}/mock.schema.json'],
+      validator: { merge_base_keys: [], child_values_from_parent_key: [], allow_quoted_values: ['integer'] },
+    }),
+    dslEntry('mock-native', {
+      file_includes: ['{config_root}/native/**/mock.yml'],
+      schema_search_paths: ['{config_root}/mock.schema.json'],
+    }),
+  ));
+  await quotedWorkspace.sync('file:///repo/quoted/mock.yml', '/repo/quoted/mock.yml', quotedFileText);
+  assert.deepEqual(messagesOf(quotedWorkspace.problems('file:///repo/quoted/mock.yml')), ['`enabled` must be boolean']);
+  await quotedWorkspace.sync('file:///repo/native/mock.yml', '/repo/native/mock.yml', quotedFileText);
+  assert.deepEqual(
+    messagesOf(quotedWorkspace.problems('file:///repo/native/mock.yml')),
+    ['`count` must be integer', '`enabled` must be boolean'],
+  );
+  quotedWorkspace.dispose();
+});
+
 test('a file whose stack leaves the cache stops being validated, and a schema the cache drops is dropped', async () => {
   const dropped = { slots: [], schemas: [] };
   const folders = ['first', 'second', 'third'];

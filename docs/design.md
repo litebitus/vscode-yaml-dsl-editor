@@ -831,6 +831,7 @@ A DSL's `validator` block states how a document is read before it is validated; 
 |---|---|
 | `merge_base_keys` | keys whose value, wherever they appear, is the merge base of each sibling entry: the sibling merges over it with the layers' merge. Nothing under a merge base is required, and an error a base passes to its siblings is marked once, at the base |
 | `child_values_from_parent_key` | patterns of a key that sets a field of the entry it keys, with `field` and `value` groups. A field the entry writes itself stays as written |
+| `allow_quoted_values` | types from `boolean`, `integer` and `number` a quoted value is validated as, where the schema expects that type and the string spells one; `[]` when left out. A quoted value that spells none stays a string. Hover and completion show the schema's types, and what the extension writes stays unquoted |
 
 The `validator.*` settings show validation errors at a chosen severity, turn them off, and color the files holding them in the Explorer.
 
@@ -1622,7 +1623,11 @@ dsls:
 - It starts only when the workspace holds a `yaml-dsl.yml`, and leaves a file outside every config's folder alone.
 - Each DSL's files are associated with that language in the workspace's `files.associations`, so a file opens as `yaml-dsl` and no extension that selects `yaml`, such as the Red Hat YAML extension, receives it. The language server's document selector is that language.
 - An association is a DSL's `file_includes` glob, or a `{concern}` name in its `layers.common_layer_files`, anchored at the config's folder. A glob holding a character the editor's globs cannot hold is left to the claim below.
-- The associations follow the configs: every `yaml-dsl.yml` read, saved, created or deleted writes them again, adding the new globs and dropping the ones no config states. Every association to `yaml-dsl` is the extension's; the other languages' entries are kept as written.
+- The associations follow the configs: every `yaml-dsl.yml` read, saved, created or deleted writes them again, adding the new globs and dropping the ones no config states.
+- Every workspace entry mapping to `yaml-dsl` is the extension's; the other languages' entries are kept as written.
+- A glob is compared by its path: `~` reads as the home folder, `\` as `/`, and `.`, `..`, repeated and trailing slashes are resolved. A glob the user settings or another language's workspace entry already associates is not added, and a `yaml-dsl` entry repeating an associated glob is dropped.
+- The write reads and writes the workspace's own settings alone, never the user's, and removes the setting once it holds nothing.
+- The settings file is the `.code-workspace` file of a multi-root workspace, or `.vscode/settings.json` of a single folder. When it does not exist, nothing is written and the log says so; the open-file claim below still applies.
 - Until the startup listing has read every config, a write only adds, so the association of a config not read yet stays in place.
 - An open file is claimed as well: a file a DSL owns becomes `yaml-dsl`, and a `yaml-dsl` file no DSL owns, such as one a `file_excludes` glob matches, goes back to `yaml`.
 - A file that matches no DSL pattern stays `yaml`.

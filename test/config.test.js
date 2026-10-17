@@ -185,6 +185,7 @@ test('a complete config states every field and keeps them', () => {
   assert.deepEqual(sample.validator, {
     mergeBaseKeys: ['defaults'],
     childValuesFromParentKey: [{ pattern: '^(?<field>[a-z_]+) (?<value>[a-z0-9-]+)$' }],
+    allowQuotedValues: [],
   });
   assert.deepEqual(sample.performance, { compiledSchemaCache: true });
   assert.deepEqual(sample.scopes.GLOBAL, {
@@ -296,7 +297,39 @@ test('the validator block states its merge base keys and child value patterns, e
   assert.match(unnamed.error, /child_values_from_parent_key\[0\]\.pattern must name the child field and its value/);
   assert.match(unnamed.error, /child_values_from_parent_key\[1\]\.pattern is required/);
   assert.match(unnamed.error, /child_values_from_parent_key\[2\] must be a mapping with pattern/);
-  assert.deepEqual(unnamed.dsls[0].validator, { mergeBaseKeys: [], childValuesFromParentKey: [] });
+  assert.deepEqual(unnamed.dsls[0].validator, { mergeBaseKeys: [], childValuesFromParentKey: [], allowQuotedValues: [] });
+});
+
+test('the validator block states the types a quoted value is read as, none when left out', () => {
+  const withQuotedValues = (allowQuotedValuesLine) => parseConfig([
+    'version: "1"',
+    'dsls:',
+    '  - id: mock',
+    '    file_includes: ["**/mock.yml"]',
+    '    file_excludes: []',
+    '    schema_search_paths: []',
+    '    key_sort_orders: []',
+    '    scopes: {}',
+    '    declarations: []',
+    '    references: []',
+    '    validator:',
+    '      merge_base_keys: []',
+    '      child_values_from_parent_key: []',
+    ...(allowQuotedValuesLine ? [`      ${allowQuotedValuesLine}`] : []),
+    '',
+  ].join('\n'));
+  const listed = withQuotedValues('allow_quoted_values: [boolean, integer, number]');
+  assert.equal(listed.error, null);
+  assert.deepEqual(listed.dsls[0].validator.allowQuotedValues, ['boolean', 'integer', 'number']);
+  assert.deepEqual(withQuotedValues(null).dsls[0].validator.allowQuotedValues, []);
+  assert.match(
+    withQuotedValues('allow_quoted_values: [boolean, string]').error,
+    /mock\.validator\.allow_quoted_values must be a list from boolean, integer, number/,
+  );
+  assert.match(
+    withQuotedValues('allow_quoted_values: boolean').error,
+    /mock\.validator\.allow_quoted_values must be a list from boolean, integer, number/,
+  );
 });
 
 test('the duplicate check states its depth and the keys it passes over', () => {

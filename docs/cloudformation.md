@@ -92,6 +92,10 @@ A name that only its field marks, such as in `DependsOn`, the first item of `Fn:
 
 A repo states its own `location_mappings`; no S3 location maps to a folder by default.
 
+### Quoted values
+
+CloudFormation reads a quoted boolean or number as the value it spells, so `validator.allow_quoted_values` is `[boolean, integer, number]`: `Enabled: "true"` validates as `true`, and `Port: "70000"` still fails a maximum of 65535.
+
 ### Functions
 
 An intrinsic function is a field: `Fn::Join` is a key whose value is its arguments. The schema documents each `Fn::` key and `Ref` with AWS's description and validates its arguments, as it does any field.

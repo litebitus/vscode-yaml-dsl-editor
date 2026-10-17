@@ -45,6 +45,56 @@ test('each draft validates with its own validator, a failure carrying its path, 
   }
 });
 
+test('a quoted value of an allowed type is validated as the value it spells, its constraints still checked', () => {
+  const validator = schemaValidatorFor({
+    $schema: DRAFT_URIS[2],
+    type: 'object',
+    properties: {
+      enabled: { type: 'boolean' },
+      count: { type: 'integer', maximum: 900 },
+      ratio: { type: 'number' },
+      label: { type: 'string' },
+      sizes: { type: 'array', items: { type: 'integer' } },
+    },
+  });
+  const allowQuotedValues = ['boolean', 'integer', 'number'];
+  const quoted = { enabled: 'true', count: '12', ratio: '-1.5e3', label: '12', sizes: ['1', '2'] };
+  assert.deepEqual(validator.documentFailures(quoted, { allowQuotedValues }), []);
+  const failures = validator.documentFailures(
+    { enabled: 'yes', count: '901', ratio: '1.', sizes: ['01', '2.5'] },
+    { allowQuotedValues },
+  );
+  assert.deepEqual(failures.map(({ path, keyword }) => [path, keyword]), [
+    [['enabled'], 'type'],
+    [['count'], 'maximum'],
+    [['ratio'], 'type'],
+    [['sizes', 0], 'type'],
+    [['sizes', 1], 'type'],
+  ]);
+});
+
+test('a quoted value is read only as a type the config lists, and only where the schema expects that type', () => {
+  const validator = schemaValidatorFor({
+    $schema: DRAFT_URIS[2],
+    type: 'object',
+    properties: { enabled: { type: 'boolean' }, count: { type: 'integer' }, ratio: { type: 'number' } },
+  });
+  const quoted = { enabled: 'true', count: '12', ratio: '12' };
+  assert.deepEqual(validator.documentFailures(quoted).map(({ path }) => path), [['enabled'], ['count'], ['ratio']]);
+  assert.deepEqual(
+    validator.documentFailures(quoted, { allowQuotedValues: ['boolean'] }).map(({ path }) => path),
+    [['count'], ['ratio']],
+  );
+  assert.deepEqual(
+    validator.documentFailures(quoted, { allowQuotedValues: ['number'] }).map(({ path }) => path),
+    [['enabled'], ['count']],
+  );
+  assert.deepEqual(
+    validator.documentFailures({ count: '1.5' }, { allowQuotedValues: ['integer', 'number'] }).map(({ keyword }) => keyword),
+    ['type'],
+  );
+});
+
 test('an alternative none of whose branches holds is one failure, without the branches\' own', () => {
   const validator = schemaValidatorFor(mockSchema(DRAFT_URIS[2]));
   const failures = validator.documentFailures({ mocktype: { primary: { label: 'mock', size: 'mock-size' } } });

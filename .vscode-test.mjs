@@ -27,7 +27,10 @@ const workspaceFolders = [
   { path: concernFolder },
   { path: settingsFolder },
 ];
-writeFileSync(workspaceFile, JSON.stringify({ folders: workspaceFolders }));
+writeFileSync(workspaceFile, JSON.stringify({
+  folders: workspaceFolders,
+  settings: { 'files.associations': { '/mock-stale/**/*.yaml': 'yaml-dsl', '*.mock-workspace': 'plaintext' } },
+}));
 
 const sha256Of = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
 const plantedStackFolder = path.join(writableFolder, 'planted-marks');
@@ -73,7 +76,13 @@ function plantedMarksStoreText() {
 function userDataWithPlantedMarks() {
   const userDataFolder = mkdtempSync(path.join(tmpdir(), 'yaml-dsl-ud-'));
   mkdirSync(path.join(userDataFolder, 'User'), { recursive: true });
-  writeFileSync(path.join(userDataFolder, 'User', 'settings.json'), JSON.stringify({ 'chat.disableAIFeatures': true }));
+  writeFileSync(path.join(userDataFolder, 'User', 'settings.json'), JSON.stringify({
+    'chat.disableAIFeatures': true,
+    'files.associations': {
+      '*.mock-user': 'plaintext',
+      [`${fixturesFolder.replaceAll('\\', '/')}/associated/./*.yaml`]: 'yaml-dsl',
+    },
+  }));
   const extensionStorage = path.join(userDataFolder, 'User', 'globalStorage', `${pkg.publisher}.${pkg.name}`);
   const storeFolder = path.join(extensionStorage, sha256Of(`file://${workspaceFile}`));
   mkdirSync(storeFolder, { recursive: true });

@@ -66,8 +66,9 @@ function fakeVscode(options = {}) {
       dispose() {}
     },
     Uri: {
-      joinPath(base, part) {
-        return { fsPath: `${base.fsPath}/${part}`, toString() { return `file://${base.fsPath}/${part}`; } };
+      joinPath(base, ...parts) {
+        const joined = `${base.fsPath}/${parts.join('/')}`;
+        return { fsPath: joined, toString() { return `file://${joined}`; } };
       },
       file(fsPath) { return { scheme: 'file', fsPath, toString() { return `file://${fsPath}`; } }; },
       from(parts) { return { scheme: parts.scheme, path: parts.path, fsPath: parts.path }; },
@@ -76,8 +77,14 @@ function fakeVscode(options = {}) {
     workspace: {
       workspaceFolders: options.folders === undefined ? [{ uri: { fsPath: '/repo' } }] : options.folders,
       textDocuments: options.documents || [],
+      workspaceFile: options.workspaceFile,
       fs: {
         readFile: options.readFile || (async () => Buffer.from(configText(dslEntry('sample')))),
+        stat: async (uri) => {
+          vscode.statted.push(uri.fsPath);
+          if (options.settingsFileMissing) throw new Error('mock missing settings file');
+          return { type: 1 };
+        },
       },
       openTextDocument: options.openTextDocument,
       getConfiguration() {
@@ -86,6 +93,7 @@ function fakeVscode(options = {}) {
             if (key && key.startsWith('cache.')) return options.cacheCapacity === undefined ? 32 : options.cacheCapacity;
             return options.associations || {};
           },
+          inspect: () => ({ workspaceValue: options.associations }),
           update: async (key, value) => { vscode.updated = value; },
         };
       },
@@ -131,6 +139,7 @@ function fakeVscode(options = {}) {
       setTextDocumentLanguage: async (doc, language) => { doc.languageId = language; vscode.languagesSet.push(doc); },
     },
     shown: [],
+    statted: [],
     peeked: [],
     contextsSet: [],
     decorations: [],
@@ -215,23 +224,29 @@ test('activation finishes without waiting on analysis, '
   assert.deepEqual(vscode.updated, { '/repo/**/mock.yml': 'yaml-dsl', '/repo/nested/**/mock.yml': 'yaml-dsl' });
 });
 
+function associationsSettings(vscode, initial) {
+  const settings = { workspaceValue: initial, userValue: { '*.mock-user': 'mock-language' }, writes: [] };
+  vscode.workspace.getConfiguration = () => ({
+    get: (key) => (key === 'associations' ? { ...settings.userValue, ...settings.workspaceValue } : 32),
+    inspect: () => ({ workspaceValue: settings.workspaceValue, globalValue: settings.userValue }),
+    update: async (key, value) => { settings.workspaceValue = value; settings.writes.push(value); },
+  });
+  return settings;
+}
+
 test('the workspace folders\' associations are added first, keeping every other, '
   + 'and only once the listing ends are the stale ones dropped', async () => {
   const vscode = fakeVscode({ readFile: async () => Buffer.from(sampleConfig) });
-  let written = {
+  const settings = associationsSettings(vscode, {
     '*.mock': 'mock-language',
     '/repo/nested/**/mock.yml': 'yaml-dsl',
     '/repo/gone/**/mock.yml': 'yaml-dsl',
-  };
-  const writes = [];
-  vscode.workspace.getConfiguration = () => ({
-    get: (key) => (key === 'associations' ? written : 32),
-    update: async (key, value) => { written = value; writes.push(value); },
   });
   let finishListing = null;
   vscode.workspace.findFiles = () => new Promise((resolve) => { finishListing = resolve; });
   const handle = await activateWith(vscode, { subscriptions: [] }, () => fakeClient());
-  assert.deepEqual(writes, [{
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(settings.writes, [{
     '*.mock': 'mock-language',
     '/repo/nested/**/mock.yml': 'yaml-dsl',
     '/repo/gone/**/mock.yml': 'yaml-dsl',
@@ -239,12 +254,54 @@ test('the workspace folders\' associations are added first, keeping every other,
   }]);
   finishListing([{ fsPath: '/repo/nested/yaml-dsl.yml' }]);
   await handle.startup;
-  assert.deepEqual(written, {
+  assert.deepEqual(settings.workspaceValue, {
     '*.mock': 'mock-language',
     '/repo/nested/**/mock.yml': 'yaml-dsl',
     '/repo/**/mock.yml': 'yaml-dsl',
   });
-  assert.equal(writes.length, 2);
+  assert.equal(settings.writes.length, 2);
+});
+
+test('the associations are written to the workspace\'s own settings, never copying the user\'s, '
+  + 'and the key is removed once nothing is left in it', async () => {
+  const vscode = fakeVscode({ readFile: async () => Buffer.from(sampleConfig), folders: [{ uri: { fsPath: '/repo' } }] });
+  const settings = associationsSettings(vscode, undefined);
+  vscode.workspace.findFiles = async () => [];
+  await activatedFully(vscode, { subscriptions: [] }, () => fakeClient());
+  assert.deepEqual(settings.workspaceValue, { '/repo/**/mock.yml': 'yaml-dsl' });
+  assert.deepEqual([...new Set(vscode.statted)], ['/repo/.vscode/settings.json']);
+  const emptied = fakeVscode({ readFile: async () => Buffer.from(configText()), folders: [{ uri: { fsPath: '/repo' } }] });
+  const emptiedSettings = associationsSettings(emptied, settings.workspaceValue);
+  emptied.workspace.findFiles = async () => [];
+  await activatedFully(emptied, { subscriptions: [] }, () => fakeClient());
+  assert.equal(emptiedSettings.workspaceValue, undefined);
+  assert.deepEqual(emptiedSettings.writes, [undefined]);
+});
+
+test('without a workspace settings file the associations are left unwritten and the log says so', async () => {
+  const vscode = fakeVscode({ readFile: async () => Buffer.from(sampleConfig), settingsFileMissing: true });
+  const settings = associationsSettings(vscode, undefined);
+  vscode.workspace.findFiles = async () => [];
+  await activatedFully(vscode, { subscriptions: [] }, () => fakeClient());
+  assert.deepEqual(settings.writes, []);
+  assert.ok(vscode.window.logged.some((line) => line.includes(
+    'left files.associations unwritten: the workspace has no settings file',
+  )));
+  const multiRoot = fakeVscode({
+    readFile: async () => Buffer.from(sampleConfig),
+    folders: [{ uri: { fsPath: '/repo' } }, { uri: { fsPath: '/other' } }],
+    workspaceFile: { fsPath: '/mock-workspace.code-workspace' },
+  });
+  associationsSettings(multiRoot, undefined);
+  multiRoot.workspace.findFiles = async () => [];
+  await activatedFully(multiRoot, { subscriptions: [] }, () => fakeClient());
+  assert.deepEqual([...new Set(multiRoot.statted)], ['/mock-workspace.code-workspace']);
+  const noFolder = fakeVscode({ readFile: async () => Buffer.from(sampleConfig), folders: [] });
+  const noFolderSettings = associationsSettings(noFolder, undefined);
+  noFolder.workspace.findFiles = async () => [];
+  await activatedFully(noFolder, { subscriptions: [] }, () => fakeClient());
+  assert.deepEqual(noFolderSettings.writes, []);
+  assert.deepEqual(noFolder.statted, []);
 });
 
 test('owned files are watched by each DSL\'s include patterns under its config folder', async () => {

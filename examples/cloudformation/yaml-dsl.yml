@@ -37,6 +37,10 @@ dsls:
     placeholder:
       pattern: "\\$\\{(?<body>[^!}][^}]*)\\}"
       unscanned_paths: []
+    validator:
+      merge_base_keys: []
+      child_values_from_parent_key: []
+      allow_quoted_values: [boolean, integer, number]
     performance:
       compiled_schema_cache: true
     key_sort_orders:

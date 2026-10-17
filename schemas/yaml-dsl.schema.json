@@ -300,6 +300,12 @@
             }
           },
           "description": "Keys that set a field of the entry they key."
+        },
+        "allow_quoted_values": {
+          "type": "array",
+          "items": { "enum": ["boolean", "integer", "number"] },
+          "uniqueItems": true,
+          "description": "Types a quoted value is validated as, where the schema expects that type and the string spells one. Defaults to []."
         }
       }
     },

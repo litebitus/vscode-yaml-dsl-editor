@@ -88,6 +88,24 @@ test('in the worker, a document is pending until answered, then answered from th
   validation.close();
 });
 
+test('the types a quoted value is read as reach the worker, and other types are another request', async () => {
+  const validation = createWorkerValidation();
+  const quoted = { size: '12' };
+  assert.deepEqual(messagesOf(createInProcessValidation().problemsOf(mockRequest(quoted, {
+    allowQuotedValues: ['integer'],
+  }))), []);
+  validation.problemsOf(mockRequest(quoted, { allowQuotedValues: ['integer'] }));
+  await validation.whenSettled();
+  assert.deepEqual(validation.problemsOf(mockRequest(quoted, { allowQuotedValues: ['integer'] })), []);
+  assert.deepEqual(validation.problemsOf(mockRequest(quoted, { allowQuotedValues: ['boolean'] })), []);
+  await validation.whenSettled();
+  assert.deepEqual(
+    messagesOf(validation.problemsOf(mockRequest(quoted, { allowQuotedValues: ['boolean'] }))),
+    ['`size` must be integer'],
+  );
+  validation.close();
+});
+
 test('a schema the workspace drops is sent again with its next request, and a dropped slot asks again', async () => {
   const validation = createWorkerValidation();
   validation.problemsOf(mockRequest({ size: 1 }));
@@ -209,7 +227,7 @@ test('a schema that breaks validation is answered with the reason', () => {
   const host = createValidationHost();
   const brokenProperties = new Proxy({}, { ownKeys: () => { throw new Error('mock broken schema'); } });
   host.addSchema('mock-broken-hash', { type: 'object', properties: brokenProperties }, null);
-  assert.deepEqual(host.problemsOf('mock-broken-hash', {}, null), [{
+  assert.deepEqual(host.problemsOf('mock-broken-hash', {}, { fragmentPointer: null, allowQuotedValues: [] }), [{
     path: [],
     message: 'validation failed: mock broken schema',
     keyword: VALIDATION_FAILED_KEYWORD,

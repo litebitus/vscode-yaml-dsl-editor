@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Ownership: each config's globs are written to the workspace's `files.associations`, so a DSL file opens as YAML DSL before another YAML extension can read it.
+- Ownership: each config's globs are written to an existing workspace settings file's `files.associations`, so a DSL file opens as YAML DSL before another YAML extension can read it; a glob already associated, in any spelling, is not repeated.
 - Config: a `yaml-dsl.yml` in any folder of the workspace governs the files below it, and `{config_root}/` starts a glob or schema path at its folder.
 - Config: `tag_keys` reads a YAML tag as the key it stands for, so `!Ref Mock` and `Ref: Mock` are one reference, one field and one value.
 - Hover, completion and required-field filling: a schema's `if`/`then`/`else` is read by the branch the document's value selects.
@@ -14,6 +14,7 @@
 - Schemas: a `pattern` is built with the `u` flag, as JSON Schema says.
 - Performance: choosing a branch, comparing overlays' schema nodes and checking an opt-out no longer each compile or hash a whole large schema.
 - Performance: documents are validated in a worker, so a large schema's compile never holds hover, completion or suggestions.
+- Config: `validator.allow_quoted_values` validates a quoted boolean or number as the value it spells.
 - Config: `performance.compiled_schema_cache` keeps a DSL's compiled schema in the extension's storage for later sessions.
 - Examples: the CloudFormation schema, generated from AWS's resource provider schemas by `scripts/cloudformation-schema/`.
 - Docs: the design doc and README speak of entries and a sample DSL, no longer of one DSL's resources.
