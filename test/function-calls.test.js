@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Ajv2020 = require('ajv/dist/2020');
 const { analyzeDocument } = require('../lib/analyze');
+const { completionsAt } = require('../lib/completion-offers');
 const { parseAt } = require('../lib/document-path');
 const {
   ARGUMENT_TYPES,
@@ -13,6 +14,7 @@ const {
   callProblems,
   unmarkedCallsOf,
   calleeNamesOf,
+  calleeWrittenAt,
 } = require('../lib/function-calls');
 
 const markerFunction = { callMarker: 'fn.', splatOperator: '*', callsWithoutNameAllowed: true };
@@ -231,6 +233,7 @@ test('a macro call stands as a whole key among siblings, kept distinct by its na
   ]);
   const suffixed = 'x:\n  Fn::ForEach::Topics: [x, [1], {}]\n';
   assert.deepEqual(problemsWith('x:\n  Fn::ForEachMock: [x, [1], {}]\n', withMacro), ['unknown function ForEachMock']);
+  assert.deepEqual(problemsWith('x:\n  Fn::ForEach: [x, [1], {}]\n', withMacro), ['unknown function ForEach']);
   const unsuffixedMacro = { ForEach: { ...loopMacro, macro: { kind: 'loop', nameSuffixPattern: null } } };
   assert.deepEqual(problemsWith(suffixed, unsuffixedMacro), ['unknown function ForEach::Topics']);
   const refusing = { ...tableConfig, markerFunction: { ...tableMarker, callsWithoutNameAllowed: false } };
@@ -284,6 +287,56 @@ test('a function_call macro binds its arguments by name, or takes the callee\'s 
     'Transform argument Name expects text',
     'Transform needs argument Name',
   ]);
+});
+
+test('a function_call macro\'s callee is written after its callee key, as the call\'s value or as a list item', () => {
+  const tableMarker = { callMarker: 'Fn::', splatOperator: null, callsWithoutNameAllowed: true };
+  const dsl = {
+    function: { ...functionConfig, callsNotAllowedAt: [], markerFunction: tableMarker },
+    scopes: {},
+    declarations: [],
+    references: [],
+    placeholder: null,
+  };
+  const transform = {
+    ...mockFunction('Transform', mockArgument('Name', 'text', true, false)),
+    macro: { kind: 'function_call', nameSuffixPattern: null, unmarkedKeyPaths: [] },
+  };
+  const text = [
+    'Resources:',
+    '  Fn::Transform:',
+    '    Name: Mock::Include',
+    '    Other: x',
+    '  MockQueue:',
+    '    Fn::Transform: Mock::Macro',
+    '  MockList:',
+    '    Fn::Transform: [Mock::Macro]',
+    '',
+  ].join('\n');
+  const doc = analyzeDocument(text, '/repo/mock.yml', dsl);
+  const writtenAt = (line, character) => doc.calls
+    .filter((call) => calleeWrittenAt(call, transform, { line, character }));
+  assert.equal(writtenAt(2, 10).length, 1);
+  assert.equal(writtenAt(2, 4).length, 0);
+  assert.equal(writtenAt(3, 11).length, 0);
+  assert.equal(writtenAt(5, 20).length, 1);
+  assert.equal(writtenAt(7, 21).length, 1);
+});
+
+test('a callee completion replaces the whole name typed after its key, whatever characters the name holds', () => {
+  const stack = {
+    dsl: { references: [], placeholder: null, function: null },
+    symbols: [],
+    vocabulary: { table: { 'mock:include': mockFunction('mock:include') } },
+  };
+  const offeredRangeAt = (lineText) => {
+    const position = { line: 0, character: lineText.length };
+    const [item] = completionsAt(lineText, position, { file: null, documentPath: [], atCallee: true }, stack, null);
+    return [item.label, item.range.start.character];
+  };
+  assert.deepEqual(offeredRangeAt('    Name: mock:inc'), ['mock:include', 10]);
+  assert.deepEqual(offeredRangeAt('    Name: '), ['mock:include', 10]);
+  assert.deepEqual(offeredRangeAt('  Fn::Transform: [mock:a,mock:in'), ['mock:include', 25]);
 });
 
 test('a key at a macro\'s unmarked key path calls the macro without the call marker', () => {

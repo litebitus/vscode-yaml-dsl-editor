@@ -254,7 +254,7 @@ test('a hover on a valued target shows its value, and a builtin names its scope'
   const symbol = localSymbol('db', '/repo/mock.yml', 'mock-value', { keyRange: doc.tree.range });
   assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([symbol]), null).contents.value, 'mock\\-value');
   assert.equal(hoverAt(doc, { line: 0, character: 8 }, stack([]), null).contents.value, 'Invalid reference: local\\.db');
-  assert.equal(hoverAt(doc, { line: 1, character: 9 }, stack([]), null).contents.value, 'GLOBAL env');
+  assert.equal(hoverAt(doc, { line: 1, character: 9 }, stack([]), null).contents.value, '`env`: *builtin*');
   assert.equal(definitionAt(doc, { line: 1, character: 9 }, stack([])), null);
   assert.deepEqual(linksFor(doc, stack([])), []);
 });

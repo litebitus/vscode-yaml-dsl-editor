@@ -6,6 +6,7 @@ const {
   WAIT_DEADLINE_MILLISECONDS,
   shownDocument,
   fixtureCopy,
+  completionItemsAt,
   undoInEditorOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
@@ -15,18 +16,6 @@ function stackCopy() {
 }
 
 const labelOf = (item) => (typeof item.label === 'string' ? item.label : item.label.label);
-
-async function completionItemsAt(doc, position) {
-  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
-  let items = [];
-  while (Date.now() < deadline) {
-    const list = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', doc.uri, position);
-    items = list ? list.items : [];
-    if (items.length > 0) return items;
-    await new Promise((resolve) => { setTimeout(resolve, 50); });
-  }
-  return items;
-}
 
 async function completionLabelsAt(doc, position) {
   return (await completionItemsAt(doc, position)).map(labelOf);

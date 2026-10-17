@@ -556,7 +556,7 @@ A local is a named value. `locals.scope_name` names the scope whose declarations
 | Resting the pointer | no popup of the extension's | the editor's Command-click tooltip on its link | an error reads `Invalid reference: <scope>.<name>` |
 
 - The popup shows the declarations in this language, each section headed by its overlay's name, `common layer` for the common layer's; the heading opens the declaration.
-- A reference nothing visible declares is an error. A builtin has no declaration.
+- A reference nothing visible declares is an error. A builtin has no declaration; its hover and its completion entry read `` `<name>`: *builtin* ``.
 - The references peek is not opened.
 
 In `mock-dsl.yml`:
@@ -623,6 +623,7 @@ The list holds what the file's fold sees and what is visible from the cursor:
 | the common layer | its own symbols, and those declared in every overlay |
 | inside a placeholder | every reference a placeholder body may be, builtins included |
 | after a call marker in a key | the vocabulary, each entry with its signature |
+| at a `function_call` macro's callee | the vocabulary without the call marker, each entry with its signature |
 
 - A declaration keyed by a local is offered under the local's value, the spelling a ref uses for it.
 - A ref completes up to the declared name; the field path after it is the author's.
@@ -687,6 +688,7 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 - Hover walks the YAML path through `properties`, then `patternProperties`, then what the schema's draft reads for a key `properties` does not list.
 - On an object that carries both a `$ref` and a `description`, it keeps that `description`, then follows the `$ref` only to keep walking.
+- A field an `allOf` part or an `if` branch restates without a `description` keeps the `description` the object states for it.
 - The tooltip documents the field, as a javadoc documents a method:
 
 | Part | Shows |

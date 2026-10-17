@@ -767,7 +767,7 @@ test('completion offers what the file\'s fold sees, written as each reference ru
   assert.deepEqual(labels(one, oneText, 'label: local.'), ['local.db']);
   assert.deepEqual(labels(one, oneText, '${local.d').sort(), ['${env}', '${local.db}']);
   const builtin = ws.completion(`file://${one}`, after(oneText, '${local.d')).find((entry) => entry.label === '${env}');
-  assert.deepEqual([builtin.kind, builtin.detail, builtin.documentation], ['builtin', 'GLOBAL scope', '']);
+  assert.deepEqual([builtin.kind, builtin.detail, builtin.documentation], ['builtin', 'builtin', '`env`: *builtin*']);
   assert.deepEqual(labels(one, oneText, 'key_being_typed').sort(), ['label', 'source']);
   const item = ws.completion(`file://${one}`, after(oneText, 'source: ref '))
     .find((entry) => entry.label === 'ref mocktype.primary');

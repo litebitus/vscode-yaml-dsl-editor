@@ -40,7 +40,20 @@ const schema = JSON.stringify({
   properties: {
     Resources: {
       type: 'object',
-      properties: { 'Fn::Transform': { type: 'object' } },
+      properties: {
+        'Fn::Transform': {
+          anyOf: [
+            {
+              type: 'object',
+              properties: {
+                Name: { type: 'string', description: 'The mock macro\'s name.' },
+                Parameters: { type: 'object', description: 'The mock macro\'s arguments.' },
+              },
+            },
+            { type: 'array' },
+          ],
+        },
+      },
       additionalProperties: {
         type: 'object',
         required: ['Type'],
@@ -153,6 +166,9 @@ test('a fold puts the common layer\'s entries in place of the include, the overl
     Resources: { Added: { Type: 'common' }, Kept: { Type: 'own', Extra: 1 } },
   });
   assert.deepEqual(foldedValueOf(overlay, includes, () => undefined), overlay);
+  assert.deepEqual(foldedValueOf(overlay, includes, () => common, { keepsIncludeKeys: true }), {
+    Resources: { Added: { Type: 'common' }, Kept: { Type: 'own', Extra: 1 }, 'Fn::Transform': { Name: 'AWS::Include' } },
+  });
 });
 
 test('a template resolves its common layer\'s names, validates its fold, and opens the common layer', async () => {
@@ -316,6 +332,19 @@ test('completion in a common layer offers the schema\'s fields at its merge poin
   await ws.sync(`file://${SNIPPET}`, SNIPPET, typed);
   const labels = ws.completion(`file://${SNIPPET}`, at(typed, '  Pro', 5)).map((item) => item.label);
   assert.deepEqual(labels.sort(), ['Properties', 'Type']);
+});
+
+test('completion in a resolved include offers the include\'s own fields', async () => {
+  const typed = bucketText.replace('    Name: AWS::Include\n', '    Name: AWS::Include\n    Pa\n');
+  const ws = await includeWorkspace({ ...stackFiles, [BUCKET]: typed });
+  await ws.sync(`file://${SNIPPET}`, SNIPPET, snippetText);
+  await ws.sync(`file://${BUCKET}`, BUCKET, typed);
+  const offered = ws.completion(`file://${BUCKET}`, at(typed, '    Pa\n', 6));
+  const documentationOf = Object.fromEntries(offered.map((item) => [item.label, item.documentation]));
+  assert.deepEqual(documentationOf, {
+    Name: 'The mock macro\'s name.',
+    Parameters: 'The mock macro\'s arguments.',
+  });
 });
 
 test('a modeline\'s fragment marks a fragment, validated at the node it names with no key required', async () => {

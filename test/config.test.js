@@ -776,7 +776,7 @@ test('overlay_includes pairs an overlay with the common layers its includes name
   );
   assert.equal(
     problemOf({ ...includeLayers, overlay_includes: [{ ...includeLayers.overlay_includes[0], location_path: '$.*' }] }),
-    'sample.layers.overlay_includes[0].location_path is required: a JSONPath of names such as $.Parameters.Location',
+    'sample.layers.overlay_includes[0].location_path is required: a JSONPath of names',
   );
   assert.equal(
     problemOf({ ...includeLayers, common_layer_discovery: 'parent', overlay_folders: ['one'] }),

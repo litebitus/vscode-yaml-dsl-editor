@@ -23,6 +23,9 @@
 - Hover: a function's or macro's signature is colored by its own grammar, the macro keyword, name, arguments and types each apart, never as the open file's YAML.
 - Layers: a file an include's location maps to, written or removed after its overlay opened, is followed or left at once.
 - Hover: a field's line shows its name and requirement as code and its type in italics; a definition that chooses between definitions is named by the one the value selects.
+- Completion: a function or macro offered after its call marker is documented as its hover is, and a field a branch restates without a description keeps the description its base states.
+- Completion: a `function_call` macro's callee is offered every function and macro of the table.
+- Hover and completion: a builtin reads `` `<name>`: *builtin* ``, no longer its scope's name.
 - Examples: the CloudFormation schema names its definitions in the engine's words, `ref` apart from `func` and `condition_ref` apart from `condition_func`; `.vscodeignore` leaves dependencies' TypeScript sources, source maps and browser builds out of the package.
 - Config: `validator.allow_quoted_values` validates a quoted boolean or number as the value it spells.
 - Config: `performance.compiled_schema_cache` keeps a DSL's compiled schema in the extension's storage for later sessions.

@@ -6,6 +6,7 @@ const {
   shownDocument,
   positionInText,
   hoverTextOf,
+  completionItemsAt,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -18,6 +19,26 @@ async function hoverTextHolds(doc, position, expected) {
     await new Promise((resolve) => { setTimeout(resolve, 50); });
   }
   assert.ok(text.includes(expected), text);
+}
+
+async function offeredDocumentationOf(doc, position, label) {
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+  let documentation = '';
+  while (Date.now() < deadline) {
+    const items = await completionItemsAt(doc, position);
+    const item = items.find((offered) => (typeof offered.label === 'string' ? offered.label : offered.label.label) === label);
+    documentation = item && item.documentation ? item.documentation.value : '';
+    if (documentation) return documentation;
+    await new Promise((resolve) => { setTimeout(resolve, 50); });
+  }
+  return documentation;
+}
+
+async function typedAfter(editor, needle, text) {
+  const doc = editor.document;
+  const lineEnd = doc.lineAt(positionInText(doc, needle).line).range.end;
+  await editor.edit((edit) => { edit.insert(lineEnd, text); });
+  return doc.lineAt(lineEnd.line + text.split('\n').length - 1).range.end;
 }
 
 suite('CloudFormation templates', () => {
@@ -44,6 +65,46 @@ suite('CloudFormation templates', () => {
     await hoverTextHolds(doc, positionInText(doc, 'MockTable'), resourceHover);
     const repeated = await hoverTextOf(doc, positionInText(doc, 'MockTable'));
     assert.equal(repeated.split('*When*').length, 2, repeated);
+  });
+
+  test('a resource key offered by completion carries the description its Type\'s branch restates without one', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-template.yaml'));
+    const cursor = await typedAfter(editor, 'Type: AWS::SQS::Queue', '\n    Pr');
+    assert.equal(
+      await offeredDocumentationOf(editor.document, cursor, 'Properties'),
+      'The properties of the resource, by its type.',
+    );
+  });
+
+  test('a function offered after the call marker is documented by its signature and description', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-template.yaml'));
+    const cursor = await typedAfter(editor, 'Value: !GetAtt MockQueue.Arn', '\n  MockJoined:\n    Value:\n      Fn::Jo');
+    const documentation = await offeredDocumentationOf(editor.document, cursor, 'Fn::Join');
+    assert.ok(documentation.startsWith([
+      '```yaml-dsl-signature',
+      'Join(delimiter: text, values: list): text',
+      '```',
+      '',
+      'Joins a list of values into one value, separated by the delimiter.',
+    ].join('\n')), documentation);
+  });
+
+  test('a function_call macro\'s callee is completed from every function and macro the table holds', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'));
+    const cursor = await typedAfter(editor, 'Resources:', '\n  Fn::Transform:\n    Name: AWS::');
+    const includeDocumentation = await offeredDocumentationOf(editor.document, cursor, 'AWS::Include');
+    assert.ok(includeDocumentation.startsWith([
+      '```yaml-dsl-signature',
+      'macro AWS::Include(Location: text)',
+      '```',
+      '',
+      'Inserts the template snippet stored in Amazon S3 in its place, merged with the map holding the call.',
+    ].join('\n')), includeDocumentation);
+    const joinDocumentation = await offeredDocumentationOf(editor.document, cursor, 'Join');
+    assert.ok(joinDocumentation.startsWith('```yaml-dsl-signature\nJoin(delimiter: text, values: list): text'));
   });
 
   test('an intrinsic function in an output\'s value is documented', async () => {

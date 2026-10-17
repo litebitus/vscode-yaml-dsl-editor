@@ -84,6 +84,18 @@ async function hoverTextBecomes(doc, position, expected) {
   assert.equal(text, expected);
 }
 
+async function completionItemsAt(doc, position) {
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+  let items = [];
+  while (Date.now() < deadline) {
+    const list = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', doc.uri, position);
+    items = list ? list.items : [];
+    if (items.length > 0) return items;
+    await new Promise((resolve) => { setTimeout(resolve, 50); });
+  }
+  return items;
+}
+
 async function undoInEditorOf(document) {
   await vscode.window.showTextDocument(document);
   await vscode.commands.executeCommand('undo');
@@ -102,5 +114,6 @@ module.exports = {
   positionInText,
   hoverTextOf,
   hoverTextBecomes,
+  completionItemsAt,
   undoInEditorOf,
 };

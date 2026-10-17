@@ -220,6 +220,38 @@ test('a document selects the branch its value meets, and without a value every b
   assert.deepEqual(Object.keys(anywhere.fieldsAt(propertiesPath)).sort(), ['BucketName', 'QueueName']);
 });
 
+test('a field a branch restates without a description keeps the description its base states', () => {
+  const schema = {
+    $schema: DRAFT_2020_12_URI,
+    $defs: { 'Mock::Bucket': { properties: { BucketName: { type: 'string' } } } },
+    properties: {
+      mockthing: {
+        properties: {
+          Type: { type: 'string' },
+          Properties: { type: 'object', description: 'The mock properties.' },
+          Tags: { type: 'object', description: 'The mock tags.' },
+        },
+        allOf: [
+          {
+            if: { properties: { Type: { const: 'Mock::Bucket' } }, required: ['Type'] },
+            then: {
+              properties: {
+                Properties: { $ref: '#/$defs/Mock::Bucket' },
+                Tags: { type: 'object', description: 'The bucket tags.' },
+              },
+            },
+          },
+        ],
+      },
+    },
+  };
+  const parser = schemaParserForDocument(schema, { mockthing: { Type: 'Mock::Bucket' } });
+  assert.equal(parser.fieldDescription(['mockthing', 'Properties']), 'The mock properties.');
+  assert.equal(parser.fieldsAt(['mockthing']).Properties.description, 'The mock properties.');
+  assert.deepEqual(Object.keys(parser.fieldsAt(['mockthing', 'Properties'])), ['BucketName']);
+  assert.equal(parser.fieldDescription(['mockthing', 'Tags']), 'The bucket tags.');
+});
+
 test('a value form under a branch is one form when the document selects it and an alternative of each branch without', () => {
   const schema = {
     $schema: DRAFT_2020_12_URI,
