@@ -1353,7 +1353,7 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 - The loop variable is a name the loop declares within its body, read by the DSL's placeholders and reference rules as any name is; an inner loop's loop variable hides an outer one of the same name.
 - The names an expansion declares are declared where they land.
 - A merge whose content is at a location is an include, its location mapped by `layers.overlay_includes`.
-- A merge's contents are merged in order, and the holding map's own keys over them. A content that is a local is read as the local's value in the fold, whichever layer declares it.
+- A merge's contents are merged in order, and the holding map's own keys over them. A content that is a local is read as the local's value in the fold, whichever layer declares it, and a name it declares resolves to the key the local writes.
 - A problem in what a content supplies is reported at the call's key.
 
 ### Hover

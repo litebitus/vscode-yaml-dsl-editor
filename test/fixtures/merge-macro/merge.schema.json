@@ -20,7 +20,8 @@
         "required": ["size"],
         "properties": {
           "size": { "type": "integer", "description": "[required] The mock size." },
-          "mode": { "enum": ["fast", "slow"], "description": "[optional] The mock mode." }
+          "mode": { "enum": ["fast", "slow"], "description": "[optional] The mock mode." },
+          "source": { "type": "string", "description": "[optional] The mock entry this one reads from." }
         }
       }
     }

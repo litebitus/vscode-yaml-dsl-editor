@@ -1,7 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorkspace } = require('../lib/workspace');
-const { mergeContextOf, mergedValueOf, preMergePathOf } = require('../lib/merge-macros');
+const {
+  mergeContextOf,
+  mergedValueOf,
+  preMergePathOf,
+  mergeTreeContextOf,
+  mergedTreeOf,
+} = require('../lib/merge-macros');
+const { parseYaml } = require('../lib/tree');
+const { collectSymbols } = require('../lib/symbols');
 const {
   unitedTableOf,
   calledEntryOf,
@@ -189,4 +197,146 @@ test('a merge reads a local from the overlay or the common layer, validates what
     [11, '`size` is required'],
   ]);
   assert.deepEqual(validationMessages(common), []);
+});
+
+const landingEntry = dslEntry('landing', {
+  ...mergedEntry,
+  id: 'landing',
+  declarations: [
+    declaration('$.locals.*', 'local'),
+    declaration('$.*.*', 'ENTRY', { skip_keys: ['locals'] }),
+  ],
+});
+
+const landingFiles = {
+  [`${root}/schema.json`]: schema,
+  [common]: [
+    'locals:',
+    '  mock_shared:',
+    '    fn.merge: local.mock_nested',
+    '    first:',
+    '      size: 1',
+    '  mock_nested:',
+    '    second:',
+    '      size: 2',
+    '  mock_cycle:',
+    '    fn.merge: local.mock_cycle',
+    'mocktype:',
+    '  fn.merge*:',
+    '    - local.mock_shared',
+    '    - local.mock_cycle',
+    '  own:',
+    '    size: 3',
+    'mockuser:',
+    '  common_uses: ref mocktype.first',
+    '',
+  ].join('\n'),
+  [one]: [
+    'locals:',
+    '  mock_nested:',
+    '    third:',
+    '      size: 5',
+    'mockuser:',
+    '  uses:',
+    '    - ref mocktype.first',
+    '    - ref mocktype.third',
+    '    - ref mocktype.second',
+    '',
+  ].join('\n'),
+};
+
+function lineAt(text, needle) {
+  return text.slice(0, text.indexOf(needle)).split('\n').length - 1;
+}
+
+function positionAt(text, needle) {
+  const index = text.indexOf(needle);
+  return { line: lineAt(text, needle), character: index - text.lastIndexOf('\n', index - 1) - 1 };
+}
+
+test('a merge declares the names its local contents hold where it lands, through nested merges and the fold\'s locals',
+  async () => {
+    const ws = createWorkspace({
+      readFile: async (filePath) => (Object.hasOwn(landingFiles, filePath) ? landingFiles[filePath] : null),
+      fetchText: async () => null,
+    });
+    await ws.setConfigs([{ text: configText(landingEntry), dir: '/repo' }]);
+    for (const filePath of [common, one]) await ws.sync(`file://${filePath}`, filePath, landingFiles[filePath]);
+    const definitionOf = (filePath, needle) => {
+      const found = ws.definition(`file://${filePath}`, positionAt(landingFiles[filePath], needle));
+      return found ? [found.path, found.range.start.line] : null;
+    };
+    assert.deepEqual(definitionOf(common, 'ref mocktype.first'), [common, lineAt(landingFiles[common], 'first:')]);
+    assert.deepEqual(definitionOf(one, 'ref mocktype.first'), [common, lineAt(landingFiles[common], 'first:')]);
+    assert.deepEqual(definitionOf(one, 'ref mocktype.third'), [one, lineAt(landingFiles[one], 'third:')]);
+    assert.equal(definitionOf(one, 'ref mocktype.second'), null);
+    assert.deepEqual(ws.references(`file://${one}`).map((found) => found.kind), ['external', 'local', 'error']);
+    const typed = landingFiles[one].replace('ref mocktype.second', 'ref mocktype.');
+    await ws.sync(`file://${one}`, one, typed);
+    const typedAt = positionAt(typed, 'ref mocktype.\n');
+    const typedEnd = { ...typedAt, character: typedAt.character + 'ref mocktype.'.length };
+    const offered = ws.completion(`file://${one}`, typedEnd).map((item) => item.label);
+    assert.deepEqual(offered.filter((label) => label.startsWith('ref mocktype.')).sort(), [
+      'ref mocktype.first',
+      'ref mocktype.own',
+      'ref mocktype.third',
+    ]);
+  });
+
+test('a deep merge declares the nested names of every content, with each name in the file that writes it', () => {
+  const localsPath = '/repo/mock-locals.yml';
+  const holdingPath = '/repo/mock.yml';
+  const localsText = [
+    'locals:',
+    '  mock_base:',
+    '    shared:',
+    '      first: 1',
+    '    tags:',
+    '      - mock-tag',
+    '',
+  ].join('\n');
+  const holdingText = [
+    'mocktype:',
+    '  fn.merge*:',
+    '    - local.mock_base',
+    '    - inline: 1',
+    '  shared:',
+    '    second: 2',
+    '',
+  ].join('\n');
+  const parsedFiles = new Map([
+    [localsPath, { text: localsText, tree: parseYaml(localsText).tree }],
+    [holdingPath, { text: holdingText, tree: parseYaml(holdingText).tree }],
+  ]);
+  const dsl = parsedDsl(dslEntry('nested', {
+    function: markerFunction({ definitions: ['schema'] }),
+    locals: { scope_name: 'local' },
+    scopes: { local: scope(), ENTRY: scope({ named_by_parent_key: true }) },
+    declarations: [
+      declaration('$.locals.*', 'local'),
+      declaration('$.mocktype.*', 'ENTRY'),
+      declaration('$.mocktype.shared.*', 'ENTRY'),
+      declaration('$.mocktype.tags.*', 'ENTRY', { name_source: 'value' }),
+    ],
+    references: [reference('^local\\.(?<name>[a-z0-9_]+)$', 'local')],
+  }));
+  const localSymbols = new Map([['mock_base', { file: localsPath, documentPath: ['locals', 'mock_base'] }]]);
+  const declaredWith = (mergeBehavior) => {
+    const context = mergeTreeContextOf(dsl, { merge: mergeMacro(mergeBehavior) }, {
+      localSymbols,
+      fileOf: (filePath) => parsedFiles.get(filePath),
+    });
+    const tree = mergedTreeOf(parsedFiles.get(holdingPath).tree, context);
+    return collectSymbols(tree, dsl, holdingPath, holdingText)
+      .map((symbol) => [symbol.name, symbol.file, symbol.keyRange.start.line]);
+  };
+  assert.deepEqual(declaredWith('deep'), [
+    ['shared', holdingPath, 4],
+    ['tags', localsPath, 4],
+    ['inline', holdingPath, 3],
+    ['first', localsPath, 3],
+    ['second', holdingPath, 5],
+    ['mock-tag', localsPath, 5],
+  ]);
+  assert.deepEqual(declaredWith('shallow').filter(([name]) => name === 'first'), []);
 });

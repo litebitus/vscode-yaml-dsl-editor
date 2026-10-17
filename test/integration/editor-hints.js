@@ -96,6 +96,20 @@ async function completionItemsAt(doc, position) {
   return items;
 }
 
+async function definitionLineAt(doc, position) {
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+  while (Date.now() < deadline) {
+    const definitions = await vscode.commands.executeCommand(
+      'vscode.executeDefinitionProvider',
+      doc.uri,
+      position,
+    ) || [];
+    if (definitions.length > 0) return (definitions[0].targetRange || definitions[0].range).start.line;
+    await new Promise((resolve) => { setTimeout(resolve, 50); });
+  }
+  return null;
+}
+
 async function undoInEditorOf(document) {
   await vscode.window.showTextDocument(document);
   await vscode.commands.executeCommand('undo');
@@ -115,5 +129,6 @@ module.exports = {
   hoverTextOf,
   hoverTextBecomes,
   completionItemsAt,
+  definitionLineAt,
   undoInEditorOf,
 };

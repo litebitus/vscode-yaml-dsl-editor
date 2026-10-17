@@ -1,6 +1,12 @@
+const assert = require('assert');
 const path = require('path');
 const vscode = require('vscode');
-const { shownDocument, positionInText, hoverTextBecomes } = require('./editor-hints');
+const {
+  shownDocument,
+  positionInText,
+  hoverTextBecomes,
+  definitionLineAt,
+} = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
 function mergeFixture(...parts) {
@@ -18,5 +24,13 @@ suite('merge macros', () => {
       + '*Expands to:* the map holding the call, merged over `contents` in order.';
     await hoverTextBecomes(doc, positionInText(doc, 'merge: local.mock_wrong'), documentation);
     await hoverTextBecomes(doc, positionInText(doc, 'merge*:'), documentation);
+  });
+
+  test('a name a merge brings in from a local resolves where the local declares it', async () => {
+    const doc = (await shownDocument(mergeFixture('mock.yaml'))).document;
+    assert.equal(
+      await definitionLineAt(doc, positionInText(doc, 'ref mocktype.landed', 4)),
+      positionInText(doc, '    landed:').line,
+    );
   });
 });

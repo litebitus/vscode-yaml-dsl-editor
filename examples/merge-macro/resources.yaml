@@ -3,11 +3,13 @@ locals:
     retention_seconds: 345600
     visibility_seconds: 30
     encrypted: true
+  dead_letter_queues:
+    orders_failed:
+      fn.merge: local.queue_defaults
+      retention_seconds: 1209600
 
 queue:
+  fn.merge: local.dead_letter_queues
   orders:
     fn.merge: local.queue_defaults
     dead_letter: ref queue.orders_failed
-  orders_failed:
-    fn.merge: local.queue_defaults
-    retention_seconds: 1209600

@@ -28,6 +28,7 @@
 - Macros: a `macro` object names the argument that plays each of its kind's roles, `callee`, `callee_arguments`, `content`, `loop_variable`, `collection` and `body`, so a call binds its arguments by name or by position as the DSL writes them.
 - Completion: a placeholder pattern opening with a character class completes in each of its openings, and a placeholder in a loop's body offers the loop variables around it.
 - Macros: a `merge` macro states its `merge_behavior`, `shallow`, `deep` or `join`, and merges contents from its argument, a local's map read from the fold and any other reference supplying the holding map's required fields; a call among sibling keys calls the macro of its name, beside a function of that name.
+- Macros: a `merge` declares the names a local content holds where it lands, so a reference to one resolves to the local's key and completes.
 - Macros: a `transform` macro takes the arguments its entry states and expands to the map holding the call, rewritten by the macro; a table entry's name may hold `-`.
 - Examples: CloudFormation's function table holds the `Rules` section's functions and every transform AWS hosts.
 - Hover and completion: a builtin reads `` `<name>`: *builtin* ``, no longer its scope's name.

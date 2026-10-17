@@ -7,6 +7,7 @@ const {
   positionInText,
   hoverTextOf,
   completionItemsAt,
+  definitionLineAt,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -174,18 +175,10 @@ suite('CloudFormation templates', () => {
   test('a name a loop in another loop\'s body declares resolves to that body\'s key', async () => {
     const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
     const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'))).document;
-    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
-    let definitions = [];
-    while (Date.now() < deadline && definitions.length === 0) {
-      definitions = await vscode.commands.executeCommand(
-        'vscode.executeDefinitionProvider',
-        doc.uri,
-        positionInText(doc, '${BucketEastLogs}', 4),
-      ) || [];
-      if (definitions.length === 0) await new Promise((resolve) => { setTimeout(resolve, 50); });
-    }
-    const target = definitions[0].targetRange || definitions[0].range;
-    assert.equal(target.start.line, positionInText(doc, 'Bucket&{Region}&{Kind}').line);
+    assert.equal(
+      await definitionLineAt(doc, positionInText(doc, '${BucketEastLogs}', 4)),
+      positionInText(doc, 'Bucket&{Region}&{Kind}').line,
+    );
   });
 
   test('the template\'s Transform section calls the Transform macro, documented with its callee', async () => {

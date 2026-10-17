@@ -1,6 +1,11 @@
 locals:
   mock_defaults:
     size: 1
+  mock_landed:
+    landed:
+      size: 2
 mocktype:
+  fn.merge: local.mock_landed
   shared:
     fn.merge: local.mock_defaults
+    source: ref mocktype.landed

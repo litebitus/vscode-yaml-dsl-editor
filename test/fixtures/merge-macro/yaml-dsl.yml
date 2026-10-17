@@ -43,6 +43,15 @@ dsls:
         meta_argument_name: null
         declares_every_name: false
         scope_name: local
+      - path: "$.*.*"
+        skip_keys: [locals]
+        exclude_candidates: []
+        name_source: key
+        key_token: all_words
+        name_spelling: as_written
+        meta_argument_name: null
+        declares_every_name: false
+        scope_name: ENTRY
     references:
       - pattern: "^local\\.(?<name>[a-z0-9_]+)$"
         positions: [whole_scalar]
