@@ -4,10 +4,10 @@ Language support for any YAML DSL, declared in one config file, with nothing abo
 
 ## Examples
 
-`examples/` is a workspace to open and try the editor, one folder per DSL, each with its own `yaml-dsl.yml`:
+[`examples/`](examples) is a workspace to open and try the editor, one folder per DSL, each with its own `yaml-dsl.yml`:
 
-- `examples/cloudformation/`: AWS's sample templates, and the editor's own `mock-loops.yaml` and `mock-macros.yaml` showing the macros, read with the CloudFormation schema in `examples/schemas/`.
-- `examples/merge-macro/`: a mock DSL with a common layer and an overlay, showing the merge macro and paths into locals; its README lists what to look at.
+- [`examples/cloudformation/`](examples/cloudformation): AWS's sample templates, and the editor's own [`mock-loops.yaml`](examples/cloudformation/mock-loops.yaml) and [`mock-macros.yaml`](examples/cloudformation/mock-macros.yaml) showing the macros, read with the CloudFormation schema in [`examples/schemas/`](examples/schemas).
+- [`examples/merge-macro/`](examples/merge-macro): a mock DSL with a common layer and an overlay, showing the merge macro and paths into locals; [its README](examples/merge-macro/README.md) lists what to look at.
 
 ## Features
 
