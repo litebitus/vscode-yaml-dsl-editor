@@ -155,12 +155,14 @@ test('the template schema publishes every intrinsic and condition function in it
     nameSuffixPattern: '::[A-Za-z0-9]+',
     unmarkedKeyPaths: [],
     mergeBehavior: null,
+    roles: { loopVariable: 'identifier', collection: 'collection', body: 'fragment' },
   });
   assert.deepEqual(published.vocabulary.Transform.macro, {
     kind: 'function_call',
     nameSuffixPattern: null,
     unmarkedKeyPaths: [[{ kind: 'name', key: 'Transform' }]],
     mergeBehavior: null,
+    roles: { callee: 'Name', calleeArguments: 'Parameters' },
   });
   assert.equal(schema.$defs.func.properties['Fn::ForEach'], undefined);
   assert.deepEqual(published.vocabulary['AWS::Include'].macro, {
@@ -168,6 +170,7 @@ test('the template schema publishes every intrinsic and condition function in it
     nameSuffixPattern: null,
     unmarkedKeyPaths: [],
     mergeBehavior: 'join',
+    roles: { content: 'Location' },
   });
   assert.equal(schema.$defs.func.properties['Fn::AWS::Include'], undefined);
   for (const [key, shape] of callShapes.filter(([callKey]) => callKey !== 'Fn::Transform')) {

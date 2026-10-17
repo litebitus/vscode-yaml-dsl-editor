@@ -1215,7 +1215,13 @@ test('a macro the schema\'s table publishes is called beside sibling keys by its
           macroArgument('collection', 'list'),
           macroArgument('fragment', 'map'),
         ],
-        macro: { kind: 'loop', name_suffix_pattern: '::[A-Za-z0-9]+' },
+        macro: {
+          kind: 'loop',
+          loop_variable: 'identifier',
+          collection: 'collection',
+          body: 'fragment',
+          name_suffix_pattern: '::[A-Za-z0-9]+',
+        },
       },
     },
   });
@@ -1285,7 +1291,13 @@ test('a loop declares its loop variable in its body and each item\'s names where
           loopArgument('collection', 'list'),
           loopArgument('fragment', 'map'),
         ],
-        macro: { kind: 'loop', name_suffix_pattern: '::[A-Za-z0-9]+' },
+        macro: {
+          kind: 'loop',
+          loop_variable: 'identifier',
+          collection: 'collection',
+          body: 'fragment',
+          name_suffix_pattern: '::[A-Za-z0-9]+',
+        },
       },
     },
     type: 'object',
@@ -1361,6 +1373,15 @@ test('a loop declares its loop variable in its body and each item\'s names where
     '`TopicName`: the loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
   ]);
   assert.ok(offered.some((item) => item.label === '&{MockBucket}'));
+  assert.deepEqual(loopVariableItem.range.end, { line: 8, character: 17 });
+  const autoClosed = text.replace('        Label: ${TopicName}', '        Label: ${}');
+  await ws.sync(`file://${common}`, common, autoClosed);
+  const closedItem = ws.completion(`file://${common}`, { line: 8, character: 17 })
+    .find((item) => item.label === '${TopicName}');
+  assert.deepEqual([closedItem.range.start, closedItem.range.end], [
+    { line: 8, character: 15 },
+    { line: 8, character: 18 },
+  ]);
   const outside = typed.replace('    Peer: !Ref TopicMockA', '    Peer: ${');
   await ws.sync(`file://${common}`, common, outside);
   const outsideLabels = ws.completion(`file://${common}`, { line: 11, character: 12 }).map((item) => item.label);
@@ -1394,12 +1415,17 @@ test('an include\'s key is a function_call macro call, at its marked and unmarke
       'Mock::Include': {
         description: 'Includes the mock snippet.',
         arguments: [mockArgument('Location', 'text', true)],
-        macro: { kind: 'merge', merge_behavior: 'join' },
+        macro: { kind: 'merge', content: 'Location', merge_behavior: 'join' },
       },
       Transform: {
         description: 'Calls the mock macro.',
         arguments: [mockArgument('Name', 'text', true), mockArgument('Parameters', 'map', false)],
-        macro: { kind: 'function_call', unmarked_key_paths: ['$.Transform'] },
+        macro: {
+          kind: 'function_call',
+          callee: 'Name',
+          callee_arguments: 'Parameters',
+          unmarked_key_paths: ['$.Transform'],
+        },
       },
     },
   });

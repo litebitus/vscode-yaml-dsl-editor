@@ -154,6 +154,23 @@ suite('CloudFormation templates', () => {
     assert.equal(await offeredDocumentationOf(editor.document, ampersandCursor, '&{TopicName}'), documentation);
   });
 
+  test('accepting a placeholder entry before an auto-closed brace writes one closing brace', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'));
+    const lineEnd = await typedAfter(editor, 'DisplayName: mock-${TopicName}', '\n          FifoTopic: ${TopicN}');
+    const cursor = lineEnd.translate(0, -1);
+    editor.selection = new vscode.Selection(cursor, cursor);
+    await completionItemsAt(editor.document, cursor);
+    const typedLine = () => editor.document.lineAt(cursor.line).text;
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    while (Date.now() < deadline && typedLine() !== '          FifoTopic: ${TopicName}') {
+      await vscode.commands.executeCommand('editor.action.triggerSuggest');
+      await new Promise((resolve) => { setTimeout(resolve, 300); });
+      await vscode.commands.executeCommand('acceptSelectedSuggestion');
+    }
+    assert.equal(typedLine(), '          FifoTopic: ${TopicName}');
+  });
+
   test('a name a loop in another loop\'s body declares resolves to that body\'s key', async () => {
     const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
     const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'))).document;

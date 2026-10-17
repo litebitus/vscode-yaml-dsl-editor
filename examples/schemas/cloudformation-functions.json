@@ -20,6 +20,7 @@
       ],
       "macro": {
         "kind": "merge",
+        "content": "Location",
         "merge_behavior": "join"
       }
     },
@@ -290,6 +291,9 @@
       ],
       "macro": {
         "kind": "loop",
+        "loop_variable": "identifier",
+        "collection": "collection",
+        "body": "fragment",
         "name_suffix_pattern": "::[A-Za-z0-9]+"
       }
     },
@@ -600,6 +604,8 @@
       ],
       "macro": {
         "kind": "function_call",
+        "callee": "Name",
+        "callee_arguments": "Parameters",
         "unmarked_key_paths": ["$.Transform"]
       }
     },

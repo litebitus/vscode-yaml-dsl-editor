@@ -6,7 +6,7 @@
       "arguments": [
         { "name": "contents", "type": "map", "required": true, "repeated": true, "description": "The mock contents." }
       ],
-      "macro": { "kind": "merge", "merge_behavior": "shallow" }
+      "macro": { "kind": "merge", "content": "contents", "merge_behavior": "shallow" }
     }
   },
   "type": "object",

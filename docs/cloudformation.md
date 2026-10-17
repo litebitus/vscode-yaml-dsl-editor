@@ -115,9 +115,9 @@ The function table marks CloudFormation's macros with a `macro` object:
 
 | Macro | `kind` | What its entry adds |
 |---|---|---|
-| `Transform` | `function_call` | `unmarked_key_paths: ["$.Transform"]`, so the template's `Transform` section calls it as `Fn::Transform` does in a section |
-| `AWS::Include` | `merge` | `merge_behavior: join`, since the snippet's entries are inserted beside the holding map's |
-| `ForEach` | `loop` | `name_suffix_pattern: "::[A-Za-z0-9]+"`, so `Fn::ForEach::Topics` calls `ForEach` |
+| `Transform` | `function_call` | `callee: Name`, `callee_arguments: Parameters`; `unmarked_key_paths: ["$.Transform"]`, so the template's `Transform` section calls it as `Fn::Transform` does in a section |
+| `AWS::Include` | `merge` | `content: Location`; `merge_behavior: join`, since the snippet's entries are inserted beside the holding map's |
+| `ForEach` | `loop` | `loop_variable: identifier`, `collection: collection`, `body: fragment`; `name_suffix_pattern: "::[A-Za-z0-9]+"`, so `Fn::ForEach::Topics` calls `ForEach` |
 | every other transform AWS hosts | `transform` | |
 
 - `Transform`'s `Name` is typed `macro`, so it is completed from the table's macros and naming a function there is a problem.

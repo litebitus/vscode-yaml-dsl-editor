@@ -7,7 +7,7 @@
       "arguments": [
         { "name": "Location", "type": "text", "required": true, "repeated": false, "description": "The mock snippet's location." }
       ],
-      "macro": { "kind": "merge", "merge_behavior": "join" }
+      "macro": { "kind": "merge", "content": "Location", "merge_behavior": "join" }
     },
     "Transform": {
       "description": "Calls the mock macro.",
@@ -15,7 +15,7 @@
         { "name": "Name", "type": "macro", "required": true, "repeated": false, "description": "The mock macro's name." },
         { "name": "Parameters", "type": "map", "required": false, "repeated": false, "description": "The mock macro's arguments." }
       ],
-      "macro": { "kind": "function_call" }
+      "macro": { "kind": "function_call", "callee": "Name", "callee_arguments": "Parameters" }
     }
   },
   "properties": {

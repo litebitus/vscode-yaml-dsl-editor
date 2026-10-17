@@ -1311,15 +1311,18 @@ The editor follows the preprocessing, so it reads the document as it will be: an
 | `name_suffix_pattern` | the regular expression of the text after the macro's name that keeps sibling calls distinct; left out, nothing follows the name |
 | `unmarked_key_paths` | the keys that call the macro without the call marker; left out, none |
 | `merge_behavior` | on a `merge` macro, and required there: `shallow` replaces a key's value whole, `deep` merges nested maps key by key, `join` takes each key once, so a key that both the holding map and a content set is a problem |
+| a role, below | the name of the entry's argument that plays the role |
 
-| `kind` | Arguments, in order | Expands to |
+| `kind` | Roles | Expands to |
 |---|---|---|
-| `function_call` | the callee's name, then the callee's arguments | a call of the macro or function the first argument names, the second its arguments by name |
-| `merge` | the content's location, a `text`, or the contents, each a `map`, in order | the map holding the call, combined with the contents by `merge_behavior` |
-| `loop` | the loop variable, the collection, the body | the body once per item of the collection, the loop variable bound to the item |
-| `transform` | its own, by name | the map holding the call, rewritten by the macro |
+| `function_call` | `callee`, a `text`, `function` or `macro`; `callee_arguments`, a `map`, left out when the callee takes none | a call of the macro or function the callee names, the callee arguments its arguments by name |
+| `merge` | `content`, a `text` location or a `map`, repeated for contents merged in order | the map holding the call, combined with the contents by `merge_behavior` |
+| `loop` | `loop_variable`, a `text`; `collection`, a `list`; `body`, a `map` | the body once per item of the collection, the loop variable bound to the item |
+| `transform` | none | the map holding the call, rewritten by the macro |
 
-An entry whose arguments do not fit its kind is a problem on the modeline line.
+- A role names one of the entry's arguments, so arguments sit in whatever order the DSL writes them. An argument no role names is one the editor does not read.
+- A call binds its arguments by name when its value is a map holding argument names, by position when it is a list, and otherwise as the first argument.
+- An entry whose roles are missing, name no argument, or name an argument of the wrong type is a problem on the modeline line. Only a `merge` macro's content may be repeated.
 
 `examples/schemas/cloudformation-functions.json` is CloudFormation's table.
 

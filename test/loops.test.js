@@ -25,7 +25,12 @@ const table = {
       mockArgument('fragment', 'map'),
     ],
     return: null,
-    macro: { kind: 'loop', nameSuffixPattern: '::[A-Za-z0-9]+', unmarkedKeyPaths: [] },
+    macro: {
+      kind: 'loop',
+      nameSuffixPattern: '::[A-Za-z0-9]+',
+      unmarkedKeyPaths: [],
+      roles: { loopVariable: 'identifier', collection: 'collection', body: 'fragment' },
+    },
   },
 };
 
@@ -163,6 +168,51 @@ test('a loop standing directly in another loop\'s body expands once per outer it
     ['Resources', 'Fn::ForEach::Regions', 2, 'Fn::ForEach::Buckets', 2, 'Bucket&{Region}&{Kind}', 'Type'],
     'mock west (for `West` and `Logs`)',
   ]]);
+});
+
+test('a loop whose arguments are written by name reads each role from the argument its entry names', () => {
+  const byNameTable = {
+    Repeat: {
+      description: 'Repeats the mock body.',
+      arguments: [
+        mockArgument('items', 'list'),
+        mockArgument('body', 'map'),
+        mockArgument('variable', 'text'),
+      ],
+      return: null,
+      macro: {
+        kind: 'loop',
+        nameSuffixPattern: '::[A-Za-z0-9]+',
+        unmarkedKeyPaths: [],
+        roles: { loopVariable: 'variable', collection: 'items', body: 'body' },
+      },
+    },
+  };
+  const byNameContext = loopContextOf(dsl, byNameTable);
+  const byNameText = [
+    'Resources:',
+    '  Fn::Repeat::Topics:',
+    '    variable: Name',
+    '    items: [MockA]',
+    '    body:',
+    '      Topic${Name}: { Type: mock-type }',
+    '',
+  ].join('\n');
+  const byNameDoc = analyzeDocument(byNameText, '/repo/mock.yml', dsl);
+  const [loop] = loopsOf(byNameDoc.tree, byNameContext);
+  assert.deepEqual([loop.loopVariable, loop.items, loop.bodyPath], [
+    'Name',
+    ['MockA'],
+    ['Resources', 'Fn::Repeat::Topics', 'body'],
+  ]);
+  const symbols = collectSymbols(expandedTreeOf(byNameDoc.tree, byNameContext), dsl, '/repo/mock.yml', byNameText);
+  assert.deepEqual(symbols.map((symbol) => symbol.name), ['TopicMockA']);
+  const { value, pathMap } = expandedValueOf(byNameDoc.value, byNameContext);
+  assert.deepEqual(value, { Resources: { TopicMockA: { Type: 'mock-type' } } });
+  assert.deepEqual(
+    expandedPathOf(pathMap, ['Resources', 'Fn::Repeat::Topics', 'body', 'Topic${Name}', 'Type']),
+    ['Resources', 'TopicMockA', 'Type'],
+  );
 });
 
 test('a problem in an expansion is placed at the body\'s source, naming the items it holds for '

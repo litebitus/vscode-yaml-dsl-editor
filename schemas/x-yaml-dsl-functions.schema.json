@@ -46,13 +46,61 @@
           "required": ["kind"],
           "additionalProperties": false,
           "description": "Present only on a macro: what the DSL's preprocessor does with a call.",
-          "if": { "properties": { "kind": { "const": "merge" } } },
-          "then": { "required": ["merge_behavior"] },
-          "else": { "not": { "required": ["merge_behavior"] } },
+          "allOf": [
+            {
+              "if": { "properties": { "kind": { "const": "function_call" } } },
+              "then": { "required": ["callee"] },
+              "else": { "not": { "anyOf": [{ "required": ["callee"] }, { "required": ["callee_arguments"] }] } }
+            },
+            {
+              "if": { "properties": { "kind": { "const": "merge" } } },
+              "then": { "required": ["merge_behavior", "content"] },
+              "else": { "not": { "anyOf": [{ "required": ["merge_behavior"] }, { "required": ["content"] }] } }
+            },
+            {
+              "if": { "properties": { "kind": { "const": "loop" } } },
+              "then": { "required": ["loop_variable", "collection", "body"] },
+              "else": {
+                "not": {
+                  "anyOf": [{ "required": ["loop_variable"] }, { "required": ["collection"] }, { "required": ["body"] }]
+                }
+              }
+            }
+          ],
           "properties": {
             "kind": {
               "enum": ["function_call", "merge", "loop", "transform"],
-              "description": "What a call expands to. The kind fixes what the arguments are, in order."
+              "description": "What a call expands to."
+            },
+            "callee": {
+              "type": "string",
+              "minLength": 1,
+              "description": "On a function_call macro, required: the argument naming the macro or function called."
+            },
+            "callee_arguments": {
+              "type": "string",
+              "minLength": 1,
+              "description": "On a function_call macro: the argument holding the callee's arguments by name."
+            },
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "description": "On a merge macro, required: the argument holding the content or its location."
+            },
+            "loop_variable": {
+              "type": "string",
+              "minLength": 1,
+              "description": "On a loop macro, required: the argument naming the loop variable."
+            },
+            "collection": {
+              "type": "string",
+              "minLength": 1,
+              "description": "On a loop macro, required: the argument holding the collection."
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "description": "On a loop macro, required: the argument holding the body."
             },
             "name_suffix_pattern": {
               "type": "string",

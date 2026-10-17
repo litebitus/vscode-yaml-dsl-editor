@@ -416,7 +416,7 @@ test('an include of a join merge macro folds by joining, and a key on both sides
       'AWS::Include': {
         description: 'Includes the mock snippet.',
         arguments: [{ name: 'Location', type: 'text', required: true, repeated: false, description: 'The mock location.' }],
-        macro: { kind: 'merge', merge_behavior: 'join' },
+        macro: { kind: 'merge', content: 'Location', merge_behavior: 'join' },
       },
       Transform: {
         description: 'Calls the mock macro.',
@@ -424,7 +424,7 @@ test('an include of a join merge macro folds by joining, and a key on both sides
           { name: 'Name', type: 'macro', required: true, repeated: false, description: 'The mock macro.' },
           { name: 'Parameters', type: 'map', required: false, repeated: false, description: 'The mock arguments.' },
         ],
-        macro: { kind: 'function_call' },
+        macro: { kind: 'function_call', callee: 'Name', callee_arguments: 'Parameters' },
       },
     },
   });

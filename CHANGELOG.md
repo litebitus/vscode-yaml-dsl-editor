@@ -25,6 +25,7 @@
 - Hover: a field's line shows its name and requirement as code and its type in italics; a definition that chooses between definitions is named by the one the value selects.
 - Completion: a function or macro offered after its call marker is documented as its hover is, and a field a branch restates without a description keeps the description its base states.
 - Functions: an argument or return typed `function` or `macro` holds the name of a table entry of that kind; a `function_call` macro's callee so typed is completed from those entries and checked against them.
+- Macros: a `macro` object names the argument that plays each of its kind's roles, `callee`, `callee_arguments`, `content`, `loop_variable`, `collection` and `body`, so a call binds its arguments by name or by position as the DSL writes them.
 - Completion: a placeholder pattern opening with a character class completes in each of its openings, and a placeholder in a loop's body offers the loop variables around it.
 - Macros: a `merge` macro states its `merge_behavior`, `shallow`, `deep` or `join`, and merges contents from its argument, a local's map read from the fold and any other reference supplying the holding map's required fields; a call among sibling keys calls the macro of its name, beside a function of that name.
 - Macros: a `transform` macro takes the arguments its entry states and expands to the map holding the call, rewritten by the macro; a table entry's name may hold `-`.

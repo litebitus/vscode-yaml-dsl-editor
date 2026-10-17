@@ -22,7 +22,7 @@ const mergeMacro = (mergeBehavior, repeated = true) => ({
   description: 'Merges the mock contents.',
   arguments: [{ name: 'contents', type: 'map', required: true, repeated, description: 'The mock contents.' }],
   return: null,
-  macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [], mergeBehavior },
+  macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [], mergeBehavior, roles: { content: 'contents' } },
 });
 
 const mergedEntry = dslEntry('merged', {
@@ -118,7 +118,7 @@ const schema = JSON.stringify({
     merge: {
       description: 'Merges the mock contents.',
       arguments: [{ name: 'contents', type: 'map', required: true, repeated: true, description: 'The mock contents.' }],
-      macro: { kind: 'merge', merge_behavior: 'shallow' },
+      macro: { kind: 'merge', content: 'contents', merge_behavior: 'shallow' },
     },
   },
   type: 'object',
