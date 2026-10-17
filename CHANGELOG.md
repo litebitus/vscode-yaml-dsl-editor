@@ -2,41 +2,53 @@
 
 ## Unreleased
 
-- Ownership: each config's globs are written to an existing workspace settings file's `files.associations`, so a DSL file opens as YAML DSL before another YAML extension can read it; a glob already associated, in any spelling, is not repeated.
-- Config: a `yaml-dsl.yml` in any folder of the workspace governs the files below it, and `{config_root}/` starts a glob or schema path at its folder.
-- Config: `tag_keys` reads a YAML tag as the key it stands for, so `!Ref Mock` and `Ref: Mock` are one reference, one field and one value.
-- Hover, completion and required-field filling: a schema's `if`/`then`/`else` is read by the branch the document's value selects.
-- Hover: with the document's value, a field's conditions are the branches the value selects, and a field's own `if` branch sets its shown type.
-- Hover and completion: a field under an `anyOf` or `oneOf` is read through the alternatives whose type admits the document's value.
-- Layers: `common_layer_discovery: overlay_includes` pairs an overlay with the common layers its includes name, each merged where its include sits.
-- Paths: the JSONPath steps `['name']` and `..name`.
-- Schemas: a modeline's `#` or `#/pointer` marks a fragment, validated at the node it names with no key required.
-- Schemas: a `pattern` is built with the `u` flag, as JSON Schema says.
-- Performance: choosing a branch, comparing overlays' schema nodes and checking an opt-out no longer each compile or hash a whole large schema.
-- Performance: documents are validated in a worker, so a large schema's compile never holds hover, completion or suggestions.
-- Functions: the function table states each function's and argument's description and the function's `return`, shown on hover, Terraform's included; a function mapped straight to its argument list is deprecated, noted by an info on the modeline.
-- Functions: `splat_operator: null` lets the function table decide how a call's value binds its arguments; CloudFormation's functions are calls by `Fn::`, documented and checked from the table its schema publishes.
-- Macros: a function table entry with a `macro` object is a macro, called beside sibling keys, after a name suffix its `name_suffix_pattern` matches, and documented by what it expands to; CloudFormation's `Fn::ForEach` is one.
-- Macros: a `function_call` macro binds its arguments by name and its callee's arguments by name, documents its callee on hover, and is also called by a key at its `unmarked_key_paths`; CloudFormation's `Fn::Transform` and `Transform` section are one, and an include's key is a call of it.
-- Macros: CloudFormation's `AWS::Include` is a `merge` macro, so an include's `Parameters` are checked against it and hover documents it.
-- Macros: a `loop` macro declares its loop variable in its body and each literal item's names where its body lands; each item is validated, documented and completed at that place, a problem naming the items it holds for; CloudFormation's placeholder pattern reads `&{…}` too.
-- Hover: a function's or macro's signature is colored by its own grammar, the macro keyword, name, arguments and types each apart, never as the open file's YAML.
-- Layers: a file an include's location maps to, written or removed after its overlay opened, is followed or left at once.
-- Hover: a field's line shows its name and requirement as code and its type in italics; a definition that chooses between definitions is named by the one the value selects.
-- Completion: a function or macro offered after its call marker is documented as its hover is, and a field a branch restates without a description keeps the description its base states.
-- Functions: an argument or return typed `function` or `macro` holds the name of a table entry of that kind; a `function_call` macro's callee so typed is completed from those entries and checked against them.
-- Macros: a `macro` object names the argument that plays each of its kind's roles, `callee`, `callee_arguments`, `content`, `loop_variable`, `collection` and `body`, so a call binds its arguments by name or by position as the DSL writes them.
-- Completion: a placeholder pattern opening with a character class completes in each of its openings, and a placeholder in a loop's body offers the loop variables around it.
-- Macros: a `merge` macro states its `merge_behavior`, `shallow`, `deep` or `join`, and merges contents from its argument, a local's map read from the fold and any other reference supplying the holding map's required fields; a call among sibling keys calls the macro of its name, beside a function of that name.
-- Macros: a `merge` declares the names a local content holds where it lands, so a reference to one resolves to the local's key and completes.
-- Macros: a `transform` macro takes the arguments its entry states and expands to the map holding the call, rewritten by the macro; a table entry's name may hold `-`.
-- Examples: CloudFormation's function table holds the `Rules` section's functions and every transform AWS hosts.
-- Hover and completion: a builtin reads `` `<name>`: *builtin* ``, no longer its scope's name.
-- Examples: the CloudFormation schema names its definitions in the engine's words, `ref` apart from `func` and `condition_ref` apart from `condition_func`; `.vscodeignore` leaves dependencies' TypeScript sources, source maps and browser builds out of the package.
-- Config: `validator.allow_quoted_values` validates a quoted boolean or number as the value it spells.
-- Config: `performance.compiled_schema_cache` keeps a DSL's compiled schema in the extension's storage for later sessions.
-- Examples: the CloudFormation schema, generated from AWS's resource provider schemas by `scripts/cloudformation-schema/`.
-- Docs: the design doc and README speak of entries and a sample DSL, no longer of one DSL's resources.
+- Config
+  - A `yaml-dsl.yml` in any folder of the workspace governs the files below it, and `{config_root}/` starts a glob or schema path at its folder.
+  - `tag_keys` reads a YAML tag as the key it stands for, so `!Ref Mock` and `Ref: Mock` are one reference, one field and one value.
+  - `validator.allow_quoted_values` validates a quoted boolean or number as the value it spells.
+  - `performance.compiled_schema_cache` keeps a DSL's compiled schema in the extension's storage for later sessions.
+- Ownership
+  - Each config's globs are written to an existing workspace settings file's `files.associations`, once in any spelling, so a DSL file opens as YAML DSL before another YAML extension can read it.
+- Layers
+  - `common_layer_discovery: overlay_includes` pairs an overlay with the common layers its includes name, each merged where its include sits, and follows a mapped file written or removed after its overlay opened.
+- Paths
+  - The JSONPath steps `['name']` and `..name`.
+- Schemas
+  - A modeline's `#` or `#/pointer` marks a fragment, validated at the node it names with no key required.
+  - A `pattern` is built with the `u` flag, as JSON Schema says.
+  - `if`/`then`/`else`, `anyOf` and `oneOf` are read by the branch the document's value selects, in hover, completion and required-field filling; a field a branch restates without a description keeps its base's.
+- Functions
+  - The function table states each function's and argument's description and the function's `return`, shown on hover, Terraform's included; a table entry's name may hold `-`.
+  - `splat_operator: null` lets the function table decide how a call's value binds its arguments.
+  - An argument or return typed `function` or `macro` holds the name of a table entry of that kind, completed from those entries and checked against them.
+- Macros
+  - A function table entry with a `macro` object is a macro of kind `function_call`, `merge`, `loop` or `transform`, called beside sibling keys or after a name suffix its `name_suffix_pattern` matches, and documented by what it expands to; a call among sibling keys calls the macro of its name, beside a function of that name.
+  - A `macro` object names the argument that plays each of its kind's roles, so a call binds its arguments by name or by position as the DSL writes them.
+  - A `function_call` macro binds its callee's arguments, documents its callee on hover, and is also called by a key at its `unmarked_key_paths`.
+  - A `merge` macro states its `merge_behavior`, `shallow`, `deep` or `join`, and merges contents from a location or its argument: a local's map is read from the fold and declares its names where it lands, and any other reference supplies the holding map's required fields.
+  - A `loop` macro declares its loop variable in its body and each literal item's names where its body lands; each item is validated, documented and completed there, a problem naming the items it holds for.
+  - A `transform` macro takes the arguments its entry states and expands to the map holding the call, rewritten by the macro.
+- Hover
+  - A function's or macro's signature is colored by its own grammar, never as the open file's YAML.
+  - A field's line shows its name and requirement as code and its type in italics; a definition that chooses between definitions is named by the one the value selects, and a field's conditions are the branches the value selects.
+  - A builtin reads `` `<name>`: *builtin* ``, in completion too.
+- Completion
+  - A function or macro offered after its call marker is documented as its hover is.
+  - A placeholder pattern opening with a character class completes in each of its openings, a placeholder in a loop's body offers the loop variables around it, and accepting one before an auto-closed closing writes one closing.
+- Performance
+  - Documents are validated in a worker, and choosing a branch, comparing overlays' schema nodes and checking an opt-out no longer each compile or hash a whole large schema.
+- Examples
+  - CloudFormation, with a schema generated from AWS's resource provider schemas by `scripts/cloudformation-schema/`, its definitions named in the engine's words, and a function table holding every intrinsic function, the `Rules` section's functions, `Fn::ForEach`, `Fn::Transform`, `AWS::Include` and every transform AWS hosts.
+  - Loop and merge macros, the merge on a mock DSL of its own.
+- Packaging
+  - `.vscodeignore` leaves dependencies' TypeScript sources, source maps and browser builds out of the package.
+- Docs
+  - The design doc and README speak of entries and a sample DSL, no longer of one DSL's resources.
+
+### Deprecated
+
+- Functions
+  - A function table entry mapped straight to its argument list, noted by an info on the modeline; state `arguments` instead.
 
 ## 0.7.0 - 2026-10-15
 
