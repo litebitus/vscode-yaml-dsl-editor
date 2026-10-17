@@ -43,6 +43,17 @@ suite('overlay includes', () => {
     assert.equal(target.toString(), snippetUri);
   });
 
+  test('an include calls a merge macro, its callee documented by what it expands to', async () => {
+    const template = (await shownDocument(includesFixture('mock-bucket.yaml'))).document;
+    await hoverTextBecomes(
+      template,
+      positionInText(template, 'AWS::Include', 2),
+      '```\nmacro AWS::Include(Location: text)\n```\n\nInserts the mock snippet in its place.\n\n'
+        + '- `Location`: The mock snippet\'s location.\n\n'
+        + '*Expands to:* the map holding the call, merged over the content at `Location`.',
+    );
+  });
+
   test('a fragment is documented from the schema node its modeline names, its requirement marker struck', async () => {
     const fragment = (await shownDocument(includesFixture('snippets', 'mock-alone.yaml'))).document;
     const struckRequired = [...'[required]'].map((character) => `${character}̶`).join('');

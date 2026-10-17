@@ -1,6 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
+  "x-yaml-dsl-functions": {
+    "AWS::Include": {
+      "description": "Inserts the mock snippet in its place.",
+      "arguments": [
+        { "name": "Location", "type": "text", "required": true, "repeated": false, "description": "The mock snippet's location." }
+      ],
+      "macro": { "kind": "merge" }
+    },
+    "Transform": {
+      "description": "Calls the mock macro.",
+      "arguments": [
+        { "name": "Name", "type": "text", "required": true, "repeated": false, "description": "The mock macro's name." },
+        { "name": "Parameters", "type": "map", "required": false, "repeated": false, "description": "The mock macro's arguments." }
+      ],
+      "macro": { "kind": "function_call" }
+    }
+  },
   "properties": {
     "Resources": {
       "type": "object",

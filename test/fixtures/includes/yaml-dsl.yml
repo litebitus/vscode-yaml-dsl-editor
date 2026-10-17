@@ -16,6 +16,14 @@ dsls:
           location_mappings:
             - { local: "{config_root}/snippets/", remote: "s3://mock-bucket/snippets/" }
       duplicate_check: { depth: 2, key_depths: {}, skip_keys: [] }
+    function:
+      definitions: [schema]
+      call_result_reference_positions: []
+      calls_not_allowed_at: []
+      marker_function:
+        call_marker: "Fn::"
+        splat_operator: null
+        calls_without_name_allowed: true
     key_sort_orders: []
     scopes:
       LOGICAL_ID:

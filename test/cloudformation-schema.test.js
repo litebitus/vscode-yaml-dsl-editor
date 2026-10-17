@@ -159,6 +159,12 @@ test('the template schema publishes every intrinsic and condition function in it
     unmarkedKeyPaths: [[{ kind: 'name', key: 'Transform' }]],
   });
   assert.equal(schema.$defs.IntrinsicFunction.properties['Fn::ForEach'], undefined);
+  assert.deepEqual(published.vocabulary['AWS::Include'].macro, {
+    kind: 'merge',
+    nameSuffixPattern: null,
+    unmarkedKeyPaths: [],
+  });
+  assert.equal(schema.$defs.IntrinsicFunction.properties['Fn::AWS::Include'], undefined);
   for (const [key, shape] of callShapes.filter(([callKey]) => callKey !== 'Fn::Transform')) {
     assert.deepEqual(shape, {}, key);
   }
