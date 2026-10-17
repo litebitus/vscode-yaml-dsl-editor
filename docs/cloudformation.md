@@ -19,7 +19,7 @@ The DSL is a config like any other. The engine features it needs are generic and
 | `Ref`, `Fn::GetAtt`, `DependsOn`, a `Condition` | a reference |
 | `${...}` in `Fn::Sub` | a placeholder |
 | an intrinsic function or a condition function | a call, `Fn::` its marker, its value its arguments |
-| `Fn::Transform`, `Fn::If`, `AWS::Include`, `Fn::ForEach` | a macro: a function call, a conditional, a merge and a loop |
+| `Fn::Transform`, `AWS::Include`, `Fn::ForEach`, a transform AWS hosts | a macro: a function call, a merge, a loop and a transform |
 | a YAML short form, such as `!Ref` | a tag key |
 | an `AWS::Include` transform | an include, pairing an overlay with its common layer |
 | a template that includes a snippet | an overlay |
@@ -116,9 +116,11 @@ The function table marks CloudFormation's macros with a `macro` object:
 | Macro | `kind` | What its entry adds |
 |---|---|---|
 | `Transform` | `function_call` | `unmarked_key_paths: ["$.Transform"]`, so the template's `Transform` section calls it as `Fn::Transform` does in a section |
-| `If` | `conditional` | |
 | `AWS::Include` | `merge` | |
 | `ForEach` | `loop` | `name_suffix_pattern: "::[A-Za-z0-9]+"`, so `Fn::ForEach::Topics` calls `ForEach` |
+| every other transform AWS hosts | `transform` | |
+
+- `Transform`'s `Name` is typed `macro`, so it is completed from the table's macros and naming a function there is a problem.
 
 - `ForEach`'s identifier is written `${identifier}` in its fragment, a placeholder as any other, and `&{identifier}` for the item's letters and digits alone, so the placeholder pattern takes both.
 - A macro the table does not hold, such as one registered by `AWS::CloudFormation::Macro`, is not a problem where `Transform` names it.

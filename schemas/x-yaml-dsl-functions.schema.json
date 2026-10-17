@@ -48,7 +48,7 @@
           "description": "Present only on a macro: what the DSL's preprocessor does with a call.",
           "properties": {
             "kind": {
-              "enum": ["function_call", "conditional", "merge", "loop", "transform"],
+              "enum": ["function_call", "merge", "loop", "transform"],
               "description": "What a call expands to. The kind fixes what the arguments are, in order."
             },
             "name_suffix_pattern": {

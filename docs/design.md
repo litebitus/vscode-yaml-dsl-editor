@@ -1312,7 +1312,6 @@ A function computes a value when the document is used. A macro is expanded by th
 | `kind` | Arguments, in order | Expands to |
 |---|---|---|
 | `function_call` | the callee's name, then the callee's arguments | a call of the macro or function the first argument names, the second its arguments by name |
-| `conditional` | the condition, then every result | the result the condition chooses |
 | `merge` | the content's location, a `text`, or the content, a `map` | the map holding the call, merged over the content |
 | `loop` | the identifier, the collection, the body | the body once per item of the collection, the item standing for the identifier |
 | `transform` | its own, by name | the map holding the call, rewritten by the macro |
@@ -1335,7 +1334,6 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 | `kind` | Input unknown |
 |---|---|
 | `function_call` | the call is checked against the macro's own entry alone |
-| `conditional` | each result is an outcome, and each validates in the call's position |
 | `merge` | a location no `location_mappings` entry covers, or whose file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem |
 | `loop` | the body is checked once, the identifier standing for its own name; a key in it that names the identifier declares every name it can spell, so `Topic${TopicName}` declares `TopicA`, and a reference to such a name is not a problem |
 | `transform` | always: the map holding the call is checked as written |
@@ -1373,8 +1371,7 @@ Each phase is one kind, built and validated before the next:
 2. `function_call`: arguments bound by name, the callee, and `unmarked_key_paths`. An include's key is then a macro call.
 3. `merge` from a location.
 4. `loop`.
-5. `conditional`.
-6. `merge` from an argument, which takes the place of merge bases named by key; `validator.merge_base_keys` retires once no DSL names its merge bases by key.
+5. `merge` from an argument, which takes the place of merge bases named by key; `validator.merge_base_keys` retires once no DSL names its merge bases by key.
 
 ## What the workspace defines
 

@@ -28,7 +28,7 @@ function exactlyOneKey(properties, description) {
 
 const FUNCTION_CALL_MARKER = 'Fn::';
 const CONDITION_FUNCTION_NAMES = ['And', 'Equals', 'Not', 'Or'];
-const MACRO_KINDS_CALLED_AS_VALUES = ['function_call', 'conditional'];
+const MACRO_KINDS_CALLED_AS_VALUES = ['function_call'];
 const VALUE_FUNCTION_NAMES = Object.entries(FUNCTION_TABLE)
   .filter(([name, entry]) => !CONDITION_FUNCTION_NAMES.includes(name)
     && !(entry.macro && !MACRO_KINDS_CALLED_AS_VALUES.includes(entry.macro.kind)))

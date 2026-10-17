@@ -426,7 +426,7 @@ test('a macro is a table entry with a macro object, taking no return, its argume
   assert.equal(published({ ...loopEntry, macro: 1 }).problem, '#/x f.macro must be a mapping with kind');
   assert.equal(
     published({ ...loopEntry, macro: { kind: 'mock-kind' } }).problem,
-    '#/x f.macro.kind must be one of function_call, conditional, merge, loop, transform',
+    '#/x f.macro.kind must be one of function_call, merge, loop, transform',
   );
   assert.equal(
     published({ ...loopEntry, macro: { kind: 'loop', name_suffix_pattern: '(' } }).problem,
@@ -444,7 +444,6 @@ test('a macro is a table entry with a macro object, taking no return, its argume
   const fitting = [
     withArguments('function_call', textArgument('Name'), mockArgument('Parameters', 'map', false, false)),
     withArguments('function_call', textArgument('Name')),
-    withArguments('conditional', textArgument('condition'), mockArgument('results', 'any', true, true)),
     withArguments('merge', textArgument('Location')),
     withArguments('merge', mockArgument('content', 'map', true, false)),
     withArguments(
@@ -462,7 +461,7 @@ test('a macro is a table entry with a macro object, taking no return, its argume
       withArguments('function_call', mockArgument('Name', 'map', true, false)),
       "the callee's name (text, function or macro), then the callee's arguments (map)",
     ],
-    [withArguments('conditional', textArgument('condition')), 'the condition, then every result'],
+    [withArguments('transform', mockArgument('Options', 'map', true, true)), 'its own, by name'],
     [
       withArguments('merge', mockArgument('Location', 'list', true, false)),
       "the content's location (text) or the content (map)",
@@ -506,10 +505,6 @@ test('a macro is documented by its signature after macro, its arguments and what
   assert.equal(
     expansionOf('function_call', ['Name', 'text']),
     '*Expands to:* a call of the macro or function `Name` names.',
-  );
-  assert.equal(
-    expansionOf('conditional', ['condition', 'text'], ['a', 'any'], ['b', 'any'], ['c', 'any']),
-    '*Expands to:* the result `condition` chooses among `a`, `b` and `c`.',
   );
   assert.equal(
     expansionOf('merge', ['Location', 'text']),
