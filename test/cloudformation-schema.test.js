@@ -7,6 +7,7 @@ const { unicodePatternOf } = require('../scripts/cloudformation-schema/regex-pat
 const { zipEntriesOf } = require('../scripts/cloudformation-schema/zip-entries');
 const { resourceTypeDefinitionOf } = require('../scripts/cloudformation-schema/provider-schemas');
 const { templateSchemaOf } = require('../scripts/cloudformation-schema/template-schema');
+const { schemaVocabulary } = require('../lib/function-calls');
 
 const MOCK_ZIP = path.join(__dirname, 'fixtures', 'cloudformation-schema', 'mock-providers.zip');
 const INTRINSIC_FUNCTION = { $ref: '#/$defs/IntrinsicFunction' };
@@ -121,9 +122,36 @@ test('the template schema states its source and gives each resource the properti
   assert.deepEqual(failureKeywordsOf(validator, {
     Resources: { MockQueue: { Type: 'AWS::Mock::Queue', Properties: { DelaySeconds: { 'Fn::Mock': 1 } } } },
   }), [['Resources.MockQueue.Properties.DelaySeconds', 'type']]);
+});
+
+test('the template schema publishes every intrinsic and condition function in its function table, '
+  + 'the one home of their arguments', () => {
+  const { schema } = templateSchemaOf(mockProviders(), { region: 'mock-region-1', downloadDate: '2026-01-01' });
+  const published = schemaVocabulary(schema, '#/x-yaml-dsl-functions');
+  assert.equal(published.problem, null);
+  assert.equal(published.notice, null);
+  const callShapes = [
+    ...Object.entries(schema.$defs.IntrinsicFunction.properties),
+    ...Object.entries(schema.$defs.ConditionFunction.properties),
+  ].filter(([key]) => key.startsWith('Fn::'));
+  const calledNames = callShapes.map(([key]) => key.slice('Fn::'.length));
+  assert.deepEqual(Object.keys(published.vocabulary).sort(), calledNames.sort());
+  for (const [key, shape] of callShapes.filter(([callKey]) => callKey !== 'Fn::Transform')) {
+    assert.deepEqual(shape, {}, key);
+  }
+  const includeOrMacro = schema.$defs.IntrinsicFunction.properties['Fn::Transform'];
+  assert.match(includeOrMacro.description, /AWS::Include/);
+  assert.equal(schema.properties.Resources.properties['Fn::Transform'], includeOrMacro);
+  assert.deepEqual(schema.$defs.IntrinsicFunction.properties.Ref.type, 'string');
+  assert.deepEqual(schema.$defs.ConditionFunction.properties.Condition.type, 'string');
+  assert.deepEqual(published.vocabulary.Join.arguments.map(({ name, type }) => [name, type]), [
+    ['delimiter', 'text'],
+    ['values', 'list'],
+  ]);
+  const validator = mockTemplateValidator();
   assert.deepEqual(failureKeywordsOf(validator, {
     Resources: { MockQueue: { Type: 'AWS::Mock::Queue', Properties: { DelaySeconds: { 'Fn::If': 'mock' } } } },
-  }), [['Resources.MockQueue.Properties.DelaySeconds.Fn::If', 'type']]);
+  }), []);
 });
 
 test('a property under a list item or an object is documented and offered, '
@@ -144,31 +172,20 @@ test('a property under a list item or an object is documented and offered, '
   assert.deepEqual(Object.keys(parser.fieldsAt([...properties, 'BucketName'])).includes('Ref'), true);
 });
 
-test('an intrinsic function at any depth of an open value is validated and documented, from one shared definition', () => {
+test('an intrinsic function call stands in for a value at any depth of an open value, from one shared definition', () => {
   const { schema } = templateSchemaOf(mockProviders(), { region: 'mock-region-1', downloadDate: '2026-01-01' });
   const anyValue = { $ref: '#/$defs/AnyValue' };
   assert.deepEqual(schema.$defs.AnyValue, orIntrinsicFunctionOf({ additionalProperties: anyValue, items: anyValue }));
   assert.deepEqual(schema.$defs.Output.properties.Value, { description: 'The value of the output.', ...anyValue });
-  assert.deepEqual(schema.$defs.IntrinsicFunction.properties['Fn::If'].prefixItems.slice(1), [anyValue, anyValue]);
   const template = {
-    Resources: {
-      MockQueue: {
-        Type: 'AWS::Mock::Queue',
-        Properties: { DelaySeconds: { 'Fn::If': ['MockOn', { mockKey: [{ 'Fn::GetAtt': 'MockQueue.Arn' }] }, 1] } },
-      },
-    },
-    Outputs: { MockOut: { Value: { mockKey: { 'Fn::GetAtt': 'MockQueue.Arn' } } } },
+    Resources: { MockQueue: { Type: 'AWS::Mock::Queue' } },
+    Outputs: { MockOut: { Value: { mockKey: [{ 'Fn::GetAtt': 'MockQueue.Arn' }] } } },
   };
   const validator = schemaValidatorFor(schema);
   assert.deepEqual(failureKeywordsOf(validator, template), []);
-  const badArguments = structuredClone(template);
-  badArguments.Outputs.MockOut.Value.mockKey['Fn::GetAtt'] = 1;
-  assert.deepEqual(failureKeywordsOf(validator, badArguments), [['Outputs.MockOut.Value.mockKey.Fn::GetAtt', 'anyOf']]);
-  const parser = schemaParserForDocument(schema, template);
-  const nested = ['Resources', 'MockQueue', 'Properties', 'DelaySeconds', 'Fn::If', 1, 'mockKey', 0, 'Fn::GetAtt'];
-  const described = 'Returns the value of an attribute of a resource in the template.';
-  assert.equal(parser.fieldDescription(nested), described);
-  assert.equal(parser.fieldDescription(['Outputs', 'MockOut', 'Value', 'mockKey', 'Fn::GetAtt']), described);
+  const tableCheckedArguments = structuredClone(template);
+  tableCheckedArguments.Outputs.MockOut.Value.mockKey[0]['Fn::GetAtt'] = 1;
+  assert.deepEqual(failureKeywordsOf(validator, tableCheckedArguments), []);
 });
 
 test('a resource\'s Type selects its service\'s branch and then its type\'s, for validation, fields and hover', () => {

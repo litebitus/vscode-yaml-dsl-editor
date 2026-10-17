@@ -37,6 +37,14 @@ dsls:
     placeholder:
       pattern: "\\$\\{(?<body>[^!}][^}]*)\\}"
       unscanned_paths: []
+    function:
+      definitions: [schema]
+      call_result_reference_positions: []
+      calls_not_allowed_at: []
+      marker_function:
+        call_marker: "Fn::"
+        splat_operator: null
+        calls_without_name_allowed: true
     validator:
       merge_base_keys: []
       child_values_from_parent_key: []

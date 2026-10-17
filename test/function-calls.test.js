@@ -136,6 +136,48 @@ test('calls are checked for name, arity, argument types, placement and unnamed f
   assert.deepEqual(problemsFor('x:\n  y fn.nope: 1\n', { table: {}, complete: false }), []);
 });
 
+test('with no splat operator, the function table decides how a call value binds its arguments', () => {
+  const tableMarker = { callMarker: 'Fn::', splatOperator: null, callsWithoutNameAllowed: true };
+  const tableConfig = { ...functionConfig, callsNotAllowedAt: [], markerFunction: tableMarker };
+  const byTable = {
+    Length: mockFunction('Length', mockArgument('items', 'list', true, false)),
+    Join: mockFunction(
+      'Join',
+      mockArgument('delimiter', 'text', true, false),
+      mockArgument('values', 'list', true, false),
+    ),
+    Sub: mockFunction(
+      'Sub',
+      mockArgument('template', 'text', true, false),
+      mockArgument('variables', 'map', false, false),
+    ),
+  };
+  assert.equal(parseFunctionKey('Fn::Join*', tableMarker), null);
+  assert.equal(parseFunctionKey('Fn::Join', tableMarker).splat, false);
+  const text = [
+    'whole:',
+    '  Fn::Length: [1, 2, 3]',
+    'listed:',
+    '  Fn::Join: [",", [x, y]]',
+    'first:',
+    '  Fn::Sub: mock-text',
+    'both:',
+    '  Fn::Sub: [mock-text, { x: 1 }]',
+    'extra:',
+    '  Fn::Join: [",", [x], mock-extra]',
+    'scalar_for_list:',
+    '  Fn::Length: mock-text',
+    'one_of_two:',
+    '  Fn::Join: mock-text',
+    '',
+  ].join('\n');
+  assert.deepEqual(problemsFor(text, { table: byTable, complete: true }, tableConfig), [
+    'Join takes 2 arguments, given 3',
+    'Length argument items expects list',
+    'Join takes 2 arguments, given 1',
+  ]);
+});
+
 test("Terraform's function metadata becomes a vocabulary", () => {
   const vocabulary = terraformVocabulary({
     function_signatures: {

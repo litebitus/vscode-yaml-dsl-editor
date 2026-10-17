@@ -1236,7 +1236,7 @@ A placeholder splices a value into a scalar or a key, whole or as part of a long
 
 `marker_function` is a call written in a key, `<name> <call_marker><function>`:
 
-- `splat_operator` follows the function when the value below is a list of arguments rather than the one argument.
+- `splat_operator` follows the function when the value below is a list of arguments rather than the one argument. `null` states a DSL with no operator, and the function table decides: a function with one argument takes the value whole; one with more takes a list value as its arguments, and any other value as its first.
 - `calls_without_name_allowed` says whether a key that is the marker alone is a call with no name, the only key of its map.
 
 | `definitions` source | The table |
@@ -1245,7 +1245,8 @@ A placeholder splices a value into a scalar or a key, whole or as part of a long
 | `schema` | the table the file's schema publishes at `#/x-yaml-dsl-functions`; a schema that publishes no table there, or a malformed one, is a problem on the modeline line |
 
 - While a source has not answered the vocabulary is open, and an unknown function is a problem only once every source has.
-- Every call is checked: its function against the vocabulary, its argument count against the function's arity, and each literal argument against its type. A reference or a call standing as an argument is not typed.
+- A key an overlay include reads is the include, never a call, even where its key names a function.
+- Every call is checked: its function against the vocabulary, its argument count against the function's arity, and each literal argument against its type. A reference or a call standing as an argument is not typed, a reference written as its tag's key included.
 - Hover on a function shows its signature, with the return type, then its description, each argument's description and the return's description, or its type where it has none, read as markdown. A function with no `return` returns `void`.
 
 ## The function table

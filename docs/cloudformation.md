@@ -18,7 +18,7 @@ The DSL is a config like any other. The engine features it needs are generic and
 | a condition | a declaration in `CONDITION` |
 | `Ref`, `Fn::GetAtt`, `DependsOn`, a `Condition` | a reference |
 | `${...}` in `Fn::Sub` | a placeholder |
-| an intrinsic function | a field whose value is its arguments |
+| an intrinsic function or a condition function | a call, `Fn::` its marker, its value its arguments |
 | a YAML short form, such as `!Ref` | a tag key |
 | an `AWS::Include` transform | an include, pairing an overlay with its common layer |
 | a template that includes a snippet | an overlay |
@@ -98,7 +98,15 @@ CloudFormation reads a quoted boolean or number as the value it spells, so `vali
 
 ### Functions
 
-An intrinsic function is a field: `Fn::Join` is a key whose value is its arguments. The schema documents each `Fn::` key and `Ref` with AWS's description and validates its arguments, as it does any field.
+An intrinsic function or a condition function is a call through `marker_function`, as in any DSL:
+
+| Field | Value |
+|---|---|
+| `call_marker` | `Fn::`, so `Fn::Join:` and its tag `!Join` call `Join` |
+| `calls_without_name_allowed` | `true`: a function's map holds its call alone |
+| `splat_operator` | `null`: the function table decides how a value binds the arguments |
+
+The schema publishes the function table, the one home of each function's description, arguments and return. `Ref` and `Condition` are references, not calls, and a `Fn::Transform` naming `AWS::Include` is the include, documented by the schema.
 
 ## The schema
 
@@ -122,7 +130,9 @@ The template schema is generated from them. The template's own sections are writ
 | a pattern | kept when the `u` flag reads it, else without its identity escapes; one neither reads is left out and listed when the generator runs |
 | a description | carried as written, so hover shows AWS's text |
 
-A value the template reference leaves open, such as an output's `Value` or an `Fn::If` branch, refers to one shared definition, `AnyValue`: an intrinsic function call at any depth in it reads as the function, so its arguments are validated and documented.
+A value the template reference leaves open, such as an output's `Value`, refers to one shared definition, `AnyValue`: an intrinsic function call at any depth in it stands in for a value.
+
+The generator writes the function table at `#/x-yaml-dsl-functions` from the intrinsic function reference: each intrinsic and condition function with its description, its arguments and its return. `IntrinsicFunction` and `ConditionFunction` name the calls and leave their arguments to the table.
 
 `Type` also takes a custom resource type, `Custom::<name>`, and a registry type, `<organization>::<service>::<resource>`, whose `Properties` the schema leaves open.
 
@@ -157,7 +167,8 @@ Each is designed in the editor's design doc:
 - overlay includes, `layers.common_layer_discovery: overlay_includes`;
 - a reference rule reading a scalar with its tag;
 - the `['name']` path step;
-- the branches the document selects, so a resource is documented and completed by its `Type`.
+- the branches the document selects, so a resource is documented and completed by its `Type`;
+- calls through `marker_function` with `splat_operator: null`, the function table deciding a call's arguments.
 
 ## Open questions
 

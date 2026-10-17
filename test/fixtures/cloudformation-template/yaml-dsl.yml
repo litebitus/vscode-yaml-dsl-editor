@@ -7,6 +7,14 @@ dsls:
     tag_keys:
       - { tag: "!GetAtt", key: "Fn::GetAtt" }
       - { tag: "!Ref", key: Ref }
+    function:
+      definitions: [schema]
+      call_result_reference_positions: []
+      calls_not_allowed_at: []
+      marker_function:
+        call_marker: "Fn::"
+        splat_operator: null
+        calls_without_name_allowed: true
     performance:
       compiled_schema_cache: true
     key_sort_orders: []

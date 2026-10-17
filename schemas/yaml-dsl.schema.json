@@ -321,9 +321,9 @@
           "description": "Text that opens a call in a key."
         },
         "splat_operator": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
-          "description": "Suffix after the function that spreads a list value into the arguments."
+          "description": "Suffix after the function that spreads a list value into the arguments; `null` where the function table decides how a value binds the arguments."
         },
         "calls_without_name_allowed": {
           "type": "boolean",

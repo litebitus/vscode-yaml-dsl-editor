@@ -1125,6 +1125,121 @@ test('a schema that publishes nothing at the vocabulary pointer is a problem on 
   ]);
 });
 
+test('with no splat operator, a call written as a tag binds its arguments by the table, '
+  + 'and a reference standing as an argument is not typed', async () => {
+  const text = [
+    'Resources:',
+    '  MockBucket:',
+    '    Name: !Join ["-", [mock, !Ref MockBucket]]',
+    '    Encoded:',
+    '      Fn::Base64: !Ref MockBucket',
+    '    Broken: !Join mock-text',
+    '',
+  ].join('\n');
+  const tableSchema = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    'x-yaml-dsl-functions': {
+      Join: {
+        description: 'Joins the values by the delimiter.',
+        arguments: [
+          { name: 'delimiter', type: 'text', required: true, repeated: false, description: 'The mock delimiter.' },
+          { name: 'values', type: 'list', required: true, repeated: false, description: 'The mock values.' },
+        ],
+        return: { type: 'text', description: 'The joined text.' },
+      },
+      Base64: {
+        description: 'Encodes the text.',
+        arguments: [{ name: 'text', type: 'text', required: true, repeated: false, description: 'The mock text.' }],
+      },
+    },
+  });
+  const tableConfig = configText(dslEntry('mock-template', {
+    schema_search_paths: ['https://example.test/fallback.json'],
+    tag_keys: [{ tag: '!Join', key: 'Fn::Join' }, { tag: '!Ref', key: 'Ref' }],
+    scopes: { LOGICAL_ID: scope() },
+    declarations: [declaration('$.Resources.*', 'LOGICAL_ID')],
+    references: [reference('^!Ref (?<name>[A-Za-z0-9]+)$', 'LOGICAL_ID')],
+    function: {
+      definitions: ['schema'],
+      call_result_reference_positions: [],
+      calls_not_allowed_at: [],
+      marker_function: { call_marker: 'Fn::', splat_operator: null, calls_without_name_allowed: true },
+    },
+  }));
+  const ws = createWorkspace({
+    readFile: async (filePath) => (filePath === common ? text : null),
+    fetchText: async () => tableSchema,
+  });
+  await ws.setConfigs([{ text: tableConfig, dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, text);
+  const problems = ws.problems(`file://${common}`).filter((problem) => problem.severity === 'error');
+  assert.deepEqual(problems.map((problem) => [problem.message, problem.range.start.line]), [
+    ['Join takes 2 arguments, given 1', 5],
+  ]);
+  assert.equal(
+    ws.hover(`file://${common}`, at(text, '!Join')).contents.value,
+    '```\nJoin(delimiter: text, values: list): text\n```\n\nJoins the values by the delimiter.\n\n'
+      + '- `delimiter`: The mock delimiter.\n- `values`: The mock values.\n\n*Returns:* The joined text.',
+  );
+});
+
+test('a key an overlay include reads is the include, never a call, and keeps its schema hover', async () => {
+  const text = [
+    'Resources:',
+    '  Fn::Transform:',
+    '    Name: Mock::Include',
+    '    Parameters: { Location: s3://mock-bucket/mock.yaml }',
+    '  MockBucket:',
+    '    Fn::Transform: { Name: Mock::Macro }',
+    '    Other: x',
+    '',
+  ].join('\n');
+  const includeSchema = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    'x-yaml-dsl-functions': {
+      Transform: {
+        description: 'Calls the mock macro.',
+        arguments: [{ name: 'macro', type: 'map', required: true, repeated: false, description: 'The mock macro.' }],
+      },
+    },
+    properties: {
+      Resources: {
+        properties: { 'Fn::Transform': { description: 'The mock include or macro call.' } },
+      },
+    },
+  });
+  const includeConfig = configText(dslEntry('mock-template', {
+    schema_search_paths: ['https://example.test/fallback.json'],
+    layers: {
+      common_layer_discovery: 'overlay_includes',
+      overlay_includes: [{
+        key_paths: ["$..['Fn::Transform']"],
+        value_conditions: [{ key: 'Name', value: 'Mock::Include' }],
+        location_path: '$.Parameters.Location',
+        location_mappings: [],
+      }],
+      duplicate_check: { depth: 1, key_depths: {}, skip_keys: [] },
+    },
+    function: {
+      definitions: ['schema'],
+      call_result_reference_positions: [],
+      calls_not_allowed_at: [],
+      marker_function: { call_marker: 'Fn::', splat_operator: null, calls_without_name_allowed: true },
+    },
+  }));
+  const ws = createWorkspace({
+    readFile: async (filePath) => (filePath === common ? text : null),
+    fetchText: async () => includeSchema,
+  });
+  await ws.setConfigs([{ text: includeConfig, dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, text);
+  const problems = ws.problems(`file://${common}`).filter((problem) => problem.severity === 'error');
+  assert.deepEqual(problems.map((problem) => [problem.message, problem.range.start.line]), [
+    ['a call with no name must be the only key of its map', 5],
+  ]);
+  assert.match(ws.hover(`file://${common}`, { line: 1, character: 4 }).contents.value, /The mock include or macro call\./);
+});
+
 test('a function table in the deprecated argument-list form is an info on the modeline, its calls still checked', async () => {
   const text = 'locals:\n  db fn.ssm: /mock/key\n  bad fn.ssm*: [1, 2]\n';
   const listedSchema = JSON.stringify({

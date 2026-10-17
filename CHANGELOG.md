@@ -15,6 +15,7 @@
 - Performance: choosing a branch, comparing overlays' schema nodes and checking an opt-out no longer each compile or hash a whole large schema.
 - Performance: documents are validated in a worker, so a large schema's compile never holds hover, completion or suggestions.
 - Functions: the function table states each function's and argument's description and the function's `return`, shown on hover, Terraform's included; a function mapped straight to its argument list is deprecated, noted by an info on the modeline.
+- Functions: `splat_operator: null` lets the function table decide how a call's value binds its arguments; CloudFormation's functions are calls by `Fn::`, documented and checked from the table its schema publishes.
 - Config: `validator.allow_quoted_values` validates a quoted boolean or number as the value it spells.
 - Config: `performance.compiled_schema_cache` keeps a DSL's compiled schema in the extension's storage for later sessions.
 - Examples: the CloudFormation schema, generated from AWS's resource provider schemas by `scripts/cloudformation-schema/`.
