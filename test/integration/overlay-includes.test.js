@@ -50,7 +50,7 @@ suite('overlay includes', () => {
       positionInText(template, 'AWS::Include', 2),
       '```yaml-dsl-signature\nmacro AWS::Include(Location: text)\n```\n\nInserts the mock snippet in its place.\n\n'
         + '- `Location`: The mock snippet\'s location.\n\n'
-        + '*Expands to:* the map holding the call, merged over the content at `Location`.',
+        + '*Expands to:* the map holding the call, joined with the content at `Location`.',
     );
   });
 

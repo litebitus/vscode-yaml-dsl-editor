@@ -1,0 +1,6 @@
+locals:
+  mock_defaults:
+    size: 1
+mocktype:
+  shared:
+    fn.merge: local.mock_defaults

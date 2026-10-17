@@ -46,6 +46,9 @@
           "required": ["kind"],
           "additionalProperties": false,
           "description": "Present only on a macro: what the DSL's preprocessor does with a call.",
+          "if": { "properties": { "kind": { "const": "merge" } } },
+          "then": { "required": ["merge_behavior"] },
+          "else": { "not": { "required": ["merge_behavior"] } },
           "properties": {
             "kind": {
               "enum": ["function_call", "merge", "loop", "transform"],
@@ -60,6 +63,10 @@
               "type": "array",
               "items": { "type": "string", "pattern": "^\\$." },
               "description": "The JSONPaths of the keys that call the macro without the call marker. Left out, none."
+            },
+            "merge_behavior": {
+              "enum": ["shallow", "deep", "join"],
+              "description": "How a merge macro combines the holding map with its content. Required on a merge macro."
             }
           }
         }

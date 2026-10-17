@@ -277,13 +277,14 @@
     "validator": {
       "type": "object",
       "description": "How a document is read before it is validated against its schema. Left out for a DSL whose documents are validated as written.",
-      "required": ["merge_base_keys", "child_values_from_parent_key"],
+      "required": ["child_values_from_parent_key"],
       "additionalProperties": false,
       "properties": {
         "merge_base_keys": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
-          "description": "Keys whose value is the merge base of each sibling entry."
+          "description": "Deprecated: call a `merge` macro whose argument is the content instead.",
+          "deprecated": true
         },
         "child_values_from_parent_key": {
           "type": "array",

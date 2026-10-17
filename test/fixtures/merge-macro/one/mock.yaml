@@ -1,0 +1,13 @@
+locals:
+  mock_wrong:
+    size: large
+mocktype:
+  own:
+    fn.merge: local.mock_wrong
+    mode: fast
+  unknown:
+    fn.merge*:
+      - ref mock_source.config
+      - local.mock_defaults
+  missing:
+    mode: fast

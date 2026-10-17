@@ -284,8 +284,10 @@ test('the validator block states its merge base keys and child value patterns, e
     '',
   ].join('\n'));
   assert.match(withValidator(['validator: []']).error, /mock\.validator must be a mapping/);
-  assert.match(withValidator(['validator: {}']).error, /\.merge_base_keys is required/);
+  assert.doesNotMatch(withValidator(['validator: {}']).error, /merge_base_keys/);
   assert.match(withValidator(['validator: {}']).error, /\.child_values_from_parent_key is required/);
+  const withoutMergeBases = withValidator(['validator:', '  child_values_from_parent_key: []']);
+  assert.deepEqual(withoutMergeBases.dsls[0].validator.mergeBaseKeys, []);
   const unnamed = withValidator([
     'validator:',
     '  merge_base_keys: []',

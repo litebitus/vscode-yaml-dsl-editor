@@ -408,3 +408,47 @@ test('an overlay shows its file name, its folder too where names clash, kept if 
     'prod/mock-queue.yaml',
   ]);
 });
+
+test('an include of a join merge macro folds by joining, and a key on both sides is a problem at the include', async () => {
+  const joinSchema = JSON.stringify({
+    ...JSON.parse(schema),
+    'x-yaml-dsl-functions': {
+      'AWS::Include': {
+        description: 'Includes the mock snippet.',
+        arguments: [{ name: 'Location', type: 'text', required: true, repeated: false, description: 'The mock location.' }],
+        macro: { kind: 'merge', merge_behavior: 'join' },
+      },
+      Transform: {
+        description: 'Calls the mock macro.',
+        arguments: [
+          { name: 'Name', type: 'macro', required: true, repeated: false, description: 'The mock macro.' },
+          { name: 'Parameters', type: 'map', required: false, repeated: false, description: 'The mock arguments.' },
+        ],
+        macro: { kind: 'function_call' },
+      },
+    },
+  });
+  const joinEntry = {
+    ...includeEntry,
+    function: {
+      definitions: ['schema'],
+      call_result_reference_positions: [],
+      calls_not_allowed_at: [],
+      marker_function: { call_marker: 'Fn::', splat_operator: null, calls_without_name_allowed: true },
+    },
+  };
+  const twiceText = bucketText.replace('  MockUser:', '  MockWait:\n    Type: Mock::Twice\n  MockUser:');
+  const joinFiles = { ...stackFiles, [SCHEMA]: joinSchema, [BUCKET]: twiceText };
+  const ws = createWorkspace({
+    readFile: async (filePath) => (Object.hasOwn(joinFiles, filePath) ? joinFiles[filePath] : null),
+    fetchText: async () => null,
+  });
+  await ws.setConfigs([{ text: configText(joinEntry), dir: '/repo' }]);
+  await ws.sync(`file://${SNIPPET}`, SNIPPET, snippetText);
+  await ws.sync(`file://${BUCKET}`, BUCKET, twiceText);
+  const twice = ws.problems(`file://${BUCKET}`).filter((problem) => problem.message.includes('join'));
+  assert.deepEqual(twice.map((problem) => [problem.range.start.line, problem.message]), [
+    [at(twiceText, '  Fn::Transform:').line, '`MockWait` is set twice in a join'],
+  ]);
+  assert.match(ws.foldText(SNIPPET, BUCKET), /MockWait:\n {4}Type: Mock::Twice/);
+});

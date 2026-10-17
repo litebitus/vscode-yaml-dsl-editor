@@ -832,7 +832,6 @@ A DSL's `validator` block states how a document is read before it is validated; 
 
 | Field | What it states |
 |---|---|
-| `merge_base_keys` | keys whose value, wherever they appear, is the merge base of each sibling entry: the sibling merges over it with the layers' merge. Nothing under a merge base is required, and an error a base passes to its siblings is marked once, at the base |
 | `child_values_from_parent_key` | patterns of a key that sets a field of the entry it keys, with `field` and `value` groups. A field the entry writes itself stays as written |
 | `allow_quoted_values` | types from `boolean`, `integer` and `number` a quoted value is validated as, where the schema expects that type and the string spells one; `[]` when left out. A quoted value that spells none stays a string. Hover and completion show the schema's types, and what the extension writes stays unquoted |
 
@@ -1303,16 +1302,19 @@ Terraform's signatures are read into the same table:
 
 A function computes a value when the document is used. A macro is expanded by the DSL's preprocessor before then, as a C macro is, and its expansion is what is read: validated, declared, referenced. A macro is an entry of the function table with a `macro` object, documented and called as a function is.
 
+The editor follows the preprocessing, so it reads the document as it will be: an expansion's entries are validated where they land, the names they spell are declared there, and a reference to such a name resolves to the source that spells it. A `merge` is the one kind whose arguments may be left to when the document is used: a content that references anything but a local is merged then, so the editor merges the locals' values and reads the rest as unknown.
+
 | `macro` field | Holds |
 |---|---|
 | `kind` | what the preprocessor does with a call, below |
 | `name_suffix_pattern` | the regular expression of the text after the macro's name that keeps sibling calls distinct; left out, nothing follows the name |
 | `unmarked_key_paths` | the keys that call the macro without the call marker; left out, none |
+| `merge_behavior` | on a `merge` macro, and required there: `shallow` replaces a key's value whole, `deep` merges nested maps key by key, `join` takes each key once, so a key that both the holding map and a content set is a problem |
 
 | `kind` | Arguments, in order | Expands to |
 |---|---|---|
 | `function_call` | the callee's name, then the callee's arguments | a call of the macro or function the first argument names, the second its arguments by name |
-| `merge` | the content's location, a `text`, or the content, a `map` | the map holding the call, merged over the content |
+| `merge` | the content's location, a `text`, or the contents, each a `map`, in order | the map holding the call, combined with the contents by `merge_behavior` |
 | `loop` | the identifier, the collection, the body | the body once per item of the collection, the item standing for the identifier |
 | `transform` | its own, by name | the map holding the call, rewritten by the macro |
 
@@ -1325,6 +1327,7 @@ An entry whose arguments do not fit its kind is a problem on the modeline line.
 - A macro is called as a function is, through `marker_function` or its tag through `tag_keys`, and also by a key at one of its `unmarked_key_paths`.
 - A function yields a value, so its call stands where a value does. A macro yields entries, so its call may stand as a whole key among siblings. YAML refuses two equal keys in one map, so the text `name_suffix_pattern` matches keeps sibling calls distinct; the editor reads nothing from it.
 - A `function_call`'s value binds its arguments by name, or is the callee's name alone, or is a list holding one call per item.
+- A call with no name standing among sibling keys calls the macro of its name; any other call calls the function of its name, or the macro where no function has it. A function and a macro of one name, from two of a DSL's `definitions`, are both kept.
 - A callee the table does not hold is one the DSL's users define, such as a CloudFormation macro registered by `AWS::CloudFormation::Macro`, and is not a problem.
 
 ### Evaluation
@@ -1334,7 +1337,7 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 | `kind` | Input unknown |
 |---|---|
 | `function_call` | the call is checked against the macro's own entry alone |
-| `merge` | a location no `location_mappings` entry covers, or whose file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem |
+| `merge` | a location no `location_mappings` entry covers, or whose file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem; a content left to when the document is used supplies every field the holding map requires |
 | `loop` | the body is checked once, the identifier standing for its own name; a key in it that names the identifier declares every name it can spell, so `Topic${TopicName}` declares `TopicA`, and a reference to such a name is not a problem |
 | `transform` | always: the map holding the call is checked as written |
 
@@ -1346,6 +1349,8 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 - The identifier is a name the loop declares within its body, read by the DSL's placeholders and reference rules as any name is; an inner loop's identifier hides an outer one of the same name.
 - The names an expansion declares are declared where they land.
 - A merge whose content is at a location is an include, its location mapped by `layers.overlay_includes`.
+- A merge's contents are merged in order, and the holding map's own keys over them. A content that is a local is read as the local's value in the fold, whichever layer declares it.
+- A problem in what a content supplies is reported at the call's key.
 
 ### Hover
 
@@ -1371,7 +1376,7 @@ Each phase is one kind, built and validated before the next:
 2. `function_call`: arguments bound by name, the callee, and `unmarked_key_paths`. An include's key is then a macro call.
 3. `merge` from a location.
 4. `loop`.
-5. `merge` from an argument, which takes the place of merge bases named by key; `validator.merge_base_keys` retires once no DSL names its merge bases by key.
+5. `merge` from an argument.
 
 ## What the workspace defines
 
@@ -1412,7 +1417,6 @@ dsls:
     locals:
       scope_name: local
     validator:
-      merge_base_keys: [defaults]
       child_values_from_parent_key:
         - pattern: '^(?<field>[a-z][a-z0-9_]*) (?<value>[a-z0-9-]+)$'
     formatter:

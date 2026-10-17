@@ -25,6 +25,7 @@
 - Hover: a field's line shows its name and requirement as code and its type in italics; a definition that chooses between definitions is named by the one the value selects.
 - Completion: a function or macro offered after its call marker is documented as its hover is, and a field a branch restates without a description keeps the description its base states.
 - Functions: an argument or return typed `function` or `macro` holds the name of a table entry of that kind; a `function_call` macro's callee so typed is completed from those entries and checked against them.
+- Macros: a `merge` macro states its `merge_behavior`, `shallow`, `deep` or `join`, and merges contents from its argument, a local's map read from the fold and any other reference supplying the holding map's required fields; a call among sibling keys calls the macro of its name, beside a function of that name.
 - Macros: a `transform` macro takes the arguments its entry states and expands to the map holding the call, rewritten by the macro; a table entry's name may hold `-`.
 - Examples: CloudFormation's function table holds the `Rules` section's functions and every transform AWS hosts.
 - Hover and completion: a builtin reads `` `<name>`: *builtin* ``, no longer its scope's name.
@@ -48,6 +49,7 @@
 
 ### Deprecated
 
+- Config: `validator.merge_base_keys`, now optional; call a `merge` macro whose argument is the content instead.
 - Colors: `yamlDslEditor.errorForeground`, `warningForeground`, `infoForeground` and `overlayDiff.difference<n>`; use `yamlDslEditor.dark.<role>` and `yamlDslEditor.light.<role>`.
 
 ## 0.6.0 - 2026-10-15

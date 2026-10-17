@@ -1380,7 +1380,7 @@ test('an include\'s key is a function_call macro call, at its marked and unmarke
       'Mock::Include': {
         description: 'Includes the mock snippet.',
         arguments: [mockArgument('Location', 'text', true)],
-        macro: { kind: 'merge' },
+        macro: { kind: 'merge', merge_behavior: 'join' },
       },
       Transform: {
         description: 'Calls the mock macro.',
@@ -1425,7 +1425,7 @@ test('an include\'s key is a function_call macro call, at its marked and unmarke
   const includeDocumentation = hoverAt('Mock::Include\n');
   const includeSignature = /^```yaml-dsl-signature\nmacro Mock::Include\(Location: text\)\n```\n\nIncludes the mock snippet\./;
   assert.match(includeDocumentation, includeSignature);
-  const includeExpansion = /\*Expands to:\* the map holding the call, merged over the content at `Location`\./;
+  const includeExpansion = /\*Expands to:\* the map holding the call, joined with the content at `Location`\./;
   assert.match(includeDocumentation, includeExpansion);
 });
 

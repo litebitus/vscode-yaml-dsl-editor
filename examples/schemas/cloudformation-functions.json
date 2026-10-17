@@ -19,7 +19,8 @@
         }
       ],
       "macro": {
-        "kind": "merge"
+        "kind": "merge",
+        "merge_behavior": "join"
       }
     },
     "AWS::LanguageExtensions": {

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-yaml-dsl-functions": {
+    "merge": {
+      "description": "Merges the mock contents under the map holding the call.",
+      "arguments": [
+        { "name": "contents", "type": "map", "required": true, "repeated": true, "description": "The mock contents." }
+      ],
+      "macro": { "kind": "merge", "merge_behavior": "shallow" }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "locals": { "type": "object" },
+    "mocktype": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["size"],
+        "properties": {
+          "size": { "type": "integer", "description": "[required] The mock size." },
+          "mode": { "enum": ["fast", "slow"], "description": "[optional] The mock mode." }
+        }
+      }
+    }
+  }
+}

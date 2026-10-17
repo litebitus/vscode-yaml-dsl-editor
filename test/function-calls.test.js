@@ -255,7 +255,7 @@ test('a function_call macro binds its arguments by name, or takes the callee\'s 
     },
     'Mock::Include': {
       ...mockFunction('Mock::Include', mockArgument('Location', 'text', true, false)),
-      macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [] },
+      macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [], mergeBehavior: 'join' },
     },
   };
   const text = [
@@ -331,7 +331,7 @@ test('a callee completion offers the table entries of the callee\'s type, replac
       table: {
         'mock:include': {
           ...mockFunction('mock:include', mockArgument('Location', 'text', true, false)),
-          macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [] },
+          macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [], mergeBehavior: 'join' },
         },
         'mock:join': mockFunction('mock:join'),
       },
@@ -360,7 +360,7 @@ test('a function_call macro\'s callee typed macro or function names a table entr
     },
     'Mock::Include': {
       ...mockFunction('Mock::Include'),
-      macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [] },
+      macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [], mergeBehavior: 'join' },
     },
     Join: mockFunction('Join'),
   };
@@ -410,13 +410,19 @@ test('a macro is a table entry with a macro object, taking no return, its argume
     kind: 'loop',
     nameSuffixPattern: '::[A-Za-z0-9]+',
     unmarkedKeyPaths: [],
+    mergeBehavior: null,
   });
   const unsuffixed = { ...loopEntry, macro: { kind: 'loop', unmarked_key_paths: ['$.Mock'] } };
   assert.deepEqual(published(unsuffixed).vocabulary.f.macro, {
     kind: 'loop',
     nameSuffixPattern: null,
     unmarkedKeyPaths: [[{ kind: 'name', key: 'Mock' }]],
+    mergeBehavior: null,
   });
+  assert.equal(
+    published({ ...loopEntry, macro: { kind: 'loop', merge_behavior: 'join' } }).problem,
+    '#/x f.macro.merge_behavior is read only on a merge macro',
+  );
   for (const keyPaths of ['$.Mock', ['$'], ['mock'], [1]]) {
     assert.equal(
       published({ ...loopEntry, macro: { kind: 'loop', unmarked_key_paths: keyPaths } }).problem,
@@ -438,14 +444,17 @@ test('a macro is a table entry with a macro object, taking no return, its argume
   );
   const withArguments = (kind, ...functionArguments) => ({
     ...mockFunction('f', ...functionArguments),
-    macro: { kind },
+    macro: kind === 'merge' ? { kind, merge_behavior: 'shallow' } : { kind },
   });
   const textArgument = (name) => mockArgument(name, 'text', true, false);
+  const unbehaved = { ...withArguments('merge', textArgument('Location')), macro: { kind: 'merge' } };
+  assert.equal(published(unbehaved).problem, '#/x f.macro.merge_behavior must be one of shallow, deep, join');
   const fitting = [
     withArguments('function_call', textArgument('Name'), mockArgument('Parameters', 'map', false, false)),
     withArguments('function_call', textArgument('Name')),
     withArguments('merge', textArgument('Location')),
     withArguments('merge', mockArgument('content', 'map', true, false)),
+    withArguments('merge', mockArgument('contents', 'map', true, true)),
     withArguments(
       'loop',
       mockArgument('identifier', 'any', true, false),
@@ -464,11 +473,11 @@ test('a macro is a table entry with a macro object, taking no return, its argume
     [withArguments('transform', mockArgument('Options', 'map', true, true)), 'its own, by name'],
     [
       withArguments('merge', mockArgument('Location', 'list', true, false)),
-      "the content's location (text) or the content (map)",
+      "the content's location (text) or the contents (map), merged in order",
     ],
     [
-      withArguments('merge', mockArgument('items', 'text', true, true)),
-      "the content's location (text) or the content (map)",
+      withArguments('merge', textArgument('Location'), textArgument('Other')),
+      "the content's location (text) or the contents (map), merged in order",
     ],
     [
       withArguments('loop', textArgument('identifier')),
@@ -492,12 +501,33 @@ test('a macro is documented by its signature after macro, its arguments and what
   const expansionOf = (kind, ...typedNames) => {
     const entry = {
       description: null,
-      arguments: typedNames.map(([name, type]) => ({ name, type, required: true, repeated: false, description: null })),
+      arguments: typedNames.map(([name, type, repeated = false]) => (
+        { name, type, required: true, repeated, description: null }
+      )),
       return: null,
-      macro: { kind, nameSuffixPattern: null },
+      macro: { kind, nameSuffixPattern: null, mergeBehavior: kind === 'merge' ? 'shallow' : null },
     };
     return functionDocumentationOf('f', entry).split('\n\n').pop();
   };
+  const mergeExpansionOf = (mergeBehavior, ...typedNames) => {
+    const entry = {
+      description: null,
+      arguments: typedNames.map(([name, type, repeated = false]) => (
+        { name, type, required: true, repeated, description: null }
+      )),
+      return: null,
+      macro: { kind: 'merge', nameSuffixPattern: null, mergeBehavior },
+    };
+    return functionDocumentationOf('f', entry).split('\n\n').pop();
+  };
+  assert.equal(
+    mergeExpansionOf('join', ['Location', 'text']),
+    '*Expands to:* the map holding the call, joined with the content at `Location`.',
+  );
+  assert.equal(
+    mergeExpansionOf('deep', ['contents', 'map', true]),
+    '*Expands to:* the map holding the call, merged key by key over `contents` in order.',
+  );
   assert.equal(
     expansionOf('function_call', ['Name', 'text'], ['Parameters', 'map']),
     '*Expands to:* a call of the macro or function `Name` names, `Parameters` its arguments by name.',

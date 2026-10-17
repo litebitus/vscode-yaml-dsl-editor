@@ -7,7 +7,7 @@
       "arguments": [
         { "name": "Location", "type": "text", "required": true, "repeated": false, "description": "The mock snippet's location." }
       ],
-      "macro": { "kind": "merge" }
+      "macro": { "kind": "merge", "merge_behavior": "join" }
     },
     "Transform": {
       "description": "Calls the mock macro.",
