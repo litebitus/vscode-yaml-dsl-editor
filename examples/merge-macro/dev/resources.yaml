@@ -1,0 +1,15 @@
+locals:
+  slow_queue:
+    visibility_seconds: slow
+
+queue:
+  payments:
+    fn.merge*:
+      - local.queue_defaults
+      - local.slow_queue
+  refunds:
+    fn.merge*:
+      - ref queue.orders
+      - local.slow_queue
+  audits:
+    encrypted: true

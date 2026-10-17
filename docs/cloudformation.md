@@ -179,7 +179,7 @@ The schema is `examples/schemas/cloudformation-<format version>.schema.json`, be
 
 ## Examples
 
-`examples/` is a workspace a user opens to try the editor, one folder per public DSL, each with its own config:
+`examples/` is a workspace a user opens to try the editor, one folder per DSL, each with its own config:
 
 - `examples/cloudformation/yaml-dsl.yml` is the CloudFormation config;
 - `examples/cloudformation/` holds templates from AWS's `aws-cloudformation-templates` repository, unchanged, with its Apache-2.0 license beside them;
