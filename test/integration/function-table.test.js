@@ -17,12 +17,16 @@ suite('function table', () => {
       doc,
       positionInText(doc, 'fn.ssm', 3),
       '```\nssm(parameter: text): text\n```\n\nReturns the **mock** parameter\'s value.\n\n'
-        + '- `parameter`: The mock parameter name.\n\n*Returns:* `text`: The mock **value**.',
+        + '- `parameter`: The mock parameter name.\n\n*Returns:* The mock **value**.',
     );
   });
 
-  test('a function mapped straight to its argument list is documented by its signature and returns none', async () => {
+  test('a function mapped straight to its argument list is documented by its signature and returns void', async () => {
     const doc = (await shownDocument(functionTableFixture())).document;
-    await hoverTextBecomes(doc, positionInText(doc, 'fn.legacy', 3), '```\nlegacy(value: text)\n```\n\n*Returns:* none');
+    await hoverTextBecomes(
+      doc,
+      positionInText(doc, 'fn.legacy', 3),
+      '```\nlegacy(value: text): void\n```\n\n*Returns:* `void`',
+    );
   });
 });

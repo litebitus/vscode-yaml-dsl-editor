@@ -1091,7 +1091,7 @@ test('calls are checked against Terraform and the schema once both vocabularies 
   assert.equal(
     ws.hover(`file://${common}`, at(text, 'ssm')).contents.value,
     '```\nssm(parameter: text): text\n```\n\nReads the mock parameter.\n\n- `parameter`: The mock parameter name.'
-      + '\n\n*Returns:* `text`: The mock parameter\'s value.',
+      + '\n\n*Returns:* The mock parameter\'s value.',
   );
   assert.equal(
     ws.hover(`file://${common}`, at(text, 'upper')).contents.value,
@@ -1122,6 +1122,30 @@ test('a schema that publishes nothing at the vocabulary pointer is a problem on 
   const problems = ws.problems(`file://${common}`);
   assert.deepEqual(problems.map((problem) => [problem.message, problem.range.start.line]), [
     ['the schema publishes no #/x-yaml-dsl-functions', 0],
+  ]);
+});
+
+test('a function table in the deprecated argument-list form is an info on the modeline, its calls still checked', async () => {
+  const text = 'locals:\n  db fn.ssm: /mock/key\n  bad fn.ssm*: [1, 2]\n';
+  const listedSchema = JSON.stringify({
+    ...JSON.parse(schema),
+    'x-yaml-dsl-functions': { ssm: [{ name: 'parameter', type: 'text', required: true, repeated: false }] },
+  });
+  const ws = createWorkspace({
+    readFile: async (filePath) => (filePath === common ? text : null),
+    fetchText: async () => listedSchema,
+  });
+  await ws.setConfigs([{ text: functionsConfig(['schema']), dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, text);
+  const problems = ws.problems(`file://${common}`);
+  assert.deepEqual(problems.map((problem) => [problem.message, problem.range.start.line, problem.severity]), [
+    ['ssm takes 1 arguments, given 2', 2, 'error'],
+    [
+      '#/x-yaml-dsl-functions maps a function straight to its arguments, a deprecated form: '
+        + 'map each function to its description, arguments and return',
+      0,
+      'info',
+    ],
   ]);
 });
 

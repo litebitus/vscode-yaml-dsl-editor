@@ -1246,7 +1246,7 @@ A placeholder splices a value into a scalar or a key, whole or as part of a long
 
 - While a source has not answered the vocabulary is open, and an unknown function is a problem only once every source has.
 - Every call is checked: its function against the vocabulary, its argument count against the function's arity, and each literal argument against its type. A reference or a call standing as an argument is not typed.
-- Hover on a function shows its signature, its description, each argument's description and what it returns, read as markdown; a function with no `return` shows `none`.
+- Hover on a function shows its signature, with the return type, then its description, each argument's description and the return's description, or its type where it has none, read as markdown. A function with no `return` returns `void`.
 
 ## The function table
 
@@ -1256,7 +1256,7 @@ A schema publishes a DSL's functions as a mapping of function name to its descri
 |---|---|
 | `description` | what the function does, in markdown |
 | `arguments` | its arguments in call order |
-| `return` | what it returns: `type`, one of the argument types, and `description`, in markdown; left out, the function returns nothing |
+| `return` | what it returns: `type`, one of the argument types, and `description`, in markdown; left out, the function returns `void` |
 
 | Argument field | Meaning |
 |---|---|

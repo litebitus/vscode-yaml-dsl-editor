@@ -180,7 +180,8 @@ test('a schema publishes a function table at a pointer, held to the documented f
     .map(([functionName, entry]) => [functionName, { ...entry, return: entry.return || null }]));
   assert.deepEqual(schemaVocabulary(schema, '#/x-yaml-dsl-functions').vocabulary, readTable);
   assert.deepEqual(schemaVocabulary(schema, '#/x-a~0b~1c').vocabulary, { ssm: readTable.ssm });
-  assert.deepEqual(schemaVocabulary(null, '#/x'), { vocabulary: null, problem: null });
+  assert.deepEqual(schemaVocabulary(null, '#/x'), { vocabulary: null, problem: null, notice: null });
+  assert.equal(schemaVocabulary(schema, '#/x-yaml-dsl-functions').notice, null);
   assert.equal(schemaVocabulary(schema, '#/missing').problem, 'the schema publishes no #/missing');
   assert.equal(
     schemaVocabulary({ x: { deep: 1 } }, '#/x/deep/further').problem,
@@ -226,11 +227,16 @@ test('a schema publishes a function table at a pointer, held to the documented f
   assert.equal(malformed(withReturn({ type: 'text' })), '#/x f.return.description is required');
 });
 
-test('a function mapped straight to its argument list is still read, with no description', () => {
+test('a function mapped straight to its argument list is still read, with no description, and noted as deprecated', () => {
   const listed = [
     { name: 'layout', type: 'text', required: true, repeated: false },
     { name: 'operands', type: 'any', required: false, repeated: true },
   ];
+  assert.equal(
+    schemaVocabulary({ x: { format: listed, ssm: table.ssm } }, '#/x').notice,
+    '#/x maps a function straight to its arguments, a deprecated form: '
+      + 'map each function to its description, arguments and return',
+  );
   assert.deepEqual(schemaVocabulary({ x: { format: listed } }, '#/x').vocabulary, {
     format: {
       description: null,
@@ -257,7 +263,7 @@ test('the shipped schema of the table is a draft 2020-12 schema stating the argu
 
 test('a signature names each argument, its type, whether it is optional or repeated, and what it returns', () => {
   assert.equal(signatureText('format', table.format), 'format(layout: text, ...operands?: any): text');
-  assert.equal(signatureText('toggle', table.toggle), 'toggle(flag: boolean, ratio?: number)');
+  assert.equal(signatureText('toggle', table.toggle), 'toggle(flag: boolean, ratio?: number): void');
 });
 
 test('a function is documented by its signature, its description, each described argument and its return', () => {
@@ -265,10 +271,10 @@ test('a function is documented by its signature, its description, each described
     '```\nformat(layout: text, ...operands?: any): text\n```',
     'Mock format function.',
     '- `layout`: The mock layout.\n- `operands`: The mock operands.',
-    '*Returns:* `text`: The mock formatted text.',
+    '*Returns:* The mock formatted text.',
   ].join('\n\n'));
   const undescribed = { description: null, arguments: [{ ...table.ssm.arguments[0], description: null }], return: null };
-  assert.equal(functionDocumentationOf('ssm', undescribed), '```\nssm(parameter: text)\n```\n\n*Returns:* none');
+  assert.equal(functionDocumentationOf('ssm', undescribed), '```\nssm(parameter: text): void\n```\n\n*Returns:* `void`');
   const typedOnly = { ...undescribed, return: { type: 'text', description: null } };
   assert.equal(functionDocumentationOf('ssm', typedOnly), '```\nssm(parameter: text): text\n```\n\n*Returns:* `text`');
 });
