@@ -1183,28 +1183,103 @@ test('with no splat operator, a call written as a tag binds its arguments by the
   );
 });
 
-test('a key an overlay include reads is the include, never a call, and keeps its schema hover', async () => {
+test('a macro the schema\'s table publishes is called beside sibling keys by its suffixed name, '
+  + 'and hover documents what it expands to', async () => {
   const text = [
+    'Resources:',
+    '  Fn::ForEach::Topics:',
+    '    - TopicName',
+    '    - [MockA, MockB]',
+    '    - TopicMock:',
+    '        Type: mock-type',
+    '  MockBucket:',
+    '    Type: mock-type',
+    '  Fn::ForEach::Queues: [QueueName, [MockC]]',
+    '',
+  ].join('\n');
+  const macroArgument = (name, type) => ({
+    name,
+    type,
+    required: true,
+    repeated: false,
+    description: `The mock ${name}.`,
+  });
+  const tableSchema = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    'x-yaml-dsl-functions': {
+      ForEach: {
+        description: 'Repeats the mock fragment.',
+        arguments: [
+          macroArgument('identifier', 'text'),
+          macroArgument('collection', 'list'),
+          macroArgument('fragment', 'map'),
+        ],
+        macro: { kind: 'loop', name_suffix_pattern: '::[A-Za-z0-9]+' },
+      },
+    },
+  });
+  const tableConfig = configText(dslEntry('mock-template', {
+    schema_search_paths: ['https://example.test/fallback.json'],
+    scopes: { LOGICAL_ID: scope() },
+    declarations: [declaration('$.Resources.*', 'LOGICAL_ID')],
+    function: {
+      definitions: ['schema'],
+      call_result_reference_positions: [],
+      calls_not_allowed_at: [],
+      marker_function: { call_marker: 'Fn::', splat_operator: null, calls_without_name_allowed: true },
+    },
+  }));
+  const ws = createWorkspace({
+    readFile: async (filePath) => (filePath === common ? text : null),
+    fetchText: async () => tableSchema,
+  });
+  await ws.setConfigs([{ text: tableConfig, dir: '/repo' }]);
+  await ws.sync(`file://${common}`, common, text);
+  const problems = ws.problems(`file://${common}`).filter((problem) => problem.severity === 'error');
+  assert.deepEqual(problems.map((problem) => [problem.message, problem.range.start.line]), [
+    ['ForEach takes 3 arguments, given 2', 8],
+  ]);
+  assert.equal(
+    ws.hover(`file://${common}`, at(text, 'ForEach::Topics')).contents.value,
+    '```\nmacro ForEach(identifier: text, collection: list, fragment: map)\n```\n\nRepeats the mock fragment.\n\n'
+      + '- `identifier`: The mock identifier.\n- `collection`: The mock collection.\n'
+      + '- `fragment`: The mock fragment.\n\n'
+      + '*Expands to:* `fragment` once per item of `collection`, the item standing for `identifier`.',
+  );
+});
+
+test('an include\'s key is a function_call macro call, at its marked and unmarked keys, '
+  + 'its callee\'s arguments bound by name and its callee documented', async () => {
+  const text = [
+    'Transform: [Mock::Registered, Mock::Include]',
     'Resources:',
     '  Fn::Transform:',
     '    Name: Mock::Include',
     '    Parameters: { Location: s3://mock-bucket/mock.yaml }',
     '  MockBucket:',
-    '    Fn::Transform: { Name: Mock::Macro }',
+    '    Fn::Transform: { Name: Mock::Registered }',
     '    Other: x',
     '',
   ].join('\n');
+  const mockArgument = (name, type, required) => ({
+    name,
+    type,
+    required,
+    repeated: false,
+    description: `The mock ${name}.`,
+  });
   const includeSchema = JSON.stringify({
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     'x-yaml-dsl-functions': {
+      'Mock::Include': {
+        description: 'Includes the mock snippet.',
+        arguments: [mockArgument('Location', 'text', true)],
+        macro: { kind: 'merge' },
+      },
       Transform: {
         description: 'Calls the mock macro.',
-        arguments: [{ name: 'macro', type: 'map', required: true, repeated: false, description: 'The mock macro.' }],
-      },
-    },
-    properties: {
-      Resources: {
-        properties: { 'Fn::Transform': { description: 'The mock include or macro call.' } },
+        arguments: [mockArgument('Name', 'text', true), mockArgument('Parameters', 'map', false)],
+        macro: { kind: 'function_call', unmarked_key_paths: ['$.Transform'] },
       },
     },
   });
@@ -1235,9 +1310,16 @@ test('a key an overlay include reads is the include, never a call, and keeps its
   await ws.sync(`file://${common}`, common, text);
   const problems = ws.problems(`file://${common}`).filter((problem) => problem.severity === 'error');
   assert.deepEqual(problems.map((problem) => [problem.message, problem.range.start.line]), [
-    ['a call with no name must be the only key of its map', 5],
+    ['Mock::Include needs argument Location', 0],
   ]);
-  assert.match(ws.hover(`file://${common}`, { line: 1, character: 4 }).contents.value, /The mock include or macro call\./);
+  const hoverAt = (needle) => ws.hover(`file://${common}`, at(text, needle)).contents.value;
+  const transformSignature = /^```\nmacro Transform\(Name: text, Parameters\?: map\)\n```/;
+  assert.match(hoverAt('Transform: ['), transformSignature);
+  assert.match(hoverAt('Transform:\n    Name'), transformSignature);
+  const includeDocumentation = hoverAt('Mock::Include\n');
+  assert.match(includeDocumentation, /^```\nmacro Mock::Include\(Location: text\)\n```\n\nIncludes the mock snippet\./);
+  const includeExpansion = /\*Expands to:\* the map holding the call, merged over the content at `Location`\./;
+  assert.match(includeDocumentation, includeExpansion);
 });
 
 test('a function table in the deprecated argument-list form is an info on the modeline, its calls still checked', async () => {

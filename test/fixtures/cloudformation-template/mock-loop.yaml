@@ -1,0 +1,10 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::LanguageExtensions
+Resources:
+  Fn::ForEach::Topics:
+    - TopicName
+    - [MockA, MockB]
+    - Topic&{TopicName}:
+        Type: AWS::SNS::Topic
+  MockQueue:
+    Type: AWS::SQS::Queue

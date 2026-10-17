@@ -11,6 +11,8 @@ const {
   signatureText,
   functionDocumentationOf,
   callProblems,
+  unmarkedCallsOf,
+  calleeNamesOf,
 } = require('../lib/function-calls');
 
 const markerFunction = { callMarker: 'fn.', splatOperator: '*', callsWithoutNameAllowed: true };
@@ -178,6 +180,260 @@ test('with no splat operator, the function table decides how a call value binds 
   ]);
 });
 
+const loopMacro = {
+  ...mockFunction(
+    'ForEach',
+    mockArgument('identifier', 'text', true, false),
+    mockArgument('collection', 'list', true, false),
+    mockArgument('fragment', 'map', true, false),
+  ),
+  macro: { kind: 'loop', nameSuffixPattern: '::[A-Za-z0-9]+', unmarkedKeyPaths: [] },
+};
+
+test('a macro call stands as a whole key among siblings, kept distinct by its name suffix', () => {
+  const tableMarker = { callMarker: 'Fn::', splatOperator: null, callsWithoutNameAllowed: true };
+  const tableConfig = { ...functionConfig, callsNotAllowedAt: [], markerFunction: tableMarker };
+  const withMacro = {
+    ForEach: loopMacro,
+    Join: mockFunction(
+      'Join',
+      mockArgument('delimiter', 'text', true, false),
+      mockArgument('values', 'list', true, false),
+    ),
+  };
+  const problemsWith = (written, vocabularyTable, config = tableConfig) => (
+    problemsFor(written, { table: vocabularyTable, complete: true }, config)
+  );
+  const text = [
+    'Resources:',
+    '  Fn::ForEach::Topics:',
+    '    - TopicName',
+    '    - [MockA, MockB]',
+    '    - Topic${TopicName}:',
+    '        Type: mock-type',
+    '  Fn::ForEach::Queues: [QueueName, [MockC], { "Queue${QueueName}": { Type: mock-type } }]',
+    '  MockBucket:',
+    '    Type: mock-type',
+    'unsuffixed:',
+    '  Fn::ForEachMock: [x, [1], {}]',
+    '  other: 1',
+    'short:',
+    '  Fn::ForEach::Items: [x, [1]]',
+    'beside:',
+    '  Fn::Join: [",", [x]]',
+    '  other: 1',
+    '',
+  ].join('\n');
+  assert.deepEqual(problemsWith(text, withMacro), [
+    'a call with no name must be the only key of its map',
+    'ForEach takes 3 arguments, given 2',
+    'a call with no name must be the only key of its map',
+  ]);
+  const suffixed = 'x:\n  Fn::ForEach::Topics: [x, [1], {}]\n';
+  assert.deepEqual(problemsWith('x:\n  Fn::ForEachMock: [x, [1], {}]\n', withMacro), ['unknown function ForEachMock']);
+  const unsuffixedMacro = { ForEach: { ...loopMacro, macro: { kind: 'loop', nameSuffixPattern: null } } };
+  assert.deepEqual(problemsWith(suffixed, unsuffixedMacro), ['unknown function ForEach::Topics']);
+  const refusing = { ...tableConfig, markerFunction: { ...tableMarker, callsWithoutNameAllowed: false } };
+  assert.deepEqual(problemsWith(suffixed, withMacro, refusing), []);
+});
+
+test('a function_call macro binds its arguments by name, or takes the callee\'s name alone or a list of calls, '
+  + 'and binds the callee\'s arguments by name', () => {
+  const tableMarker = { callMarker: 'Fn::', splatOperator: null, callsWithoutNameAllowed: true };
+  const tableConfig = { ...functionConfig, callsNotAllowedAt: [], markerFunction: tableMarker };
+  const functionCallTable = {
+    Transform: {
+      ...mockFunction(
+        'Transform',
+        mockArgument('Name', 'text', true, false),
+        mockArgument('Parameters', 'map', false, false),
+      ),
+      macro: { kind: 'function_call', nameSuffixPattern: null, unmarkedKeyPaths: [] },
+    },
+    'Mock::Include': {
+      ...mockFunction('Mock::Include', mockArgument('Location', 'text', true, false)),
+      macro: { kind: 'merge', nameSuffixPattern: null, unmarkedKeyPaths: [] },
+    },
+  };
+  const text = [
+    'Resources:',
+    '  Fn::Transform:',
+    '    Name: Mock::Include',
+    '    Parameters: { Location: s3://mock-bucket/mock.yaml }',
+    '  MockBucket:',
+    '    Fn::Transform: { Name: Mock::Registered, Extra: 1 }',
+    '    Other: x',
+    '  MockQueue:',
+    '    Fn::Transform: { Parameters: {} }',
+    '  MockTopic:',
+    '    Fn::Transform:',
+    '      Name: Mock::Include',
+    '      Parameters: { Location: [1], Unknown: x }',
+    '  MockList:',
+    '    Fn::Transform: [Mock::Registered, Mock::Include, 3]',
+    '  MockEmpty:',
+    '    Fn::Transform:',
+    '',
+  ].join('\n');
+  assert.deepEqual(problemsFor(text, { table: functionCallTable, complete: true }, tableConfig), [
+    'Transform has no argument Extra',
+    'Transform needs argument Name',
+    'Mock::Include has no argument Unknown',
+    'Mock::Include argument Location expects text',
+    'Mock::Include needs argument Location',
+    'Transform argument Name expects text',
+    'Transform needs argument Name',
+  ]);
+});
+
+test('a key at a macro\'s unmarked key path calls the macro without the call marker', () => {
+  const tableMarker = { callMarker: 'Fn::', splatOperator: null, callsWithoutNameAllowed: true };
+  const dsl = {
+    function: { ...functionConfig, callsNotAllowedAt: [], markerFunction: tableMarker },
+    scopes: {},
+    declarations: [],
+    references: [],
+    placeholder: null,
+  };
+  const transform = {
+    ...mockFunction('Transform', mockArgument('Name', 'text', true, false)),
+    macro: { kind: 'function_call', nameSuffixPattern: null, unmarkedKeyPaths: [parseAt('$.Transform')] },
+  };
+  const doc = analyzeDocument('Transform: Mock::Macro\nResources:\n  Transform: x\n', '/repo/mock.yml', dsl);
+  const calls = unmarkedCallsOf(doc.tree, { Transform: transform, ssm: table.ssm });
+  assert.deepEqual(calls.map((call) => [call.functionName, call.documentPath, call.keyRange.start.line]), [
+    ['Transform', ['Transform'], 0],
+  ]);
+  assert.deepEqual(unmarkedCallsOf(doc.tree, { ssm: { ...table.ssm, macro: null } }), []);
+  assert.deepEqual(calleeNamesOf(calls[0], transform), [
+    { name: 'Mock::Macro', range: doc.tree.entries[0].value.range },
+  ]);
+});
+
+test('a macro is a table entry with a macro object, taking no return, its arguments fitting its kind', () => {
+  const published = (entry) => schemaVocabulary({ x: { f: entry } }, '#/x');
+  const loopEntry = {
+    ...mockFunction(
+      'f',
+      mockArgument('identifier', 'text', true, false),
+      mockArgument('collection', 'list', true, false),
+      mockArgument('fragment', 'map', true, false),
+    ),
+    macro: { kind: 'loop', name_suffix_pattern: '::[A-Za-z0-9]+' },
+  };
+  assert.deepEqual(published(loopEntry).vocabulary.f.macro, {
+    kind: 'loop',
+    nameSuffixPattern: '::[A-Za-z0-9]+',
+    unmarkedKeyPaths: [],
+  });
+  const unsuffixed = { ...loopEntry, macro: { kind: 'loop', unmarked_key_paths: ['$.Mock'] } };
+  assert.deepEqual(published(unsuffixed).vocabulary.f.macro, {
+    kind: 'loop',
+    nameSuffixPattern: null,
+    unmarkedKeyPaths: [[{ kind: 'name', key: 'Mock' }]],
+  });
+  for (const keyPaths of ['$.Mock', ['$'], ['mock'], [1]]) {
+    assert.equal(
+      published({ ...loopEntry, macro: { kind: 'loop', unmarked_key_paths: keyPaths } }).problem,
+      '#/x f.macro.unmarked_key_paths must be a list of JSONPaths',
+    );
+  }
+  assert.equal(published({ ...loopEntry, macro: 1 }).problem, '#/x f.macro must be a mapping with kind');
+  assert.equal(
+    published({ ...loopEntry, macro: { kind: 'mock-kind' } }).problem,
+    '#/x f.macro.kind must be one of function_call, conditional, merge, loop',
+  );
+  assert.equal(
+    published({ ...loopEntry, macro: { kind: 'loop', name_suffix_pattern: '(' } }).problem,
+    '#/x f.macro.name_suffix_pattern must be a regular expression',
+  );
+  assert.equal(
+    published({ ...loopEntry, return: { type: 'map', description: 'The mock expansion.' } }).problem,
+    '#/x f is a macro, so it takes no return',
+  );
+  const withArguments = (kind, ...functionArguments) => ({
+    ...mockFunction('f', ...functionArguments),
+    macro: { kind },
+  });
+  const textArgument = (name) => mockArgument(name, 'text', true, false);
+  const fitting = [
+    withArguments('function_call', textArgument('Name'), mockArgument('Parameters', 'map', false, false)),
+    withArguments('function_call', textArgument('Name')),
+    withArguments('conditional', textArgument('condition'), mockArgument('results', 'any', true, true)),
+    withArguments('merge', textArgument('Location')),
+    withArguments('merge', mockArgument('content', 'map', true, false)),
+    withArguments(
+      'loop',
+      mockArgument('identifier', 'any', true, false),
+      mockArgument('items', 'any', true, false),
+      mockArgument('body', 'any', true, false),
+    ),
+  ];
+  for (const entry of fitting) assert.equal(published(entry).problem, null, entry.macro.kind);
+  const unfitting = [
+    [
+      withArguments('function_call', mockArgument('Name', 'map', true, false)),
+      "the callee's name (text), then the callee's arguments (map)",
+    ],
+    [withArguments('conditional', textArgument('condition')), 'the condition, then every result'],
+    [
+      withArguments('merge', mockArgument('Location', 'list', true, false)),
+      "the content's location (text) or the content (map)",
+    ],
+    [
+      withArguments('merge', mockArgument('items', 'text', true, true)),
+      "the content's location (text) or the content (map)",
+    ],
+    [
+      withArguments('loop', textArgument('identifier')),
+      'the identifier (text), the collection (list), the body (map)',
+    ],
+  ];
+  for (const [entry, wording] of unfitting) {
+    assert.equal(published(entry).problem, `#/x f is a ${entry.macro.kind} macro, whose arguments are ${wording}`);
+  }
+});
+
+test('a macro is documented by its signature after macro, its arguments and what it expands to', () => {
+  const signature = 'macro ForEach(identifier: text, collection: list, fragment: map)';
+  assert.equal(signatureText('ForEach', loopMacro), signature);
+  assert.equal(functionDocumentationOf('ForEach', loopMacro), [
+    `\`\`\`\n${signature}\n\`\`\``,
+    'Mock ForEach function.',
+    '- `identifier`: The mock identifier.\n- `collection`: The mock collection.\n- `fragment`: The mock fragment.',
+    '*Expands to:* `fragment` once per item of `collection`, the item standing for `identifier`.',
+  ].join('\n\n'));
+  const expansionOf = (kind, ...typedNames) => {
+    const entry = {
+      description: null,
+      arguments: typedNames.map(([name, type]) => ({ name, type, required: true, repeated: false, description: null })),
+      return: null,
+      macro: { kind, nameSuffixPattern: null },
+    };
+    return functionDocumentationOf('f', entry).split('\n\n').pop();
+  };
+  assert.equal(
+    expansionOf('function_call', ['Name', 'text'], ['Parameters', 'map']),
+    '*Expands to:* a call of the macro or function `Name` names, `Parameters` its arguments by name.',
+  );
+  assert.equal(
+    expansionOf('function_call', ['Name', 'text']),
+    '*Expands to:* a call of the macro or function `Name` names.',
+  );
+  assert.equal(
+    expansionOf('conditional', ['condition', 'text'], ['a', 'any'], ['b', 'any'], ['c', 'any']),
+    '*Expands to:* the result `condition` chooses among `a`, `b` and `c`.',
+  );
+  assert.equal(
+    expansionOf('merge', ['Location', 'text']),
+    '*Expands to:* the map holding the call, merged over the content at `Location`.',
+  );
+  assert.equal(
+    expansionOf('merge', ['content', 'map']),
+    '*Expands to:* the map holding the call, merged over `content`.',
+  );
+});
+
 test("Terraform's function metadata becomes a vocabulary", () => {
   const vocabulary = terraformVocabulary({
     function_signatures: {
@@ -201,6 +457,7 @@ test("Terraform's function metadata becomes a vocabulary", () => {
       { name: 'lists', type: 'list', required: false, repeated: true, description: 'The mock lists.' },
     ],
     return: { type: 'text', description: null },
+    macro: null,
   });
   const argumentTypesOf = (functionName) => vocabulary[functionName].arguments.map((parameter) => parameter.type);
   assert.deepEqual(argumentTypesOf('jsonencode'), ['any']);
@@ -208,6 +465,7 @@ test("Terraform's function metadata becomes a vocabulary", () => {
     description: null,
     arguments: [{ name: 'numbers', type: 'number', required: false, repeated: true, description: null }],
     return: null,
+    macro: null,
   });
   assert.deepEqual(argumentTypesOf('lookup'), ['map', 'boolean']);
   assert.deepEqual(argumentTypesOf('tuplefn'), ['list', 'map']);
@@ -219,7 +477,7 @@ test("Terraform's function metadata becomes a vocabulary", () => {
 test('a schema publishes a function table at a pointer, held to the documented format', () => {
   const schema = { 'x-yaml-dsl-functions': table, 'x-a~b/c': { ssm: table.ssm } };
   const readTable = Object.fromEntries(Object.entries(table)
-    .map(([functionName, entry]) => [functionName, { ...entry, return: entry.return || null }]));
+    .map(([functionName, entry]) => [functionName, { ...entry, return: entry.return || null, macro: null }]));
   assert.deepEqual(schemaVocabulary(schema, '#/x-yaml-dsl-functions').vocabulary, readTable);
   assert.deepEqual(schemaVocabulary(schema, '#/x-a~0b~1c').vocabulary, { ssm: readTable.ssm });
   assert.deepEqual(schemaVocabulary(null, '#/x'), { vocabulary: null, problem: null, notice: null });
@@ -284,6 +542,7 @@ test('a function mapped straight to its argument list is still read, with no des
       description: null,
       arguments: listed.map((parameter) => ({ ...parameter, description: null })),
       return: null,
+      macro: null,
     },
   });
   assert.equal(
@@ -301,6 +560,11 @@ test('the shipped schema of the table is a draft 2020-12 schema stating the argu
   assert.equal(validate({ format: [{ name: 'layout', type: 'text', required: true, repeated: false }] }), true);
   assert.equal(validate({ format: { arguments: [] } }), false);
   assert.equal(validate({ format: { ...table.format, return: { type: 'text' } } }), false);
+  const loopEntry = { ...loopMacro, macro: { kind: 'loop', name_suffix_pattern: '::[A-Za-z0-9]+' } };
+  assert.equal(validate({ ForEach: loopEntry }), true, JSON.stringify(validate.errors));
+  assert.equal(validate({ ForEach: { ...loopEntry, macro: { kind: 'mock-kind' } } }), false);
+  const returned = { type: 'map', description: 'The mock expansion.' };
+  assert.equal(validate({ ForEach: { ...loopEntry, return: returned } }), false);
 });
 
 test('a signature names each argument, its type, whether it is optional or repeated, and what it returns', () => {

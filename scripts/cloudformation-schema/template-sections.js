@@ -28,8 +28,11 @@ function exactlyOneKey(properties, description) {
 
 const FUNCTION_CALL_MARKER = 'Fn::';
 const CONDITION_FUNCTION_NAMES = ['And', 'Equals', 'Not', 'Or'];
-const INTRINSIC_FUNCTION_NAMES = Object.keys(FUNCTION_TABLE)
-  .filter((name) => !CONDITION_FUNCTION_NAMES.includes(name));
+const KEY_MACRO_KINDS = ['loop', 'merge'];
+const INTRINSIC_FUNCTION_NAMES = Object.entries(FUNCTION_TABLE)
+  .filter(([name, entry]) => !CONDITION_FUNCTION_NAMES.includes(name)
+    && !(entry.macro && KEY_MACRO_KINDS.includes(entry.macro.kind)))
+  .map(([name]) => name);
 
 function callKeysOf(functionNames) {
   return Object.fromEntries(functionNames.map((name) => [`${FUNCTION_CALL_MARKER}${name}`, {}]));

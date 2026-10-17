@@ -51,4 +51,34 @@ suite('CloudFormation templates', () => {
     const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-template.yaml'))).document;
     await hoverTextHolds(doc, positionInText(doc, '!GetAtt', 1),'Returns the value of an attribute of a resource');
   });
+
+  test('a Fn::ForEach loop standing among resources by its suffixed name is documented as a macro', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'))).document;
+    await hoverTextHolds(
+      doc,
+      positionInText(doc, 'ForEach::Topics'),
+      'macro ForEach(identifier: text, collection: list, fragment: map)',
+    );
+    await hoverTextHolds(
+      doc,
+      positionInText(doc, 'ForEach::Topics'),
+      '*Expands to:* `fragment` once per item of `collection`, the item standing for `identifier`.',
+    );
+  });
+
+  test('the template\'s Transform section calls the Transform macro, documented with its callee', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'))).document;
+    await hoverTextHolds(
+      doc,
+      positionInText(doc, 'Transform:'),
+      'macro Transform(Name: text, Parameters?: map)',
+    );
+    await hoverTextHolds(
+      doc,
+      positionInText(doc, 'Transform:'),
+      '*Expands to:* a call of the macro or function `Name` names, `Parameters` its arguments by name.',
+    );
+  });
 });

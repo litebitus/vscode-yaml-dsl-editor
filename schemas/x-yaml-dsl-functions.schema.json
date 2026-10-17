@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://open-vsx.org/extension/lite2073/yaml-dsl-editor/x-yaml-dsl-functions.schema.json",
   "title": "x-yaml-dsl-functions",
-  "description": "A DSL's function table: each function name maps to its description, its arguments in call order and what it returns.",
+  "description": "A DSL's function table: each function name maps to its description, its arguments in call order and what it returns, or, for a macro, what its preprocessor does with a call.",
   "type": "object",
   "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_:]*$" },
   "additionalProperties": {
@@ -16,6 +16,8 @@
       "type": "object",
       "required": ["description", "arguments"],
       "additionalProperties": false,
+      "if": { "required": ["macro"] },
+      "then": { "not": { "required": ["return"] } },
       "properties": {
         "description": { "type": "string", "minLength": 1, "description": "What the function does, in markdown." },
         "arguments": {
@@ -33,10 +35,32 @@
           "type": "object",
           "required": ["type", "description"],
           "additionalProperties": false,
-          "description": "What the function returns. Left out for a function that returns nothing.",
+          "description": "What the function returns. Left out for a function that returns nothing, and for a macro.",
           "properties": {
             "type": { "$ref": "#/$defs/valueType" },
             "description": { "type": "string", "minLength": 1, "description": "What the returned value holds, in markdown." }
+          }
+        },
+        "macro": {
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "description": "Present only on a macro: what the DSL's preprocessor does with a call.",
+          "properties": {
+            "kind": {
+              "enum": ["function_call", "conditional", "merge", "loop"],
+              "description": "What a call expands to. The kind fixes what the arguments are, in order."
+            },
+            "name_suffix_pattern": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The regular expression of the text after the macro's name that keeps sibling calls distinct. Left out, nothing follows the name."
+            },
+            "unmarked_key_paths": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^\\$." },
+              "description": "The JSONPaths of the keys that call the macro without the call marker. Left out, none."
+            }
           }
         }
       }

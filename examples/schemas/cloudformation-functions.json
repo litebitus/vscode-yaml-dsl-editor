@@ -136,6 +136,36 @@
         "description": "The value at the two keys."
       }
     },
+    "ForEach": {
+      "description": "Repeats a fragment for each item of a collection. Needs the `AWS::LanguageExtensions` transform.",
+      "arguments": [
+        {
+          "name": "identifier",
+          "type": "text",
+          "required": true,
+          "repeated": false,
+          "description": "The identifier replaced by each item in the output key and value."
+        },
+        {
+          "name": "collection",
+          "type": "list",
+          "required": true,
+          "repeated": false,
+          "description": "The collection to iterate over."
+        },
+        {
+          "name": "fragment",
+          "type": "map",
+          "required": true,
+          "repeated": false,
+          "description": "The output key and value repeated for each item."
+        }
+      ],
+      "macro": {
+        "kind": "loop",
+        "name_suffix_pattern": "::[A-Za-z0-9]+"
+      }
+    },
     "GetAZs": {
       "description": "Returns the Availability Zones of a Region in alphabetical order.",
       "arguments": [
@@ -408,19 +438,26 @@
       }
     },
     "Transform": {
-      "description": "Calls a macro to process part of the template.",
+      "description": "Calls a macro to process part of the template, or, as the template's `Transform` section, the whole template.",
       "arguments": [
         {
-          "name": "macro",
-          "type": "map",
+          "name": "Name",
+          "type": "text",
           "required": true,
           "repeated": false,
-          "description": "The macro's `Name` and its `Parameters`."
+          "description": "The macro's name: `AWS::Include`, another transform, or a macro the account registers."
+        },
+        {
+          "name": "Parameters",
+          "type": "map",
+          "required": false,
+          "repeated": false,
+          "description": "The macro's arguments, by name."
         }
       ],
-      "return": {
-        "type": "any",
-        "description": "What the macro returns in place of the call."
+      "macro": {
+        "kind": "function_call",
+        "unmarked_key_paths": ["$.Transform"]
       }
     }
   }

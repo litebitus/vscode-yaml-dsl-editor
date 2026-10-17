@@ -145,7 +145,20 @@ test('the template schema publishes every intrinsic and condition function in it
     ...Object.entries(schema.$defs.ConditionFunction.properties),
   ].filter(([key]) => key.startsWith('Fn::'));
   const calledNames = callShapes.map(([key]) => key.slice('Fn::'.length));
-  assert.deepEqual(Object.keys(published.vocabulary).sort(), calledNames.sort());
+  const standsAsValue = ([, entry]) => !entry.macro || !['loop', 'merge'].includes(entry.macro.kind);
+  const valueNames = Object.entries(published.vocabulary).filter(standsAsValue).map(([name]) => name);
+  assert.deepEqual(valueNames.sort(), calledNames.sort());
+  assert.deepEqual(published.vocabulary.ForEach.macro, {
+    kind: 'loop',
+    nameSuffixPattern: '::[A-Za-z0-9]+',
+    unmarkedKeyPaths: [],
+  });
+  assert.deepEqual(published.vocabulary.Transform.macro, {
+    kind: 'function_call',
+    nameSuffixPattern: null,
+    unmarkedKeyPaths: [[{ kind: 'name', key: 'Transform' }]],
+  });
+  assert.equal(schema.$defs.IntrinsicFunction.properties['Fn::ForEach'], undefined);
   for (const [key, shape] of callShapes.filter(([callKey]) => callKey !== 'Fn::Transform')) {
     assert.deepEqual(shape, {}, key);
   }
