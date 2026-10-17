@@ -192,6 +192,12 @@
         "aliases": [
           "YAML DSL overlay diff"
         ]
+      },
+      {
+        "id": "yaml-dsl-signature",
+        "aliases": [
+          "YAML DSL signature"
+        ]
       }
     ],
     "grammars": [
@@ -204,6 +210,11 @@
         "language": "yaml-dsl-overlay-diff",
         "scopeName": "source.yaml.dsl.overlay-diff",
         "path": "./syntaxes/yaml-dsl-overlay-diff.tmLanguage.json"
+      },
+      {
+        "language": "yaml-dsl-signature",
+        "scopeName": "source.yaml.dsl.signature",
+        "path": "./syntaxes/yaml-dsl-signature.tmLanguage.json"
       }
     ],
     "commands": [

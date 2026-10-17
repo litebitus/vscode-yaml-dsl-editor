@@ -141,13 +141,24 @@ The template schema is generated from them. The template's own sections are writ
 | every resource type | `Type` takes one of them, and one `if`/`then` per service, `AWS::<service>`, holds one per type of the service, which gives `Properties` that type's entry |
 | a read-only property | left out of `Properties`; it is an attribute, and a reference to it reads its schema in place |
 | a deprecated property | marked `deprecated` |
-| a property value | an `if` on `IntrinsicFunctionCall`, a map of one intrinsic function's name: then an intrinsic function, else its own schema, so the document selects the branch its fields and errors come from |
+| a property value | an `if` on `ref_or_func`, which is `ref` for `Ref` and `func` for a function call: then that, else its own schema, so the document selects the branch its fields and errors come from |
 | a pattern | kept when the `u` flag reads it, else without its identity escapes; one neither reads is left out and listed when the generator runs |
 | a description | carried as written, so hover shows AWS's text |
 
 A value the template reference leaves open, such as an output's `Value`, refers to one shared definition, `AnyValue`: an intrinsic function call at any depth in it stands in for a value.
 
-The function table is maintained by hand at `examples/schemas/cloudformation-functions.json`, from the intrinsic function reference and the transform reference: each intrinsic and condition function with its description, its arguments and its return, and each macro with its `macro` object. AWS publishes no machine-readable source for them, and they change rarely. The generator merges the table into the schema at `#/x-yaml-dsl-functions`. `IntrinsicFunction` and `ConditionFunction` name the calls and leave their arguments to the table.
+The function table is maintained by hand at `examples/schemas/cloudformation-functions.json`, from the intrinsic function reference and the transform reference: each intrinsic and condition function with its description, its arguments and its return, and each macro with its `macro` object. AWS publishes no machine-readable source for them, and they change rarely. The generator merges the table into the schema at `#/x-yaml-dsl-functions`. `func` and `condition_func` name the calls and leave their arguments to the table.
+
+The schema's own definitions take the engine's words:
+
+| Definition | Is |
+|---|---|
+| `ref` | `Ref` alone |
+| `func` | one function call |
+| `ref_or_func` | a property value written as either |
+| `condition_ref` | `Condition` alone |
+| `condition_func` | one call of a condition function |
+| `condition_ref_or_func` | a `Conditions` entry, written as either |
 
 `Type` also takes a custom resource type, `Custom::<name>`, and a registry type, `<organization>::<service>::<resource>`, whose `Properties` the schema leaves open.
 

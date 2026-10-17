@@ -690,13 +690,13 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 | Part | Shows |
 |---|---|
-| signature | the field's name, its effective forms after following `$ref`, `allOf`, each `anyOf`/`oneOf` alternative and the field's own `if` branch the value selects, each named by the definition the field refers to or by its type, and its requirement; a form adding its own type or properties to a definition is named by its type |
+| signature | the field's name and its requirement as code, and its effective forms in italics after following `$ref`, `allOf`, each `anyOf`/`oneOf` alternative and the field's own `if` branch the value selects, each named by the definition the field refers to or by its type; a definition whose own `if` branch the value selects is named by that branch's definition, and a form adding its own type or properties to a definition is named by its type |
 | description | the description kept at the field, rendered as markdown; the composite's description is the value shape and is not shown |
 | accepts | one line per form, with its constraints, when the field has more than one form |
 | tags | one line per constraint, when it has one form: values, default, pattern, bounds, lengths, items, dependencies, deprecated |
 | conditions | each `if`/`then`/`else` on the object, as when and otherwise; and on a field, what its parent's dependencies require when it is set, and its parent's conditions that name it, cut to what they say about the field |
 
-- With the document's value at hand, the conditions are the branches the value selects, as when or unless, each followed into the conditions it holds. A branch whose condition or consequence it cannot read in words is left out.
+- With the document's value at hand, the conditions are the branches the value selects, as when or unless, each followed into the conditions it holds. A branch whose condition or consequence it cannot read in words is left out, and so is a branch that only refers to a definition, which the signature already names.
 - A consequence that gives a field a referenced schema reads as that field being the definition, such as `` `Properties` is a `AWS::S3::Bucket` ``.
 - The draft's renderer reads its own keywords, as its parser and validator do; without a value, a part it cannot read in words names a condition the schema states.
 - A key that sets a field of its entry, by the `validator`'s `child_values_from_parent_key`, documents its entry, then the field it sets, as that field's own tooltip would, under `*Sets* <field> *to* <value>:`. An entry that writes the field itself documents its entry alone.
@@ -1247,7 +1247,7 @@ A placeholder splices a value into a scalar or a key, whole or as part of a long
 - While a source has not answered the vocabulary is open, and an unknown function is a problem only once every source has.
 - A key that calls a macro is a macro call, never a function call.
 - Every call is checked: its function against the vocabulary, its argument count against the function's arity, and each literal argument against its type. A reference or a call standing as an argument is not typed, a reference written as its tag's key included.
-- Hover on a function shows its signature, with the return type, then its description, each argument's description and the return's description, or its type where it has none, read as markdown. A function with no `return` returns `void`.
+- Hover on a function shows its signature, colored by the extension's own signature language, `yaml-dsl-signature`, with the return type, then its description, each argument's description and the return's description, or its type where it has none, read as markdown. A function with no `return` returns `void`.
 
 ## The function table
 

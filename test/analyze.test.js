@@ -37,7 +37,7 @@ test('hover and definition outside a reference or a field are empty', () => {
   const described = hoverAt(doc, { line: 0, character: 0 }, stack, {
     properties: { name: { description: 'the name' } },
   });
-  assert.equal(described.contents.value, '```\nname    [optional]\n```\n\nthe name');
+  assert.equal(described.contents.value, '`name`    `[optional]`\n\nthe name');
 });
 
 test('a deprecated field hovers its description, and its keys are listed with a warning message naming them', () => {
@@ -52,15 +52,15 @@ test('a deprecated field hovers its description, and its keys are listed with a 
   const schemaOf = (draftUri) => ({ $schema: draftUri, properties: { mocktype: { properties: fields } } });
   const draft2020 = schemaOf('https://json-schema.org/draft/2020-12/schema');
   const hoverValue = (line, schema) => hoverAt(doc, { line, character: 2 }, stack, schema).contents.value;
-  assert.equal(hoverValue(1, draft2020), '```\nold    [optional]\n```\n\nuse plain\n\n*Deprecated*');
-  assert.equal(hoverValue(2, draft2020), '```\nplain    [optional]\n```\n\nthe plain field');
-  assert.equal(hoverValue(3, draft2020), '```\nbare    [optional]\n```\n\n*Deprecated*');
+  assert.equal(hoverValue(1, draft2020), '`old`    `[optional]`\n\nuse plain\n\n*Deprecated*');
+  assert.equal(hoverValue(2, draft2020), '`plain`    `[optional]`\n\nthe plain field');
+  assert.equal(hoverValue(3, draft2020), '`bare`    `[optional]`\n\n*Deprecated*');
   assert.deepEqual(deprecatedFields(doc, draft2020), [
     { range: rangeOf(text, 'old'), fieldRange: rangeOf(text, 'old: 1'), message: '`old` is deprecated: use plain' },
     { range: rangeOf(text, 'bare'), fieldRange: rangeOf(text, 'bare: 3'), message: '`bare` is deprecated' },
   ]);
   const draft07 = schemaOf('http://json-schema.org/draft-07/schema#');
-  assert.equal(hoverValue(1, draft07), '```\nold    [optional]\n```\n\nuse plain');
+  assert.equal(hoverValue(1, draft07), '`old`    `[optional]`\n\nuse plain');
   assert.deepEqual(deprecatedFields(doc, draft07), []);
 });
 
@@ -210,13 +210,13 @@ test('a field hover documents it: a signature with its shape and requirement, it
   assert.deepEqual(documentationAt('mode'), {
     kind: 'markdown',
     value: [
-      '```\nmode: string    [optional]\n```',
+      '`mode`: *string*    `[optional]`',
       'The `mode`, *one* per line.\nSecond line.',
       '*One of:* `"fast"`, `"slow"`  \n*Default:* `"fast"`',
     ].join('\n\n'),
   });
   assert.equal(documentationAt('threshold').value, [
-    '```\nthreshold: number | ref | local    [required]\n```',
+    '`threshold`: *number | ref | local*    `[required]`',
     [
       '*Accepts:*',
       '- `number`: *Minimum:* `1`',
@@ -226,13 +226,13 @@ test('a field hover documents it: a signature with its shape and requirement, it
   ].join('\n\n'));
   assert.equal(
     documentationAt('mock:').value,
-    '```\nmock: object    [optional]\n```\n\n*When* `mode` is `"slow"`: `tags` must not be set.',
+    '`mock`: *object*    `[optional]`\n\n*When* `mode` is `"slow"`: `tags` must not be set.',
   );
   assert.equal(
     documentationAt('tags').value,
-    '```\ntags: array    [optional]\n```\n\n*Items:* `string`  \n*When* `mode` is `"slow"`: must not be set.',
+    '`tags`: *array*    `[optional]`\n\n*Items:* `string`  \n*When* `mode` is `"slow"`: must not be set.',
   );
-  assert.equal(documentationAt('mock-a').value, '```\ntags[0]: string\n```\n\n*Pattern:* `^mock-`');
+  assert.equal(documentationAt('mock-a').value, '`tags[0]`: *string*\n\n*Pattern:* `^mock-`');
 });
 
 test('a hover on a valued target shows its value, and a builtin names its scope', () => {

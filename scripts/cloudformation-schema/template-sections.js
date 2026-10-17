@@ -1,4 +1,4 @@
-const { orIntrinsicFunction } = require('./provider-schemas');
+const { orFunctionCallOrReference } = require('./provider-schemas');
 const { 'x-yaml-dsl-functions': FUNCTION_TABLE } = require('../../examples/schemas/cloudformation-functions.json');
 
 const TEMPLATE_FORMAT_VERSION = '2010-09-09';
@@ -8,12 +8,12 @@ const CUSTOM_RESOURCE_TYPE_PATTERN = '^Custom::[A-Za-z0-9_@-]{1,60}$';
 const REGISTRY_RESOURCE_TYPE_PATTERN = '^(?!AWS::|Alexa::)'
   + '[A-Za-z0-9]{2,64}::[A-Za-z0-9]{2,64}::[A-Za-z0-9]{2,64}(::MODULE)?$';
 
-const conditionFunction = { $ref: '#/$defs/ConditionFunction' };
+const conditionReferenceOrFunctionCall = { $ref: '#/$defs/condition_ref_or_func' };
 const transformValue = { $ref: '#/$defs/Transform' };
 const forEachLoop = { $ref: '#/$defs/ForEach' };
 const anyValue = { $ref: '#/$defs/AnyValue' };
-const stringOrFunction = orIntrinsicFunction({ type: 'string' });
-const listOrFunction = orIntrinsicFunction({ type: 'array' });
+const stringOrFunction = orFunctionCallOrReference({ type: 'string' });
+const listOrFunction = orFunctionCallOrReference({ type: 'array' });
 
 function exactlyOneKey(properties, description) {
   return {
@@ -29,7 +29,7 @@ function exactlyOneKey(properties, description) {
 const FUNCTION_CALL_MARKER = 'Fn::';
 const CONDITION_FUNCTION_NAMES = ['And', 'Equals', 'Not', 'Or'];
 const KEY_MACRO_KINDS = ['loop', 'merge'];
-const INTRINSIC_FUNCTION_NAMES = Object.entries(FUNCTION_TABLE)
+const VALUE_FUNCTION_NAMES = Object.entries(FUNCTION_TABLE)
   .filter(([name, entry]) => !CONDITION_FUNCTION_NAMES.includes(name)
     && !(entry.macro && KEY_MACRO_KINDS.includes(entry.macro.kind)))
   .map(([name]) => name);
@@ -38,23 +38,39 @@ function callKeysOf(functionNames) {
   return Object.fromEntries(functionNames.map((name) => [`${FUNCTION_CALL_MARKER}${name}`, {}]));
 }
 
-const INTRINSIC_FUNCTIONS = {
-  Ref: {
-    description: 'Returns the value of the specified parameter or resource.',
-    type: 'string',
-  },
-  ...callKeysOf(INTRINSIC_FUNCTION_NAMES),
+const FUNCTION_CALLS = {
+  ...callKeysOf(VALUE_FUNCTION_NAMES),
   'Fn::Transform': {
     description: 'A macro call; `Name: AWS::Include` includes the snippet at `Parameters.Location` in its place.',
     anyOf: [transformValue, { type: 'array', items: transformValue }],
   },
 };
 
-const CONDITION_FUNCTIONS = {
-  ...callKeysOf(CONDITION_FUNCTION_NAMES),
-  Condition: {
-    description: 'The condition of that name in the Conditions section.',
-    type: 'string',
+const REFERENCE = {
+  description: 'A reference to a parameter or a resource by its logical ID, or to a pseudo parameter.',
+  type: 'object',
+  required: ['Ref'],
+  additionalProperties: false,
+  properties: {
+    Ref: {
+      description: 'Returns the value of the specified parameter or resource.',
+      type: 'string',
+    },
+  },
+};
+
+const CONDITION_FUNCTIONS = callKeysOf(CONDITION_FUNCTION_NAMES);
+
+const CONDITION_REFERENCE = {
+  description: 'A reference to a condition in the Conditions section, by its name.',
+  type: 'object',
+  required: ['Condition'],
+  additionalProperties: false,
+  properties: {
+    Condition: {
+      description: 'The condition of that name in the Conditions section.',
+      type: 'string',
+    },
   },
 };
 
@@ -70,7 +86,7 @@ const RESOURCE_ATTRIBUTES = {
   },
   DeletionPolicy: {
     description: 'What CloudFormation does with the resource when it is deleted from the stack; Delete by default.',
-    ...orIntrinsicFunction({ enum: ['Delete', 'Retain', 'RetainExceptOnCreate', 'Snapshot'] }),
+    ...orFunctionCallOrReference({ enum: ['Delete', 'Retain', 'RetainExceptOnCreate', 'Snapshot'] }),
   },
   DependsOn: {
     description: 'The resources created before this one.',
@@ -86,7 +102,7 @@ const RESOURCE_ATTRIBUTES = {
   },
   UpdateReplacePolicy: {
     description: 'What CloudFormation does with the old resource when an update replaces it; Delete by default.',
-    ...orIntrinsicFunction({ enum: ['Delete', 'Retain', 'Snapshot'] }),
+    ...orFunctionCallOrReference({ enum: ['Delete', 'Retain', 'Snapshot'] }),
   },
 };
 
@@ -253,7 +269,10 @@ function templateSectionsOf(resourceTypes) {
         type: 'object',
         additionalProperties: { type: 'object', additionalProperties: { type: 'object' } },
       },
-      Conditions: logicalIdMap('Conditions that decide whether resources and outputs are created.', conditionFunction),
+      Conditions: logicalIdMap(
+        'Conditions that decide whether resources and outputs are created.',
+        conditionReferenceOrFunctionCall,
+      ),
       Transform: {
         description: 'The macros that process the whole template, such as AWS::Serverless-2016-10-31 or AWS::Include.',
         anyOf: [
@@ -263,7 +282,7 @@ function templateSectionsOf(resourceTypes) {
         ],
       },
       Resources: logicalIdMap('The resources of the stack.', { $ref: '#/$defs/Resource' }, {
-        'Fn::Transform': INTRINSIC_FUNCTIONS['Fn::Transform'],
+        'Fn::Transform': FUNCTION_CALLS['Fn::Transform'],
       }),
       Outputs: {
         ...logicalIdMap('Values of the stack, at most 200.', { $ref: '#/$defs/Output' }),
@@ -277,16 +296,21 @@ function templateSectionsOf(resourceTypes) {
       Output: OUTPUT,
       Transform: TRANSFORM,
       ForEach: FOR_EACH,
-      IntrinsicFunction: exactlyOneKey(INTRINSIC_FUNCTIONS, 'An intrinsic function, whose value is its arguments.'),
-      IntrinsicFunctionCall: {
-        description: 'A value written as one intrinsic function, by its name.',
-        type: 'object',
-        minProperties: 1,
-        maxProperties: 1,
-        propertyNames: { enum: Object.keys(INTRINSIC_FUNCTIONS) },
+      func: exactlyOneKey(FUNCTION_CALLS, 'A function call, whose value is its arguments.'),
+      ref: REFERENCE,
+      ref_or_func: {
+        if: { required: ['Ref'] },
+        then: { $ref: '#/$defs/ref' },
+        else: { $ref: '#/$defs/func' },
       },
-      ConditionFunction: exactlyOneKey(CONDITION_FUNCTIONS, 'A condition function, whose value is its arguments.'),
-      AnyValue: orIntrinsicFunction({ additionalProperties: anyValue, items: anyValue }),
+      condition_ref: CONDITION_REFERENCE,
+      condition_func: exactlyOneKey(CONDITION_FUNCTIONS, 'A condition function call, whose value is its arguments.'),
+      condition_ref_or_func: {
+        if: { required: ['Condition'] },
+        then: { $ref: '#/$defs/condition_ref' },
+        else: { $ref: '#/$defs/condition_func' },
+      },
+      AnyValue: orFunctionCallOrReference({ additionalProperties: anyValue, items: anyValue }),
     },
     functions: FUNCTION_TABLE,
   };

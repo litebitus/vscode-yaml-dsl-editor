@@ -35,7 +35,7 @@ suite('tag keys', () => {
     await hoverTextBecomes(
       doc,
       positionInText(doc, '!Ref MockBucket', 1),
-      '```\nRef: string    [optional]\n```\n\nThe logical ID a reference reads.',
+      '`Ref`: *string*    `[optional]`\n\nThe logical ID a reference reads.',
     );
   });
 });

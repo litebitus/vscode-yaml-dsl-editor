@@ -177,6 +177,44 @@ test('with the document\'s value, only the branches it selects are worded, neste
   assert.equal(renderer.renderNode(entry).conditions.length, 4);
 });
 
+test('a field referring to a definition that chooses between definitions is named by the one the value selects, '
+  + 'and that choice is no condition line', () => {
+  const root = {
+    $schema: DRAFT_2020_12,
+    $defs: {
+      mock_ref: { type: 'object', required: ['Ref'] },
+      mock_func: { type: 'object', minProperties: 1, maxProperties: 1 },
+      mock_ref_or_func: {
+        if: { required: ['Ref'] },
+        then: { $ref: '#/$defs/mock_ref' },
+        else: { $ref: '#/$defs/mock_func' },
+      },
+      mock_key: { type: 'object' },
+    },
+    properties: {
+      mock: {
+        if: { $ref: '#/$defs/mock_key' },
+        then: { $ref: '#/$defs/mock_ref_or_func' },
+        else: { type: 'string' },
+      },
+    },
+  };
+  const renderer = schemaRendererFor(root);
+  const holdsFor = (value) => (condition) => {
+    if (condition.$ref) return typeof value === 'object';
+    return typeof value === 'object' && condition.required.every((key) => Object.hasOwn(value, key));
+  };
+  const field = root.properties.mock;
+  const referenced = renderer.renderNode(field, holdsFor({ Ref: 'MockBucket' }));
+  assert.equal(referenced.shape, 'mock_ref');
+  assert.deepEqual(referenced.conditions, []);
+  const called = renderer.renderNode(field, holdsFor({ 'Fn::Mock': [] }));
+  assert.equal(called.shape, 'mock_func');
+  assert.deepEqual(called.conditions, []);
+  assert.equal(renderer.renderNode(field, holdsFor('mock-text')).shape, 'string');
+  assert.equal(renderer.renderNode(field).shape, 'mock_ref | mock_func | string');
+});
+
 test('an unread draft has no renderer, and a node allowing nothing renders as nothing', () => {
   assert.equal(schemaRendererFor({ $schema: 'https://example.test/mock-draft' }), null);
   assert.equal(renderedOf(DRAFT_2020_12, { anyOf: [false, { type: 'string' }] }).shape, 'nothing | string');

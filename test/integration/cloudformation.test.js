@@ -36,9 +36,9 @@ suite('CloudFormation templates', () => {
     + 'and a resource names only the branch its Type selects', async () => {
     const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
     const doc = (await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-template.yaml'))).document;
-    await hoverTextHolds(doc, positionInText(doc, 'KeyType'), 'KeyType: string');
+    await hoverTextHolds(doc, positionInText(doc, 'KeyType'), '`KeyType`: *string*');
     await hoverTextHolds(doc, positionInText(doc, 'ReadCapacityUnits'), 'ReadCapacityUnits');
-    await hoverTextHolds(doc, positionInText(doc, 'AttributeName'), 'AttributeName: IntrinsicFunction');
+    await hoverTextHolds(doc, positionInText(doc, 'AttributeName'), '`AttributeName`: *ref*');
     const resourceHover = '*When* `Type` is `"AWS::DynamoDB::Table"`: '
       + '`Properties` required; `Properties` is a `AWS::DynamoDB::Table`.';
     await hoverTextHolds(doc, positionInText(doc, 'MockTable'), resourceHover);

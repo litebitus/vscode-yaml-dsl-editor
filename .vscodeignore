@@ -10,3 +10,7 @@ package-lock.json
 docs/
 examples/
 .cursor-state.md
+node_modules/**/*.ts
+node_modules/**/*.map
+node_modules/ajv/lib/**
+node_modules/yaml/browser/**

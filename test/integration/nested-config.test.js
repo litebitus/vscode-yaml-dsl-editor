@@ -28,7 +28,7 @@ suite('nested config', () => {
     await hoverTextBecomes(
       entry,
       positionInText(entry, 'label', 1),
-      '```\nlabel: string    [optional]\n```\n\nLabel of the nested DSL',
+      '`label`: *string*    `[optional]`\n\nLabel of the nested DSL',
     );
   });
 

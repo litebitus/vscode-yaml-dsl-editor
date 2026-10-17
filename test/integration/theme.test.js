@@ -60,7 +60,7 @@ suite('themes', () => {
     const common = (await shownDocument(path.join(stack, 'mock.yml'))).document;
     const label = positionInText(common, 'label: mock', 1);
     const hoverIn = (theme) => ['one', 'two']
-      .map((overlayName) => `${overlayHeadingOf(overlayName, theme)}\n\n\`\`\`\nlabel: string    [optional]\n\`\`\`\n\n`
+      .map((overlayName) => `${overlayHeadingOf(overlayName, theme)}\n\n\`label\`: *string*    \`[optional]\`\n\n`
         + `Label of ${overlayName}`)
       .join('\n\n');
     await editorThemeBecomes(false);

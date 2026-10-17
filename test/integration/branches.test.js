@@ -34,7 +34,7 @@ suite('branches the document selects', () => {
     await hoverTextBecomes(
       doc,
       positionInText(doc, 'BucketName', 1),
-      '```\nBucketName: string    [optional]\n```\n\nThe bucket name.',
+      '`BucketName`: *string*    `[optional]`\n\nThe bucket name.',
     );
   });
 

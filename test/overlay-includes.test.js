@@ -322,7 +322,7 @@ test('a modeline\'s fragment marks a fragment, validated at the node it names wi
   assert.deepEqual(ws.problems(`file://${alonePath}`).map((problem) => problem.message), ['`Type` must be string']);
   const struck = (text) => [...text].map((character) => `${character}̶`).join('');
   const typeHover = ws.hover(`file://${alonePath}`, at(aloneText, 'Type', 1)).contents.value;
-  assert.equal(typeHover, `\`\`\`\nType: string    ${struck('[required]')}\n\`\`\`\n\nThe resource type.`);
+  assert.equal(typeHover, `\`Type\`: *string*    \`${struck('[required]')}\`\n\nThe resource type.`);
   const propertiesHover = ws.hover(`file://${alonePath}`, at(aloneText, 'Properties', 1)).contents.value;
   assert.match(propertiesHover, new RegExp(struck('[optional]').replace(/[[\]]/g, '\\$&')));
   const fullHover = ws.hover(`file://${fullPath}`, at(fullText, 'Properties', 1)).contents.value;

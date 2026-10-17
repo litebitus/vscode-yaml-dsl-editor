@@ -39,10 +39,10 @@ async function draftDocument(draftFolder) {
   return (await shownDocument(path.join(fixtures, 'drafts', draftFolder, 'mock.yml'))).document;
 }
 
-const FIRST_OF_PAIR = '```\npair[0]\n```\n\nthe first of the pair';
-const LATER_ITEM = '```\npair[1]\n```\n\nevery later item';
-const NAMED_LABEL = '```\nlabel    [optional]\n```\n\nthe named label';
-const OLD_USE_PAIR = '```\nold    [optional]\n```\n\nuse pair';
+const FIRST_OF_PAIR = '`pair[0]`\n\nthe first of the pair';
+const LATER_ITEM = '`pair[1]`\n\nevery later item';
+const NAMED_LABEL = '`label`    `[optional]`\n\nthe named label';
+const OLD_USE_PAIR = '`old`    `[optional]`\n\nuse pair';
 
 suite('JSON Schema drafts', () => {
   isolateEachTest();
@@ -76,7 +76,7 @@ suite('JSON Schema drafts', () => {
     const doc = await draftDocument('draft-2020-12');
     assert.equal(
       await hoverTextAt(doc, 'queue'),
-      '```\nqueue: string    [optional]\n```\n\nthe mock queue\n\n*When set:* `role` required, or a `node`.',
+      '`queue`: *string*    `[optional]`\n\nthe mock queue\n\n*When set:* `role` required, or a `node`.',
     );
   });
 
@@ -84,8 +84,8 @@ suite('JSON Schema drafts', () => {
     const doc = await draftDocument('draft-2020-12');
     assert.equal(
       await hoverTextAt(doc, 'id mock-entry'),
-      '```\nid mock-entry    [optional]\n```\n\na mock entry\n\n*Sets* `id` *to* `mock-entry`:\n\n'
-        + '```\nid: string    [optional]\n```\n\nthe entry\'s identity',
+      '`id mock-entry`    `[optional]`\n\na mock entry\n\n*Sets* `id` *to* `mock-entry`:\n\n'
+        + '`id`: *string*    `[optional]`\n\nthe entry\'s identity',
     );
   });
 

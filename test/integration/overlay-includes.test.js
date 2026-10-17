@@ -48,7 +48,7 @@ suite('overlay includes', () => {
     await hoverTextBecomes(
       template,
       positionInText(template, 'AWS::Include', 2),
-      '```\nmacro AWS::Include(Location: text)\n```\n\nInserts the mock snippet in its place.\n\n'
+      '```yaml-dsl-signature\nmacro AWS::Include(Location: text)\n```\n\nInserts the mock snippet in its place.\n\n'
         + '- `Location`: The mock snippet\'s location.\n\n'
         + '*Expands to:* the map holding the call, merged over the content at `Location`.',
     );
@@ -60,7 +60,7 @@ suite('overlay includes', () => {
     await hoverTextBecomes(
       fragment,
       positionInText(fragment, 'Type', 1),
-      `\`\`\`\nType: string    ${struckRequired}\n\`\`\`\n\nThe resource type.`,
+      `\`Type\`: *string*    \`${struckRequired}\`\n\nThe resource type.`,
     );
   });
 
@@ -70,7 +70,7 @@ suite('overlay includes', () => {
     await hoverTextBecomes(
       snippet,
       positionInText(snippet, 'Type', 1),
-      '```\nType: string    [required]\n```\n\nThe resource type.',
+      '`Type`: *string*    `[required]`\n\nThe resource type.',
     );
   });
 });

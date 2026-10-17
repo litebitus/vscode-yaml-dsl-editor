@@ -398,7 +398,7 @@ test('a macro is documented by its signature after macro, its arguments and what
   const signature = 'macro ForEach(identifier: text, collection: list, fragment: map)';
   assert.equal(signatureText('ForEach', loopMacro), signature);
   assert.equal(functionDocumentationOf('ForEach', loopMacro), [
-    `\`\`\`\n${signature}\n\`\`\``,
+    `\`\`\`yaml-dsl-signature\n${signature}\n\`\`\``,
     'Mock ForEach function.',
     '- `identifier`: The mock identifier.\n- `collection`: The mock collection.\n- `fragment`: The mock fragment.',
     '*Expands to:* `fragment` once per item of `collection`, the item standing for `identifier`.',
@@ -574,13 +574,19 @@ test('a signature names each argument, its type, whether it is optional or repea
 
 test('a function is documented by its signature, its description, each described argument and its return', () => {
   assert.equal(functionDocumentationOf('format', table.format), [
-    '```\nformat(layout: text, ...operands?: any): text\n```',
+    '```yaml-dsl-signature\nformat(layout: text, ...operands?: any): text\n```',
     'Mock format function.',
     '- `layout`: The mock layout.\n- `operands`: The mock operands.',
     '*Returns:* The mock formatted text.',
   ].join('\n\n'));
   const undescribed = { description: null, arguments: [{ ...table.ssm.arguments[0], description: null }], return: null };
-  assert.equal(functionDocumentationOf('ssm', undescribed), '```\nssm(parameter: text): void\n```\n\n*Returns:* `void`');
+  assert.equal(
+    functionDocumentationOf('ssm', undescribed),
+    '```yaml-dsl-signature\nssm(parameter: text): void\n```\n\n*Returns:* `void`',
+  );
   const typedOnly = { ...undescribed, return: { type: 'text', description: null } };
-  assert.equal(functionDocumentationOf('ssm', typedOnly), '```\nssm(parameter: text): text\n```\n\n*Returns:* `text`');
+  assert.equal(
+    functionDocumentationOf('ssm', typedOnly),
+    '```yaml-dsl-signature\nssm(parameter: text): text\n```\n\n*Returns:* `text`',
+  );
 });

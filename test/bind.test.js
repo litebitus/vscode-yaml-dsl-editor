@@ -167,7 +167,7 @@ test('document events analyze and custom requests answer', async () => {
   documents.handlers.change({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
   await workspace.whenIdle();
   const hover = await connection.handlers.hover({ textDocument: { uri: 'file:///repo/app/mock.yml' }, position: { line: 1, character: 0 } });
-  assert.equal(hover.contents.value, '```\nname    [optional]\n```\n\nthe name');
+  assert.equal(hover.contents.value, '`name`    `[optional]`\n\nthe name');
   const missing = await connection.handlers.definition({ textDocument: { uri: 'file:///repo/app/mock.yml' }, position: { line: 1, character: 0 } });
   assert.equal(missing, null);
   await connection.handlers['yaml-dsl/config']({

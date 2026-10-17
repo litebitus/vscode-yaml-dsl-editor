@@ -16,7 +16,7 @@ suite('function table', () => {
     await hoverTextBecomes(
       doc,
       positionInText(doc, 'fn.ssm', 3),
-      '```\nssm(parameter: text): text\n```\n\nReturns the **mock** parameter\'s value.\n\n'
+      '```yaml-dsl-signature\nssm(parameter: text): text\n```\n\nReturns the **mock** parameter\'s value.\n\n'
         + '- `parameter`: The mock parameter name.\n\n*Returns:* The mock **value**.',
     );
   });
@@ -26,7 +26,7 @@ suite('function table', () => {
     await hoverTextBecomes(
       doc,
       positionInText(doc, 'fn.legacy', 3),
-      '```\nlegacy(value: text): void\n```\n\n*Returns:* `void`',
+      '```yaml-dsl-signature\nlegacy(value: text): void\n```\n\n*Returns:* `void`',
     );
   });
 });

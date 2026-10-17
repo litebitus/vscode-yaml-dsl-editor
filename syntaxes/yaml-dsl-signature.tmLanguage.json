@@ -1,0 +1,43 @@
+{
+  "name": "YAML DSL signature",
+  "scopeName": "source.yaml.dsl.signature",
+  "patterns": [
+    { "include": "#macro" },
+    { "include": "#name" },
+    { "include": "#argument" },
+    { "include": "#returnType" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "macro": {
+      "match": "^\\s*(macro)\\b",
+      "captures": { "1": { "name": "keyword.other.macro.yaml-dsl-signature" } }
+    },
+    "name": {
+      "match": "([A-Za-z_][A-Za-z0-9_:]*)(?=\\()",
+      "captures": { "1": { "name": "entity.name.function.yaml-dsl-signature" } }
+    },
+    "argument": {
+      "match": "(\\.\\.\\.)?([A-Za-z_][A-Za-z0-9_]*)(\\?)?\\s*(:)\\s*([a-z_]+)(?=\\s*[,)])",
+      "captures": {
+        "1": { "name": "keyword.operator.repeated.yaml-dsl-signature" },
+        "2": { "name": "variable.parameter.yaml-dsl-signature" },
+        "3": { "name": "keyword.operator.optional.yaml-dsl-signature" },
+        "4": { "name": "punctuation.separator.type.yaml-dsl-signature" },
+        "5": { "name": "support.type.yaml-dsl-signature" }
+      }
+    },
+    "returnType": {
+      "match": "(\\))\\s*(:)\\s*([a-z_]+)\\s*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.arguments.end.yaml-dsl-signature" },
+        "2": { "name": "punctuation.separator.type.yaml-dsl-signature" },
+        "3": { "name": "support.type.return.yaml-dsl-signature" }
+      }
+    },
+    "punctuation": {
+      "match": "[(),]",
+      "name": "punctuation.separator.yaml-dsl-signature"
+    }
+  }
+}

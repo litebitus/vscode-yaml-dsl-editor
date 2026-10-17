@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::LanguageExtensions
+Resources:
+  Fn::ForEach::Topics:
+    - TopicName
+    - [Orders, Payments]
+    - Topic&{TopicName}:
+        Type: AWS::SNS::Topic
+        Properties:
+          DisplayName: ${TopicName}
+          FifoTopic: maybe
+  Fn::Transform:
+    Name: AWS::Include
+    Parameters:
+      Location: s3://mock-bucket/snippets/mock.yaml
+      Extra: 1
+  Subscriber:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref TopicOrders
+      Protocol: email
+      Endpoint: !Ref TopicMissing

@@ -81,7 +81,7 @@ suite('feature settings', () => {
     const value = positionInText(doc, 'old: ', 'old: '.length);
     const warning = '`old` is deprecated: use pair';
     await hoverTextBecomes(doc, value, warning);
-    const documentation = '```\nold    [optional]\n```\n\nuse pair\n\n*Deprecated*';
+    const documentation = '`old`    `[optional]`\n\nuse pair\n\n*Deprecated*';
     await withSetting('warning.deprecation.enabled', false, async () => {
       await hoverTextBecomes(doc, key, documentation);
       await hoverTextBecomes(doc, value, documentation);
