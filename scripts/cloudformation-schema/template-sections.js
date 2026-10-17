@@ -1,4 +1,5 @@
 const { orIntrinsicFunction } = require('./provider-schemas');
+const { 'x-yaml-dsl-functions': FUNCTION_TABLE } = require('../../examples/schemas/cloudformation-functions.json');
 
 const TEMPLATE_FORMAT_VERSION = '2010-09-09';
 const LOGICAL_ID_PATTERN = '^[A-Za-z0-9]+$';
@@ -26,165 +27,12 @@ function exactlyOneKey(properties, description) {
 }
 
 const FUNCTION_CALL_MARKER = 'Fn::';
+const CONDITION_FUNCTION_NAMES = ['And', 'Equals', 'Not', 'Or'];
+const INTRINSIC_FUNCTION_NAMES = Object.keys(FUNCTION_TABLE)
+  .filter((name) => !CONDITION_FUNCTION_NAMES.includes(name));
 
-function argument(name, type, description, { required = true, repeated = false } = {}) {
-  return { name, type, required, repeated, description };
-}
-
-const INTRINSIC_FUNCTION_TABLE = {
-  Base64: {
-    description: 'Returns the Base64 representation of the input string.',
-    arguments: [argument('text', 'text', 'The text to encode.')],
-    return: { type: 'text', description: 'The text in Base64.' },
-  },
-  Cidr: {
-    description: 'Divides an IP block into CIDR address blocks.',
-    arguments: [
-      argument('ip_block', 'text', 'The CIDR block to divide, such as `10.0.0.0/16`.'),
-      argument('count', 'any', 'How many CIDR blocks to make, `1` to `256`.'),
-      argument('cidr_bits', 'any', 'The host bits of each block: `32` minus its prefix length for IPv4, `128` for IPv6.'),
-    ],
-    return: { type: 'list', description: 'The CIDR blocks.' },
-  },
-  FindInMap: {
-    description: 'Returns the value at two keys of a map declared in the `Mappings` section.',
-    arguments: [
-      argument('map_name', 'text', 'The map\'s name in `Mappings`.'),
-      argument('top_level_key', 'text', 'The key in the map.'),
-      argument('second_level_key', 'text', 'The key under the top-level key.'),
-      argument(
-        'default',
-        'map',
-        '`{ DefaultValue: <value> }`, returned where the keys find nothing. Needs the `AWS::LanguageExtensions` transform.',
-        { required: false },
-      ),
-    ],
-    return: { type: 'any', description: 'The value at the two keys.' },
-  },
-  GetAtt: {
-    description: 'Returns the value of an attribute of a resource in the template.',
-    arguments: [
-      argument('logical_id', 'text', 'The resource\'s logical ID, or `<logicalId>.<attribute>` written as one value.'),
-      argument('attribute', 'text', 'The attribute\'s name.', { required: false }),
-    ],
-    return: { type: 'any', description: 'The attribute\'s value.' },
-  },
-  GetAZs: {
-    description: 'Returns the Availability Zones of a Region in alphabetical order.',
-    arguments: [argument('region', 'text', 'The Region; `""` reads the stack\'s own.')],
-    return: { type: 'list', description: 'The Availability Zones.' },
-  },
-  GetStackOutput: {
-    description: 'Returns the value of an output of another stack, in this or another account or Region.',
-    arguments: [
-      argument('output', 'map', '`StackName` and `OutputName`, with `Region` and `RoleArn` where the stack is elsewhere.'),
-    ],
-    return: { type: 'any', description: 'The output\'s value.' },
-  },
-  If: {
-    description: 'Returns one of two values by a condition.',
-    arguments: [
-      argument('condition', 'text', 'The condition\'s name in the `Conditions` section.'),
-      argument('value_if_true', 'any', 'The value where the condition is true.'),
-      argument('value_if_false', 'any', 'The value where the condition is false; `!Ref AWS::NoValue` leaves the property out.'),
-    ],
-    return: { type: 'any', description: 'The value the condition selects.' },
-  },
-  ImportValue: {
-    description: 'Returns the value of an output another stack exports.',
-    arguments: [argument('export_name', 'text', 'The name the value is exported under.')],
-    return: { type: 'any', description: 'The exported value.' },
-  },
-  Join: {
-    description: 'Joins a list of values into one value, separated by the delimiter.',
-    arguments: [
-      argument('delimiter', 'text', 'The text between the values; `""` joins them with nothing.'),
-      argument('values', 'list', 'The values to join.'),
-    ],
-    return: { type: 'text', description: 'The joined text.' },
-  },
-  Length: {
-    description: 'Returns the number of elements of a list. Needs the `AWS::LanguageExtensions` transform.',
-    arguments: [argument('items', 'list', 'The list to count.')],
-    return: { type: 'whole_number', description: 'The number of elements.' },
-  },
-  Select: {
-    description: 'Returns the item of a list at an index.',
-    arguments: [
-      argument('index', 'any', 'The item\'s position, from `0`.'),
-      argument('values', 'list', 'The list to select from.'),
-    ],
-    return: { type: 'any', description: 'The item at the index.' },
-  },
-  Split: {
-    description: 'Splits a string into a list of strings at the delimiter.',
-    arguments: [
-      argument('delimiter', 'text', 'The text to split at.'),
-      argument('source', 'text', 'The text to split.'),
-    ],
-    return: { type: 'list', description: 'The pieces, in order.' },
-  },
-  Sub: {
-    description: 'Substitutes the `${...}` variables in a string.',
-    arguments: [
-      argument('template', 'text', 'The text whose variables are substituted; `${!...}` stays literal.'),
-      argument(
-        'variables',
-        'map',
-        'Variable name to value, for the names the template uses beyond parameters, resources and pseudo parameters.',
-        { required: false },
-      ),
-    ],
-    return: { type: 'text', description: 'The text with its variables substituted.' },
-  },
-  ToJsonString: {
-    description: 'Converts an object or a list to its JSON string. Needs the `AWS::LanguageExtensions` transform.',
-    arguments: [argument('value', 'any', 'The object or list to convert.')],
-    return: { type: 'text', description: 'The JSON string.' },
-  },
-  Transform: {
-    description: 'Calls a macro to process part of the template.',
-    arguments: [argument('macro', 'map', 'The macro\'s `Name` and its `Parameters`.')],
-    return: { type: 'any', description: 'What the macro returns in place of the call.' },
-  },
-};
-
-const CONDITION_FUNCTION_TABLE = {
-  And: {
-    description: 'Is true when every one of its 2 to 10 conditions is true.',
-    arguments: [
-      argument('first', 'any', 'A condition function, or `Condition: <name>`.'),
-      argument('second', 'any', 'A condition function, or `Condition: <name>`.'),
-      argument('more', 'any', 'Further conditions, up to 10 in all.', { required: false, repeated: true }),
-    ],
-    return: { type: 'boolean', description: '`true` when every condition is true.' },
-  },
-  Equals: {
-    description: 'Is true when its two values are equal.',
-    arguments: [
-      argument('value', 'any', 'The first value.'),
-      argument('other_value', 'any', 'The value compared with it.'),
-    ],
-    return: { type: 'boolean', description: '`true` when the values are equal.' },
-  },
-  Not: {
-    description: 'Is true when its one condition is false.',
-    arguments: [argument('condition', 'list', 'A list holding the one condition to negate.')],
-    return: { type: 'boolean', description: '`true` when the condition is false.' },
-  },
-  Or: {
-    description: 'Is true when any one of its 2 to 10 conditions is true.',
-    arguments: [
-      argument('first', 'any', 'A condition function, or `Condition: <name>`.'),
-      argument('second', 'any', 'A condition function, or `Condition: <name>`.'),
-      argument('more', 'any', 'Further conditions, up to 10 in all.', { required: false, repeated: true }),
-    ],
-    return: { type: 'boolean', description: '`true` when any condition is true.' },
-  },
-};
-
-function callKeysOf(functionTable) {
-  return Object.fromEntries(Object.keys(functionTable).map((name) => [`${FUNCTION_CALL_MARKER}${name}`, {}]));
+function callKeysOf(functionNames) {
+  return Object.fromEntries(functionNames.map((name) => [`${FUNCTION_CALL_MARKER}${name}`, {}]));
 }
 
 const INTRINSIC_FUNCTIONS = {
@@ -192,7 +40,7 @@ const INTRINSIC_FUNCTIONS = {
     description: 'Returns the value of the specified parameter or resource.',
     type: 'string',
   },
-  ...callKeysOf(INTRINSIC_FUNCTION_TABLE),
+  ...callKeysOf(INTRINSIC_FUNCTION_NAMES),
   'Fn::Transform': {
     description: 'A macro call; `Name: AWS::Include` includes the snippet at `Parameters.Location` in its place.',
     anyOf: [transformValue, { type: 'array', items: transformValue }],
@@ -200,7 +48,7 @@ const INTRINSIC_FUNCTIONS = {
 };
 
 const CONDITION_FUNCTIONS = {
-  ...callKeysOf(CONDITION_FUNCTION_TABLE),
+  ...callKeysOf(CONDITION_FUNCTION_NAMES),
   Condition: {
     description: 'The condition of that name in the Conditions section.',
     type: 'string',
@@ -437,7 +285,7 @@ function templateSectionsOf(resourceTypes) {
       ConditionFunction: exactlyOneKey(CONDITION_FUNCTIONS, 'A condition function, whose value is its arguments.'),
       AnyValue: orIntrinsicFunction({ additionalProperties: anyValue, items: anyValue }),
     },
-    functions: { ...INTRINSIC_FUNCTION_TABLE, ...CONDITION_FUNCTION_TABLE },
+    functions: FUNCTION_TABLE,
   };
 }
 

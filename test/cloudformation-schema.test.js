@@ -10,6 +10,7 @@ const { templateSchemaOf } = require('../scripts/cloudformation-schema/template-
 const { schemaVocabulary } = require('../lib/function-calls');
 
 const MOCK_ZIP = path.join(__dirname, 'fixtures', 'cloudformation-schema', 'mock-providers.zip');
+const FUNCTION_TABLE_PATH = path.join(__dirname, '..', 'examples', 'schemas', 'cloudformation-functions.json');
 const INTRINSIC_FUNCTION = { $ref: '#/$defs/IntrinsicFunction' };
 const INTRINSIC_FUNCTION_CALL = { $ref: '#/$defs/IntrinsicFunctionCall' };
 const orIntrinsicFunctionOf = (shape) => ({ if: INTRINSIC_FUNCTION_CALL, then: INTRINSIC_FUNCTION, else: shape });
@@ -130,6 +131,15 @@ test('the template schema publishes every intrinsic and condition function in it
   const published = schemaVocabulary(schema, '#/x-yaml-dsl-functions');
   assert.equal(published.problem, null);
   assert.equal(published.notice, null);
+  const maintained = JSON.parse(fs.readFileSync(FUNCTION_TABLE_PATH, 'utf8'));
+  assert.deepEqual(schema['x-yaml-dsl-functions'], maintained['x-yaml-dsl-functions']);
+  assert.deepEqual(Object.keys(schema.$defs.ConditionFunction.properties).sort(), [
+    'Condition',
+    'Fn::And',
+    'Fn::Equals',
+    'Fn::Not',
+    'Fn::Or',
+  ]);
   const callShapes = [
     ...Object.entries(schema.$defs.IntrinsicFunction.properties),
     ...Object.entries(schema.$defs.ConditionFunction.properties),

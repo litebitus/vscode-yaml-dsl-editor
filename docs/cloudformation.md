@@ -19,6 +19,7 @@ The DSL is a config like any other. The engine features it needs are generic and
 | `Ref`, `Fn::GetAtt`, `DependsOn`, a `Condition` | a reference |
 | `${...}` in `Fn::Sub` | a placeholder |
 | an intrinsic function or a condition function | a call, `Fn::` its marker, its value its arguments |
+| `Fn::Transform`, `Fn::If`, `AWS::Include`, `Fn::ForEach` | a macro: a function call, a conditional, a merge and a loop |
 | a YAML short form, such as `!Ref` | a tag key |
 | an `AWS::Include` transform | an include, pairing an overlay with its common layer |
 | a template that includes a snippet | an overlay |
@@ -106,7 +107,21 @@ An intrinsic function or a condition function is a call through `marker_function
 | `calls_without_name_allowed` | `true`: a function's map holds its call alone |
 | `splat_operator` | `null`: the function table decides how a value binds the arguments |
 
-The schema publishes the function table, the one home of each function's description, arguments and return. `Ref` and `Condition` are references, not calls, and a `Fn::Transform` naming `AWS::Include` is the include, documented by the schema.
+The schema publishes the function table, the one home of each function's and macro's description, arguments and return. `Ref` and `Condition` are references, not calls.
+
+### Macros
+
+The function table marks CloudFormation's macros with a `macro` object:
+
+| Macro | `kind` | What its entry adds |
+|---|---|---|
+| `Transform` | `function_call` | `unmarked_key_paths: ["$.Transform"]`, so the template's `Transform` section calls it as `Fn::Transform` does in a section |
+| `If` | `conditional` | |
+| `AWS::Include` | `merge` | |
+| `ForEach` | `loop` | `name_suffix_pattern: "::[A-Za-z0-9]+"`, so `Fn::ForEach::Topics` calls `ForEach` |
+
+- `ForEach`'s identifier is written `${identifier}` in its fragment, a placeholder as any other, and `&{identifier}` for the item's letters and digits alone, so the placeholder pattern takes both.
+- A macro the table does not hold, such as one registered by `AWS::CloudFormation::Macro`, is not a problem where `Transform` names it.
 
 ## The schema
 
@@ -132,7 +147,7 @@ The template schema is generated from them. The template's own sections are writ
 
 A value the template reference leaves open, such as an output's `Value`, refers to one shared definition, `AnyValue`: an intrinsic function call at any depth in it stands in for a value.
 
-The generator writes the function table at `#/x-yaml-dsl-functions` from the intrinsic function reference: each intrinsic and condition function with its description, its arguments and its return. `IntrinsicFunction` and `ConditionFunction` name the calls and leave their arguments to the table.
+The function table is maintained by hand at `examples/schemas/cloudformation-functions.json`, from the intrinsic function reference and the transform reference: each intrinsic and condition function with its description, its arguments and its return, and each macro with its `macro` object. AWS publishes no machine-readable source for them, and they change rarely. The generator merges the table into the schema at `#/x-yaml-dsl-functions`. `IntrinsicFunction` and `ConditionFunction` name the calls and leave their arguments to the table.
 
 `Type` also takes a custom resource type, `Custom::<name>`, and a registry type, `<organization>::<service>::<resource>`, whose `Properties` the schema leaves open.
 
@@ -168,7 +183,8 @@ Each is designed in the editor's design doc:
 - a reference rule reading a scalar with its tag;
 - the `['name']` path step;
 - the branches the document selects, so a resource is documented and completed by its `Type`;
-- calls through `marker_function` with `splat_operator: null`, the function table deciding a call's arguments.
+- calls through `marker_function` with `splat_operator: null`, the function table deciding a call's arguments;
+- macros, entries of the function table with a `macro` object.
 
 ## Open questions
 

@@ -217,7 +217,7 @@ F5 (Extension Development Host). There is no compile step. The extension is plai
 
 ### Example schemas
 
-`make cloudformation-schema` regenerates `examples/schemas/cloudformation-2010-09-09.schema.json` from the resource provider schemas of the Region in `CLOUDFORMATION_REGION`.
+`make cloudformation-schema` regenerates `examples/schemas/cloudformation-2010-09-09.schema.json` from the resource provider schemas of the Region in `CLOUDFORMATION_REGION`, merging in the hand-maintained function table, `examples/schemas/cloudformation-functions.json`.
 
 ### Publish
 

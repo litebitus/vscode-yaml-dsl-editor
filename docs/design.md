@@ -1245,7 +1245,7 @@ A placeholder splices a value into a scalar or a key, whole or as part of a long
 | `schema` | the table the file's schema publishes at `#/x-yaml-dsl-functions`; a schema that publishes no table there, or a malformed one, is a problem on the modeline line |
 
 - While a source has not answered the vocabulary is open, and an unknown function is a problem only once every source has.
-- A key an overlay include reads is the include, never a call, even where its key names a function.
+- A key that calls a macro is a macro call, never a function call.
 - Every call is checked: its function against the vocabulary, its argument count against the function's arity, and each literal argument against its type. A reference or a call standing as an argument is not typed, a reference written as its tag's key included.
 - Hover on a function shows its signature, with the return type, then its description, each argument's description and the return's description, or its type where it has none, read as markdown. A function with no `return` returns `void`.
 
@@ -1258,6 +1258,7 @@ A schema publishes a DSL's functions as a mapping of function name to its descri
 | `description` | what the function does, in markdown |
 | `arguments` | its arguments in call order |
 | `return` | what it returns: `type`, one of the argument types, and `description`, in markdown; left out, the function returns `void` |
+| `macro` | present only on a macro, under Macros; an entry with `macro` takes no `return` |
 
 | Argument field | Meaning |
 |---|---|
@@ -1267,7 +1268,7 @@ A schema publishes a DSL's functions as a mapping of function name to its descri
 | `repeated` | whether it takes every remaining value; a repeated argument is last |
 | `description` | what the argument holds, in markdown |
 
-Every field but `return` is required.
+Every field but `return` and `macro` is required.
 
 ```json
 "x-yaml-dsl-functions": {
@@ -1294,6 +1295,81 @@ Terraform's signatures are read into the same table:
 | a variadic parameter | a repeated optional argument |
 | a function's or parameter's `description` | its `description` |
 | a function's `return_type` | its `return.type`, with no `description` |
+
+## Macros
+
+A function computes a value when the document is used. A macro is expanded by the DSL's preprocessor before then, as a C macro is, and its expansion is what is read: validated, declared, referenced. A macro is an entry of the function table with a `macro` object, documented and called as a function is.
+
+| `macro` field | Holds |
+|---|---|
+| `kind` | what the preprocessor does with a call, below |
+| `name_suffix_pattern` | the regular expression of the text after the macro's name that keeps sibling calls distinct; left out, nothing follows the name |
+| `unmarked_key_paths` | the keys that call the macro without the call marker; left out, none |
+
+| `kind` | Arguments, in order | Expands to |
+|---|---|---|
+| `function_call` | the callee's name, then the callee's arguments | a call of the macro or function the first argument names, the second its arguments by name |
+| `conditional` | the condition, then every result | the result the condition chooses |
+| `merge` | the content's location, a `text`, or the content, a `map` | the map holding the call, merged over the content |
+| `loop` | the identifier, the collection, the body | the body once per item of the collection, the item standing for the identifier |
+
+An entry whose arguments do not fit its kind is a problem on the modeline line.
+
+`examples/schemas/cloudformation-functions.json` is CloudFormation's table.
+
+### Calls
+
+- A macro is called as a function is, through `marker_function` or its tag through `tag_keys`, and also by a key at one of its `unmarked_key_paths`.
+- A function yields a value, so its call stands where a value does. A macro yields entries, so its call may stand as a whole key among siblings. YAML refuses two equal keys in one map, so the text `name_suffix_pattern` matches keeps sibling calls distinct; the editor reads nothing from it.
+- A `function_call`'s value binds its arguments by name, or is the callee's name alone, or is a list holding one call per item.
+- A callee the table does not hold is one the DSL's users define, such as a CloudFormation macro registered by `AWS::CloudFormation::Macro`, and is not a problem.
+
+### Evaluation
+
+A macro is expanded when every input resolves to a constant: a literal, or a local holding one. An input with no value in the files, such as a CloudFormation parameter, leaves the expansion unknown:
+
+| `kind` | Input unknown |
+|---|---|
+| `function_call` | the call is checked against the macro's own entry alone |
+| `conditional` | each result is an outcome, and each validates in the call's position |
+| `merge` | a location no `location_mappings` entry covers, or whose file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem |
+| `loop` | the body is checked once; a key in it that names the identifier declares every name it can spell, so `Topic${TopicName}` declares `TopicA`, and a reference to such a name is not a problem |
+
+### What an expansion gives
+
+- The holding map validates with the expansion in place.
+- A loop's body is read at the position its entries land: their schema, completion and hover are the holding map's.
+- A problem in one item's expansion is reported at the body's source, naming the item; one every item shares is reported once.
+- The identifier is a name the loop declares within its body, read by the DSL's placeholders and reference rules as any name is; an inner loop's identifier hides an outer one of the same name.
+- The names an expansion declares are declared where they land.
+- A merge whose content is at a location is an include, its location mapped by `layers.overlay_includes`.
+
+### Hover
+
+Hover on a macro shows its signature after `macro`, with no return type, then its description and each argument's description, and last what it expands to: its kind's expansion, worded with the entry's argument names.
+
+```
+macro ForEach(identifier: text, collection: list, fragment: map)
+```
+
+> Repeats a fragment for each item of a collection.
+>
+> - `identifier`: The identifier replaced by each item.
+> - `collection`: The collection to iterate over.
+> - `fragment`: The output key and value repeated for each item.
+>
+> *Expands to:* `fragment` once per item of `collection`, the item standing for `identifier`.
+
+### Phases
+
+Each phase is one kind, built and validated before the next:
+
+1. Macro entries: the `macro` field, calls standing among siblings, `name_suffix_pattern` and the hover.
+2. `function_call`: arguments bound by name, the callee, and `unmarked_key_paths`. An include's key is then a macro call.
+3. `merge` from a location.
+4. `loop`.
+5. `conditional`.
+6. `merge` from an argument, which takes the place of merge bases named by key; `validator.merge_base_keys` retires once no DSL names its merge bases by key.
 
 ## What the workspace defines
 
