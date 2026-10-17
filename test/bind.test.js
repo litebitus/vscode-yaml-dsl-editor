@@ -87,7 +87,7 @@ test('a link carries its target count', async () => {
     onKeptSchemasChanged() {},
     onVocabularyLoaded() {},
     onValidationAnswered() {},
-    setCompiledSchemaFolder() {},
+    setStorageFolder() {},
     dispose() {},
     links: () => [
       { range: targetRange, target: 'file:///repo/mock.schema.json', targets: [] },
@@ -119,7 +119,7 @@ test('rename answers the name to edit and the edit, and a refusal is an error th
     onKeptSchemasChanged() {},
     onVocabularyLoaded() {},
     onValidationAnswered() {},
-    setCompiledSchemaFolder() {},
+    setStorageFolder() {},
     dispose() {},
     prepareRename: (uri) => {
       if (uri.endsWith('none.yml')) return null;
@@ -442,7 +442,7 @@ test('suggestions are sent as they arrive, and one is applied through the editor
   const workspace = {
     onVocabularyLoaded() {},
     onValidationAnswered() {},
-    setCompiledSchemaFolder() {},
+    setStorageFolder() {},
     dispose() {},
     onSuggestions(listener) { announce = listener; },
     onKeptSchemasChanged() {},
@@ -485,7 +485,7 @@ test('a layer file that changes on disk is watched and read again', async () => 
   const workspace = {
     onVocabularyLoaded() {},
     onValidationAnswered() {},
-    setCompiledSchemaFolder() {},
+    setStorageFolder() {},
     dispose() {},
     onSuggestions() {},
     onKeptSchemasChanged() {},
@@ -514,7 +514,7 @@ test('an open file deleted from disk is closed, as a closed tab is', async () =>
   const workspace = {
     onVocabularyLoaded() {},
     onValidationAnswered() {},
-    setCompiledSchemaFolder() {},
+    setStorageFolder() {},
     dispose() {},
     onSuggestions() {},
     onKeptSchemasChanged() {},
@@ -537,7 +537,7 @@ test('a file the editor opens is analyzed once, though the library reports the o
   const workspace = {
     onVocabularyLoaded() {},
     onValidationAnswered() {},
-    setCompiledSchemaFolder() {},
+    setStorageFolder() {},
     dispose() {},
     onSuggestions() {},
     onKeptSchemasChanged() {},

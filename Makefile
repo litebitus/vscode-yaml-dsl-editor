@@ -5,6 +5,7 @@
 # Prerequisites (one-time):
 #   vsce login lite2073       # VS Code Marketplace PAT
 #   export OVSX_PAT=...       # Open VSX token (ovsx reads this env var)
+#   gh auth login             # GitHub, for the release that carries the CloudFormation schema
 
 BUMP ?= patch
 CLOUDFORMATION_REGION ?= us-east-1
@@ -15,8 +16,9 @@ PUBLISHER = $(shell node -p "require('./package.json').publisher")
 EXT_ID = $(PUBLISHER).$(shell node -p "require('./package.json').name")
 ANTIGRAVITY_EXECUTABLE = /Applications/Antigravity IDE.app/Contents/MacOS/Electron
 CURSOR_EXECUTABLE = /Applications/Cursor.app/Contents/MacOS/Cursor
+CLOUDFORMATION_SCHEMA = examples/schemas/cloudformation-2010-09-09.schema.json
 
-.PHONY: test test-all test-antigravity test-cursor cloudformation-schema package install-cursor install-antigravity publish preflight bump push publish-ovsx publish-vsce uninstall
+.PHONY: test test-all test-antigravity test-cursor cloudformation-schema package install-cursor install-antigravity publish preflight bump push release-schemas publish-ovsx publish-vsce uninstall
 
 test:
 	node --test --test-timeout=5000 --test-force-exit --experimental-test-coverage \
@@ -67,7 +69,7 @@ install-antigravity:
 # push runs last so tags only reach the remote for published versions, and
 # pushes only the current version's tag; if the vsce step hangs and you
 # Ctrl+C, run `make push` afterwards.
-publish: preflight test-antigravity test-cursor bump publish-ovsx publish-vsce push
+publish: preflight test-antigravity test-cursor bump publish-ovsx publish-vsce push release-schemas
 
 # dirty check is stricter than npm version's own: also refuses on untracked
 # files, since vsce/ovsx package the working tree and would ship them uncommitted
@@ -75,12 +77,17 @@ preflight:
 	@test -z "$$(git status --porcelain)" || { git status --short; echo "error: git tree is dirty — commit or stash first"; exit 1; }
 	@vsce ls-publishers 2>/dev/null | grep -qx "$(PUBLISHER)" || { echo "error: vsce is not logged in as $(PUBLISHER) — run: vsce login $(PUBLISHER)"; exit 1; }
 	@test -n "$$OVSX_PAT" || { echo "error: OVSX_PAT is not set — export your Open VSX token first"; exit 1; }
+	@gh auth status >/dev/null 2>&1 || { echo "error: gh is not logged in — run: gh auth login"; exit 1; }
 
 bump:
 	npm version $(BUMP)
 
 push:
 	git push origin HEAD "v$(VERSION)"
+
+release-schemas:
+	awk '/^## $(VERSION) /{found=1; next} /^## /{if (found) exit} found' CHANGELOG.md \
+		| gh release create "v$(VERSION)" $(CLOUDFORMATION_SCHEMA) --verify-tag --title "v$(VERSION)" --notes-file -
 
 publish-ovsx: preflight package
 	ovsx publish $(VSIX)

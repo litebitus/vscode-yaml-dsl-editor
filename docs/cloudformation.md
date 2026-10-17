@@ -170,6 +170,13 @@ The hand-written part covers each top-level section and its entries: `Parameters
 
 The schema is `examples/schemas/cloudformation-<format version>.schema.json`, beside every other public DSL's schema. `schema_search_paths` names it once, through `{config_root}`, for a template at any depth.
 
+Each release of the editor attaches the schema to its GitHub release, so a repository outside the editor's names a fixed version by URL. That version never changes, so the URL takes a long max age:
+
+```yaml
+schema_search_paths:
+  - https://github.com/litebitus/vscode-yaml-dsl-editor/releases/download/v<version>/cloudformation-2010-09-09.schema.json?yaml_dsl_max_age_days=365
+```
+
 ### Versions
 
 - `AWSTemplateFormatVersion` is the template's grammar version, as a DSL's schema version is, and the schema is versioned to match it.

@@ -243,6 +243,7 @@ What the extension holds is a copy of what the files say: a resident stack's ana
 | the file an include's location maps to is written to or removed from disk | on the change | the include is followed or left, and the stack of the overlay holding it is built again | background |
 | a layer file's editor closes | on the close | the file is read from disk again, so discarded edits, or a file gone from disk, leave the stack with what the disk holds | background |
 | a path a resident file's schema search reads changes on disk | on the change | that file's schema reloads, its stack is analyzed and validated again, and its hover documentation reads the new schema, the common layer's for that overlay; a schema on disk changes when its stack is initialized again | background |
+| a schema URL's kept copy is older than the max age a file gives it | when a stack reading it loads | the copy is checked with the server, as under Schema URLs | foreground |
 | an overlay's schema reloads | on the reload | the common layer's validation errors are worked out again, each naming exactly the overlays whose current schema its value fails | background |
 | a `yaml-dsl.yml` is saved, created or deleted, or a workspace folder is added or removed | on the change | the configs reload; every resident stack is analyzed again under them, and a stack they no longer claim is dropped | background |
 | a file's text on disk differs from the hash its kept suggestions were worked out from | at startup, and when the file changes on disk | its kept suggestions are dropped, and its stack is worked out again without entering the cache | background |
@@ -266,6 +267,7 @@ The YAML DSL output channel exists from activation and logs:
 - each startup step;
 - the build of the extension it runs;
 - the first analysis of each opened file, with its time;
+- each schema URL read: downloaded, kept copy used with its age, or not downloaded; a check the server answers unchanged is not logged;
 - every failure.
 
 A startup step that fails is logged and skipped, so the language server always starts and the file always shows.
@@ -754,6 +756,21 @@ A modeline's schema URI also says what the file is, by its fragment:
 - The modeline's path is a link that opens the schema it names.
 - The extension embeds no schema.
 - When neither source resolves, the file's modeline line gets a problem, or its first line when it has no modeline, and field hovers stay empty. Navigation, other problems and suggestions still run.
+
+### Schema URLs
+
+A schema URL, in a modeline or in `schema_search_paths`, may carry the editor's parameters in its query, each named with the `yaml_dsl_` prefix:
+
+| Parameter | Holds |
+|---|---|
+| `yaml_dsl_max_age_days` | the whole number of days a downloaded copy is used before it is checked with the server; `0`, or no parameter, fetches the URL each time a stack reading it loads |
+
+- The editor's parameters are removed before the URL is fetched. Every other parameter reaches the server as written, in its order.
+- Any other `yaml_dsl_` parameter, or a max age that is not a whole number, is a problem on the modeline's line.
+- A downloaded copy is kept in the extension's storage, across sessions and workspaces, under the URL without the editor's parameters, with the server's `ETag` and `Last-Modified` and the time the server last sent or confirmed it.
+- A copy older than its max age is checked with `If-None-Match`, else `If-Modified-Since`, else a full download. A `304` keeps the copy, and either answer restarts its age.
+- Files naming one URL with different max ages share its copy, each judging the copy's age by its own max age.
+- When the server does not answer, the kept copy is used.
 
 ### Branches the document selects
 

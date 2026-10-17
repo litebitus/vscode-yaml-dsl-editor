@@ -35,7 +35,7 @@ test('with validation in the worker, a file\'s schema problems arrive when answe
   + 'and only an opted-in DSL keeps its compiled schema', async () => {
   const storageFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-dsl-editor-mock-storage-'));
   const ws = mockWorkspace(() => createWorkerValidation());
-  ws.setCompiledSchemaFolder(storageFolder);
+  ws.setStorageFolder(storageFolder);
   let answers = 0;
   ws.onValidationAnswered(() => { answers += 1; });
   await ws.setConfigs(mockConfigs(

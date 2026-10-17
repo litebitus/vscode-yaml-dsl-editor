@@ -98,6 +98,20 @@ The JSON Schema drafts read, each by its own parser, validator and renderer:
 - draft 2019-09
 - draft-07 (assumed when `$schema` is missing or names an older draft)
 
+### Schema modeline
+
+A file names its schema with yaml-language-server's modeline: a path relative to the file, or a URL.
+
+```yaml
+# yaml-language-server: $schema=<path or URL>
+```
+
+A schema URL may carry query param `yaml_dsl_max_age_days=<days>`: the downloaded schema is kept that many days, then checked with the server. The editor removes the parameter before fetching. A released version never changes, so it takes a long max age:
+
+```yaml
+# yaml-language-server: $schema=https://github.com/litebitus/vscode-yaml-dsl-editor/releases/download/<release>/cloudformation-2010-09-09.schema.json?yaml_dsl_max_age_days=365
+```
+
 ### Fragments
 
 A modeline marks a file as a fragment by the fragment of its schema's URI. A fragment is validated from its own root with no key required, and its hover shows the requirement markers struck.
@@ -253,6 +267,7 @@ One-time setup:
    exported as `OVSX_PAT` — Open VSX serves VSCode forks like Antigravity
 4. `npm i -g @vscode/vsce ovsx`
 5. `vsce login lite2073` (paste the PAT)
+6. `gh auth login`, for the GitHub release
 
 Each release:
 
@@ -261,7 +276,7 @@ make publish              # bump patch; publish to Open VSX + VS Code Marketplac
 make publish BUMP=minor   # bump minor instead
 ```
 
-Before the bump, `make publish` runs `make test-antigravity` and `make test-cursor`, so a release is tested in each target editor installed on the machine. The version bump renames the CHANGELOG's `## Unreleased` heading to the new version and the date, in the release commit; a release without that heading stops before the bump.
+Before the bump, `make publish` runs `make test-antigravity` and `make test-cursor`, so a release is tested in each target editor installed on the machine. The version bump renames the CHANGELOG's `## Unreleased` heading to the new version and the date, in the release commit; a release without that heading stops before the bump. After the tag is pushed, `make release-schemas` creates the version's GitHub release, its notes the version's CHANGELOG section, and attaches the CloudFormation schema.
 
 To only build the .vsix without publishing: `make package`.
 To retry a single store for the current version: `make publish-ovsx` / `make publish-vsce`.
