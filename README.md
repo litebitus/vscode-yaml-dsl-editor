@@ -79,7 +79,8 @@ layers:
 A DSL's functions and macros come from its function table: its schema's `x-yaml-dsl-functions`, or Terraform's. A function computes a value when the document is used; a macro is expanded before then, and the editor reads the document as the expansion writes it.
 
 - Hover documents a call by its signature and arguments, and a macro by what it expands to.
-- Calls complete after the call marker, each documented as its hover is.
+- Calls complete from their name, with or without the call marker, each documented as its hover is.
+- Tags the config declares complete after `!` in a value.
 - A call the table rejects is marked as you type: an unknown name, or an argument the call is missing or gets wrong.
 - A merge macro merges maps from a local, a path into one, or another file into the map holding the call, and a key in a merged local is documented and completed by the maps it lands in.
 - A loop macro repeats its body once per item: each item is validated, and the names the body declares resolve.

@@ -4,6 +4,9 @@
 
 - Schemas
   - A schema URL's `yaml_dsl_max_age_days` parameter keeps the downloaded schema across sessions for that many days, then checks it with the server; the editor's `yaml_dsl_` parameters are removed before the URL is fetched, and each read is logged in the output channel.
+- Completion
+  - A reference opens on its leading text typed in any case, and a function or macro is offered from its name, with or without the call marker.
+  - A value starting with `!` is offered the tags the config declares, each documented by the function its key calls.
 - Packaging
   - `make publish` attaches the CloudFormation schema to the version's GitHub release.
 

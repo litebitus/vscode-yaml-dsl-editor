@@ -59,4 +59,12 @@ suite('merge macros', () => {
       .map((item) => (typeof item.label === 'string' ? item.label : item.label.label));
     assert.deepEqual(labels.filter((label) => ['size', 'mode', 'source'].includes(label)), ['source']);
   });
+
+  test('a reference typed in another case is offered as its rule spells it', async () => {
+    const editor = await shownDocument(mergeFixture('mock.yaml'));
+    const cursor = await typedAfter(editor, 'source: ref mocktype.landed', '\n  lowered:\n    source: REF');
+    const labels = (await completionItemsAt(editor.document, cursor))
+      .map((item) => (typeof item.label === 'string' ? item.label : item.label.label));
+    assert.ok(labels.includes('ref mocktype.landed'), labels.join(', '));
+  });
 });

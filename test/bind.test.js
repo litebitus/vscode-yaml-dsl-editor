@@ -367,7 +367,7 @@ test('completion answers editor items that replace what was typed', async () => 
   const [offered] = await complete(5, 14);
   assert.equal(offered.label, 'ref thing.one');
   assert.equal(offered.kind, 18);
-  assert.equal(connection.handlers.initialize().capabilities.completionProvider.triggerCharacters.join(''), ' .{');
+  assert.equal(connection.handlers.initialize().capabilities.completionProvider.triggerCharacters.join(''), ' .{!');
   const bare = bind(fakeConnection(), fakeDocuments(), { readFile: async () => null, fetchText: async () => null });
   assert.deepEqual(bare.completion('file:///repo/none.yml', { line: 0, character: 0 }), []);
 });

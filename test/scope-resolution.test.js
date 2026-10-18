@@ -97,6 +97,20 @@ test('completion offers only the symbols visible where the cursor is', () => {
   assert.deepEqual(setupLabels, ['${env}']);
 });
 
+test('a reference opens on its leading text in any case, and is written in the case its rule spells', () => {
+  const taggedDsl = parsedDsl(dslEntry('tagged', {
+    file_includes: ['**/*.yml'],
+    scopes: { ENTRY: scope() },
+    declarations: [declaration('$.Resources.*', 'ENTRY')],
+    references: [reference('^!Ref (?<name>[A-Za-z0-9]+)$', 'ENTRY')],
+  }));
+  const taggedText = 'Resources:\n  MockQueue: {}\nOutputs:\n  MockOutput:\n    Value: !r\n';
+  const { doc, stack } = stackFor(taggedDsl, taggedText);
+  const lineText = '    Value: !r';
+  const items = completionAt(doc, lineText, { line: 4, character: lineText.length }, stack);
+  assert.deepEqual(items.map((item) => [item.label, item.range.start.character]), [['!Ref MockQueue', 11]]);
+});
+
 test('a symbol with no declared scope, or a site outside its list, sees nothing later items do not reach', () => {
   const followingScope = { regions: [], laterItemsOfDeclaringList: true, namedByParentKey: false, builtinNames: [] };
   const dsl = { scopes: { step: followingScope } };

@@ -628,12 +628,14 @@ The list holds what the file's fold sees and what is visible from the cursor:
 | an overlay | the common layer's symbols and its own |
 | the common layer | its own symbols, and those declared in every overlay |
 | inside a placeholder | every reference a placeholder body may be, builtins included, and in a loop's body the loop variable of each loop around it |
-| after a call marker in a key | the vocabulary, each entry with its signature |
+| a word typed where a key starts | the vocabulary, each entry with its call marker and signature |
+| a value starting with `!` | each tag `tag_keys` declares, with the signature of the function its key calls |
 | at a `function_call` macro's callee typed `function` or `macro` | the vocabulary's entries of that kind, without the call marker, each with its signature |
 
 - A declaration keyed by a local is offered under the local's value, the spelling a ref uses for it.
 - A ref completes up to the declared name; the field path after it is the author's.
 - The list opens as the reference starts and narrows on every character, by the editor's fuzzy match against everything typed since the reference began.
+- A reference starts when what is typed matches the start of its template in any case, and an entry is written in the case its rule spells.
 - Each entry names the declaring file and shows the declaration as authored.
 
 ### Schema fields and values

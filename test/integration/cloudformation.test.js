@@ -76,6 +76,39 @@ suite('CloudFormation templates', () => {
     ].join('\n')), documentation);
   });
 
+  test('a function is offered from its name typed without the call marker', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-template.yaml'));
+    const cursor = await typedAfter(editor, 'Value: !GetAtt MockQueue.Arn', '\n  MockJoined:\n    Value:\n      jo');
+    const labels = (await completionItemsAt(editor.document, cursor))
+      .map((item) => (typeof item.label === 'string' ? item.label : item.label.label));
+    assert.ok(labels.includes('Fn::Join'), labels.join(', '));
+  });
+
+  test('a value starting with `!` is offered the tags the config declares', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-template.yaml'));
+    const cursor = await typedAfter(editor, 'Value: !GetAtt MockQueue.Arn', '\n  MockTagged:\n    Value: !');
+    const labels = (await completionItemsAt(editor.document, cursor))
+      .map((item) => (typeof item.label === 'string' ? item.label : item.label.label));
+    assert.deepEqual(labels.filter((label) => label.startsWith('!')).sort(), ['!GetAtt', '!Ref']);
+  });
+
+  test('typing `!` where a value starts opens the list on its own', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-template.yaml'));
+    const cursor = await typedAfter(editor, 'Value: !GetAtt MockQueue.Arn', '\n  MockTyped:\n    Value: ');
+    editor.selection = new vscode.Selection(cursor, cursor);
+    await vscode.commands.executeCommand('type', { text: '!' });
+    const typedLine = () => editor.document.lineAt(cursor.line).text;
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    while (Date.now() < deadline && !/^ {4}Value: ![A-Za-z]/.test(typedLine())) {
+      await new Promise((resolve) => { setTimeout(resolve, 300); });
+      await vscode.commands.executeCommand('acceptSelectedSuggestion');
+    }
+    assert.match(typedLine(), /^ {4}Value: ![A-Za-z]/);
+  });
+
   test('a function_call macro\'s callee typed macro is completed from the table\'s macros only', async () => {
     const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
     const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'));
