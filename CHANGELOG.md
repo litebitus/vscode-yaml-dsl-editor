@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.1 - 2026-10-17
 
 - Schemas
   - A schema URL's `yaml_dsl_max_age_days` parameter keeps the downloaded schema across sessions for that many days, then checks it with the server; the editor's `yaml_dsl_` parameters are removed before the URL is fetched, and each read is logged in the output channel.
