@@ -98,6 +98,7 @@ const files = {
     'mocktype:',
     '  third:',
     '    fn.merge: local.mock_own',
+    '    mode: fast',
     '',
   ].join('\n'),
 };
@@ -116,12 +117,14 @@ function headingOf(text) {
   return `<span style="color:${color};"><strong>${joined}</strong></span>`;
 }
 
-async function mergingWorkspace() {
+async function mergingWorkspace(entry = mergingEntry, terraformFunctions = async () => null) {
   const ws = createWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
+    terraformFunctions,
   });
-  await ws.setConfigs([{ text: configText(mergingEntry), dir: '/repo' }]);
+  ws.vocabularyLoaded = new Promise((resolve) => { ws.onVocabularyLoaded(resolve); });
+  await ws.setConfigs([{ text: configText(entry), dir: '/repo' }]);
   for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   for (const filePath of [common, one, two]) await ws.setActive(filePath);
   await ws.setActive(null);
@@ -164,6 +167,18 @@ test('a key in a local an overlay merges reads that overlay\'s one schema', asyn
   await ws.sync(`file://${two}`, two, typed);
   const offered = ws.completion(`file://${two}`, positionAt(typed, '    \nmocktype', 4)).map((item) => item.label);
   assert.deepEqual(offered.filter((label) => ['size', 'mode', 'label'].includes(label)), ['size', 'mode', 'label']);
+});
+
+test('a merge macro beside a Terraform function of its name still documents the locals it merges', async () => {
+  const withTerraform = { ...mergingEntry, function: markerFunction({ definitions: ['terraform', 'schema'] }) };
+  const terraformMerge = async () => ({
+    function_signatures: { merge: { description: 'Mock merge.', return_type: 'dynamic', parameters: [] } },
+  });
+  const ws = await mergingWorkspace(withTerraform, terraformMerge);
+  await ws.vocabularyLoaded;
+  await ws.whenAnalyzed(`file://${two}`);
+  const hover = ws.hover(`file://${two}`, positionAt(files[two], 'size', 1));
+  assert.equal(hover.contents.value, '`size`: *integer*    `[required]`\n\nMock size, in two.');
 });
 
 test('a fold merging one local into maps with different schemas is an error at each merge call', async () => {

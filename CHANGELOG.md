@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Macros
+  - A merge or loop macro that shares its name with a function in another table, such as Terraform's `merge`, is expanded, so the locals it merges are documented and completed.
+
 ## 0.8.1 - 2026-10-17
 
 - Schemas

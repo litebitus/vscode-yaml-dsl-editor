@@ -22,6 +22,7 @@ A YAML DSL is YAML with a language on top. The extension handles DSLs built from
 - Locals: named values declared once and used anywhere, built from each other.
 - Placeholders: values left open in the document and filled in when the engine reads it, such as the environment or the region.
 - Functions: values computed from other values, such as a merge of maps or a joined list.
+- Macros: entries the DSL expands before the document is used, such as maps merged into the map holding the call or a body repeated once per item.
 - Layers: one document split into a shared common layer and per-environment overlays, so what every environment shares is written once and each overlay states only how it differs.
 - Schema: the fields and their documentation, described once for every file.
 
