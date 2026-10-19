@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Functions
+  - A schema that publishes no function table adds no functions, with no problem on the modeline.
+
 ## 0.8.2 - 2026-10-18
 
 - Macros

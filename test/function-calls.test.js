@@ -664,10 +664,10 @@ test('a schema publishes a function table at a pointer, held to the documented f
   assert.deepEqual(schemaVocabulary(schema, '#/x-a~0b~1c').vocabulary, { ssm: readTable.ssm });
   assert.deepEqual(schemaVocabulary(null, '#/x'), { vocabulary: null, problem: null, notice: null });
   assert.equal(schemaVocabulary(schema, '#/x-yaml-dsl-functions').notice, null);
-  assert.equal(schemaVocabulary(schema, '#/missing').problem, 'the schema publishes no #/missing');
-  assert.equal(
-    schemaVocabulary({ x: { deep: 1 } }, '#/x/deep/further').problem,
-    'the schema publishes no #/x/deep/further',
+  assert.deepEqual(schemaVocabulary(schema, '#/missing'), { vocabulary: {}, problem: null, notice: null });
+  assert.deepEqual(
+    schemaVocabulary({ x: { deep: 1 } }, '#/x/deep/further'),
+    { vocabulary: {}, problem: null, notice: null },
   );
   const malformed = (published) => schemaVocabulary({ x: published }, '#/x').problem;
   const argument = (name, required, repeated) => mockArgument(name, 'text', required, repeated);

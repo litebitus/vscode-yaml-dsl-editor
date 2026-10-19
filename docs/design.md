@@ -1269,7 +1269,7 @@ A placeholder splices a value into a scalar or a key, whole or as part of a long
 | `definitions` source | The table |
 |---|---|
 | `terraform` | the answer of `terraform metadata functions -json`, run by the language server and ignored when Terraform cannot be invoked |
-| `schema` | the table the file's schema publishes at `#/x-yaml-dsl-functions`; a schema that publishes no table there, or a malformed one, is a problem on the modeline line |
+| `schema` | the table the file's schema publishes at `#/x-yaml-dsl-functions`, none when it publishes none; a malformed one is a problem on the modeline line |
 
 - While a source has not answered the vocabulary is open, and an unknown function is a problem only once every source has.
 - A key that calls a macro is a macro call, never a function call.

@@ -1112,7 +1112,7 @@ test('calls are checked against Terraform and the schema once both vocabularies 
   ]);
 });
 
-test('a schema that publishes nothing at the vocabulary pointer is a problem on the modeline', async () => {
+test('a schema that publishes nothing at the vocabulary pointer adds no functions and is no problem', async () => {
   const text = 'locals:\n  db fn.ssm: /mock/key\n';
   const ws = createWorkspace({
     readFile: async (filePath) => (filePath === common ? text : null),
@@ -1122,7 +1122,7 @@ test('a schema that publishes nothing at the vocabulary pointer is a problem on 
   await ws.sync(`file://${common}`, common, text);
   const problems = ws.problems(`file://${common}`);
   assert.deepEqual(problems.map((problem) => [problem.message, problem.range.start.line]), [
-    ['the schema publishes no #/x-yaml-dsl-functions', 0],
+    ['unknown function ssm', 1],
   ]);
 });
 
