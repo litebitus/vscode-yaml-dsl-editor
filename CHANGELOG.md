@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.4 - 2026-10-19
 
 - Macros
   - A reference in the common layer to a local it alone declares goes to that declaration, merge macros or not.
