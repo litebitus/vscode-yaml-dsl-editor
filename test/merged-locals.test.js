@@ -159,6 +159,16 @@ test('a key in a local the common layer merges is documented by every schema it 
   assert.deepEqual(offered.filter((label) => ['size', 'mode', 'label'].includes(label)), ['label']);
 });
 
+test('a reference to a local only the common layer declares goes to that one declaration in every fold', async () => {
+  const ws = await mergingWorkspace();
+  const referenceAtFirst = positionAt(files[common], 'local.mock_defaults', 2);
+  const definition = ws.definition(`file://${common}`, referenceAtFirst);
+  assert.equal(definition.path, common);
+  assert.deepEqual(definition.range.start, { line: 1, character: 2 });
+  const hover = ws.hover(`file://${common}`, referenceAtFirst);
+  assert.equal(hover.contents.value.match(/```yaml-dsl/g).length, 1);
+});
+
 test('a key in a local an overlay merges reads that overlay\'s one schema', async () => {
   const ws = await mergingWorkspace();
   const hover = ws.hover(`file://${two}`, positionAt(files[two], 'size', 1));

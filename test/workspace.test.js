@@ -176,6 +176,35 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.equal(SCHEMA_UNAVAILABLE, 'schema is unavailable');
 });
 
+test('a common layer section is titled common layer, with its file name when the overlays\' files are named apart', async () => {
+  const concernEntry = sampleEntry({
+    layers: {
+      overlay_folders: ['one', 'two', 'three', 'four'],
+      common_layer_discovery: 'ancestor',
+      common_layer_files: { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] },
+      duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
+    },
+  });
+  const concernCommon = `${root}/queue.mock.yml`;
+  const concernOne = `${root}/one/queue/mock.yml`;
+  const commonText = 'locals:\n  db: mock-value\nmocktype:\n  primary:\n    label: local.db\n';
+  const oneText = 'locals:\n  db: mock-one\n';
+  const twoText = 'mocktype:\n  secondary: {}\n';
+  const titlesOf = async (commonPath, onePath) => {
+    const twoPath = onePath.replace('/one/', '/two/');
+    const ws = workspace({ [commonPath]: commonText, [onePath]: oneText, [twoPath]: twoText });
+    await ws.setConfigs([{ text: configText(concernEntry), dir: '/repo' }]);
+    await ws.sync(`file://${onePath}`, onePath, oneText);
+    await ws.sync(`file://${twoPath}`, twoPath, twoText);
+    await ws.sync(`file://${commonPath}`, commonPath, commonText);
+    await visitStack(ws, commonPath);
+    const hover = ws.hover(`file://${commonPath}`, at(commonText, 'local.db'));
+    return [...hover.contents.value.matchAll(/^\[([^\]]+)\]/gm)].map((match) => match[1]);
+  };
+  assert.deepEqual(await titlesOf(common, one), ['one', 'common layer']);
+  assert.deepEqual(await titlesOf(concernCommon, concernOne), ['one', 'common layer (queue.mock.yml)']);
+});
+
 test('a schema search path starting with {config_root} is read from the config folder for a file at any depth', async () => {
   const text = 'name: plain\n';
   const files = {

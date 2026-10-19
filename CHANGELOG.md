@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Macros
+  - A reference in the common layer to a local it alone declares goes to that declaration, merge macros or not.
+- Layers
+  - A common layer named apart from its overlays' files is labeled with its file name, as in `common layer (argocd.resources.yml)`.
+
 ## 0.8.3 - 2026-10-18
 
 - Functions

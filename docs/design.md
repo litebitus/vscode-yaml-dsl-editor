@@ -560,7 +560,7 @@ A local is a named value. `locals.scope_name` names the scope whose declarations
 | Command-click | opens the declaration | opens a popup at the reference showing them all | does not move |
 | Resting the pointer | no popup of the extension's | the editor's Command-click tooltip on its link | an error reads `Invalid reference: <scope>.<name>` |
 
-- The popup shows the declarations in this language, each section headed by its overlay's name, `common layer` for the common layer's; the heading opens the declaration.
+- The popup shows the declarations in this language, each section headed by its overlay's name, `common layer` for the common layer's, with the file name in parentheses when it differs from the overlays' file name, as in `common layer (argocd.resources.yml)`; the heading opens the declaration.
 - A reference nothing visible declares is an error. A builtin has no declaration; its hover and its completion entry read `` `<name>`: *builtin* ``.
 - The references peek is not opened.
 
