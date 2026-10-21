@@ -25,7 +25,7 @@ const schema = {
   },
 };
 
-function dslWith(keySortOrders) {
+function dslWith(keySortOrders, validatorLines = []) {
   const text = [
     'version: "1"',
     'dsls:',
@@ -33,6 +33,7 @@ function dslWith(keySortOrders) {
     '    file_includes: ["**/mock.yml"]',
     '    file_excludes: []',
     '    schema_search_paths: []',
+    ...validatorLines,
     `    key_sort_orders: ${JSON.stringify(keySortOrders)}`,
     '    scopes: {}',
     '    declarations: []',
@@ -110,6 +111,26 @@ test('a field the common layer already gives the entry is not filled again', () 
     heldKeysAt: (mapPath) => (mapPath.join('.') === 'queue.alerts' ? ['name', 'mode'] : []),
   });
   assert.deepEqual(filled.fields.map((field) => field.key), ['kms_key_arn', 'settings']);
+});
+
+test('a field the entry\'s key sets by the validator\'s child values from parent key is not filled', () => {
+  const settingName = [
+    '    validator:',
+    '      child_values_from_parent_key:',
+    "        - pattern: '^(?<field>[a-z]+) (?<value>[a-z-]+)$'",
+  ];
+  const anyKeySchema = {
+    ...schema,
+    properties: { queue: { type: 'object', additionalProperties: { $ref: '#/$defs/queue_entry' } } },
+  };
+  const filled = requiredFieldsToFill({
+    text: 'queue:\n  name mock-alerts:\n',
+    keyLine: 1,
+    schema: anyKeySchema,
+    dsl: dslWith([], settingName),
+    heldKeysAt: noHeldKeys,
+  });
+  assert.deepEqual(filled.fields.map((field) => field.key), ['mode', 'kms_key_arn', 'settings']);
 });
 
 test('a key with a value, a map that already holds lines, a scalar field and an unread schema fill nothing', () => {
