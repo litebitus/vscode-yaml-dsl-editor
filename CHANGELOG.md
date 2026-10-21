@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.5 - 2026-10-21
 
 - Completion
   - Enter after a key no longer fills in a required field the key itself sets by `child_values_from_parent_key`.
