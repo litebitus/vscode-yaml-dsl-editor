@@ -169,6 +169,22 @@ test('a reference to a local only the common layer declares goes to that one dec
   assert.equal(hover.contents.value.match(/```yaml-dsl/g).length, 1);
 });
 
+test('a key in a local a stack with no overlay files merges reads the stack\'s one schema', async () => {
+  const loneRoot = '/repo/mock-lone';
+  const lone = `${loneRoot}/mock.yml`;
+  const loneText = files[common];
+  const loneFiles = { [`${loneRoot}/.schema/sample.schema.json`]: schemaWith('[required] Mock size.'), [lone]: loneText };
+  const ws = createWorkspace({
+    readFile: async (filePath) => (Object.hasOwn(loneFiles, filePath) ? loneFiles[filePath] : null),
+    fetchText: async () => null,
+  });
+  await ws.setConfigs([{ text: configText(mergingEntry), dir: '/repo' }]);
+  await ws.sync(`file://${lone}`, lone, loneText);
+  await ws.setActive(lone);
+  const hover = ws.hover(`file://${lone}`, positionAt(loneText, 'size', 1));
+  assert.equal(hover.contents.value, '`size`: *integer*    `[required]`\n\nMock size.');
+});
+
 test('a key in a local an overlay merges reads that overlay\'s one schema', async () => {
   const ws = await mergingWorkspace();
   const hover = ws.hover(`file://${two}`, positionAt(files[two], 'size', 1));

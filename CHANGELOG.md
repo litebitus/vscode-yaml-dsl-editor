@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Macros
+  - A local merged in a stack with no overlay files is documented and completed.
+
 ## 0.8.5 - 2026-10-21
 
 - Completion
