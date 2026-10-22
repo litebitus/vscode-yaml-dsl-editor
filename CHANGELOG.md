@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.6 - 2026-10-21
 
 - Macros
   - A local merged in a stack with no overlay files is documented and completed.
