@@ -1356,7 +1356,8 @@ The editor follows the preprocessing, so it reads the document as it will be: an
 - A macro is called as a function is, through `marker_function` or its tag through `tag_keys`, and also by a key at one of its `unmarked_key_paths`.
 - A function yields a value, so its call stands where a value does. A macro yields entries, so its call may stand as a whole key among siblings. YAML refuses two equal keys in one map, so the text `name_suffix_pattern` matches keeps sibling calls distinct; the editor reads nothing from it.
 - A `function_call`'s value binds its arguments by name, or is the callee's name alone, or is a list holding one call per item.
-- A call with no name standing among sibling keys calls the macro of its name; any other call calls the function of its name, or the macro where no function has it. A function and a macro of one name, from two of a DSL's `definitions`, are both kept.
+- A call whose name only a function or only a macro holds calls that one.
+- A function and a macro of one name, from two of a DSL's `definitions`, are both kept, and a call tells them apart by syntax: written in its macro kind's usage pattern, it calls the macro, and otherwise the function. A `merge` macro's pattern is a whole key.
 - A callee the table does not hold is one the DSL's users define, such as a CloudFormation macro registered by `AWS::CloudFormation::Macro`, and is not a problem.
 
 ### Evaluation

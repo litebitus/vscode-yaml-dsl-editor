@@ -169,7 +169,8 @@ test('a reference to a local only the common layer declares goes to that one dec
   assert.equal(hover.contents.value.match(/```yaml-dsl/g).length, 1);
 });
 
-test('a key in a local a stack with no overlay files merges reads the stack\'s one schema', async () => {
+test('a key in a local a stack with no overlay files merges by lone calls, Terraform\'s merge declared before the '
+  + 'schema\'s, reads the stack\'s one schema', async () => {
   const loneRoot = '/repo/mock-lone';
   const lone = `${loneRoot}/mock.yml`;
   const loneText = files[common];
@@ -177,10 +178,17 @@ test('a key in a local a stack with no overlay files merges reads the stack\'s o
   const ws = createWorkspace({
     readFile: async (filePath) => (Object.hasOwn(loneFiles, filePath) ? loneFiles[filePath] : null),
     fetchText: async () => null,
+    terraformFunctions: async () => ({
+      function_signatures: { merge: { description: 'Mock merge.', return_type: 'dynamic', parameters: [] } },
+    }),
   });
-  await ws.setConfigs([{ text: configText(mergingEntry), dir: '/repo' }]);
+  ws.vocabularyLoaded = new Promise((resolve) => { ws.onVocabularyLoaded(resolve); });
+  const withTerraform = { ...mergingEntry, function: markerFunction({ definitions: ['terraform', 'schema'] }) };
+  await ws.setConfigs([{ text: configText(withTerraform), dir: '/repo' }]);
   await ws.sync(`file://${lone}`, lone, loneText);
   await ws.setActive(lone);
+  await ws.vocabularyLoaded;
+  await ws.whenAnalyzed(`file://${lone}`);
   const hover = ws.hover(`file://${lone}`, positionAt(loneText, 'size', 1));
   assert.equal(hover.contents.value, '`size`: *integer*    `[required]`\n\nMock size.');
 });

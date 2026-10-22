@@ -82,8 +82,8 @@ test('a merge call among its map\'s keys merges its contents in order, the map\'
   ]);
 });
 
-test('a content that is not a local\'s map supplies the holding map\'s requirements, and a call standing alone '
-  + 'is the function of its name', () => {
+test('a content that is not a local\'s map supplies the holding map\'s requirements, and a bare key calls the macro '
+  + 'of its name beside a function of that name', () => {
   const written = {
     mocktype: {
       unknown: { 'fn.merge*': ['ref mock_source.config'], mode: 'fast' },
@@ -117,7 +117,7 @@ test('a content that is not a local\'s map supplies the holding map\'s requireme
     alone: { 'fn.merge': { size: 3 } },
     among: { 'fn.merge': { size: 3 }, mode: 'fast' },
   }, contextWith(both));
-  assert.deepEqual(positioned.value, { alone: { 'fn.merge': { size: 3 } }, among: { size: 3, mode: 'fast' } });
+  assert.deepEqual(positioned.value, { alone: { size: 3 }, among: { size: 3, mode: 'fast' } });
 });
 
 const schema = JSON.stringify({

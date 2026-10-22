@@ -4,6 +4,7 @@
 
 - Macros
   - A local merged in a stack with no overlay files is documented and completed.
+  - A call written as a whole key reaches the `merge` macro of its name, siblings or not, and a function call of that name the function.
 
 ## 0.8.5 - 2026-10-21
 
