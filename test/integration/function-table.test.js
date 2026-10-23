@@ -29,4 +29,19 @@ suite('function table', () => {
       '```yaml-dsl-signature\nlegacy(value: text): void\n```\n\n*Returns:* `void`',
     );
   });
+
+  test('a call key naming a field documents that field by its name, and its function by its signature', async () => {
+    const doc = (await shownDocument(functionTableFixture())).document;
+    await hoverTextBecomes(
+      doc,
+      positionInText(doc, 'value fn.ssm', 1),
+      '`value`: *string*    `[required]`\n\nThe mock value.',
+    );
+    await hoverTextBecomes(
+      doc,
+      positionInText(doc, 'value fn.ssm', 'value fn.'.length + 1),
+      '```yaml-dsl-signature\nssm(parameter: text): text\n```\n\nReturns the **mock** parameter\'s value.\n\n'
+        + '- `parameter`: The mock parameter name.\n\n*Returns:* The mock **value**.',
+    );
+  });
 });

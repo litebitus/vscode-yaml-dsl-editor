@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Hover
+  - A key the DSL's `marker_function` reads as a call naming a field documents that field, its requirement included.
 - Validation
   - A field supplied by a key the DSL's `marker_function` reads as a call naming it counts as present inside a field's allowed forms, so the field no longer fails as matching none of them.
 

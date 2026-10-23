@@ -1,6 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
+  "properties": {
+    "mock-named": {
+      "type": "object",
+      "properties": {
+        "value": { "type": "string", "description": "[required] The mock value." }
+      }
+    }
+  },
   "x-yaml-dsl-functions": {
     "ssm": {
       "description": "Returns the **mock** parameter's value.",

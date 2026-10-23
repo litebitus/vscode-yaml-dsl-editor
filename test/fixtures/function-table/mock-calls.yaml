@@ -2,3 +2,5 @@ mock-parameter:
   fn.ssm: /mock/key
 mock-legacy:
   fn.legacy: mock-value
+mock-named:
+  value fn.ssm: /mock/key

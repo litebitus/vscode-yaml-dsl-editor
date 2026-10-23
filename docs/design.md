@@ -713,6 +713,7 @@ A schema for this kind of value is built this way. This extension reads the sche
 - A consequence that gives a field a referenced schema reads as that field being the definition, such as `` `Properties` is a `AWS::S3::Bucket` ``.
 - The draft's renderer reads its own keywords, as its parser and validator do; without a value, a part it cannot read in words names a condition the schema states.
 - A key that sets a field of its entry, by the `validator`'s `child_values_from_parent_key`, documents its entry, then the field it sets, as that field's own tooltip would, under `*Sets* <field> *to* <value>:`. An entry that writes the field itself documents its entry alone.
+- A key the DSL's `marker_function` reads as a call naming a field documents that field, as a key writing the field would; its function is documented by the function's hover.
 - In the common layer the tooltip documents the field in each overlay's schema; overlays whose documentation is the same share one section, headed by their names, and overlays whose schema has no such field are named last, as not a field.
 - A key in a common layer local that a merge reads is documented by each overlay's schema at each map the local lands in. A section's heading names `overlay:path` terms: overlays merging at the same paths are grouped and the paths' common prefix is factored, as `{dev,prod}:queue.{orders,payments}`, and a long heading wraps only between terms.
 - A section's heading is its overlays' names in bold, in the theme's `overlayHeadingForeground`.

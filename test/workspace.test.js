@@ -523,6 +523,31 @@ test('hover on a key that sets a field of its entry documents the entry, then th
   assert.equal(hoverOf('extra'), entryOf('extra'));
 });
 
+test('hover on a call key naming a field documents that field, as a key writing the field would', async () => {
+  const modeline = '# yaml-language-server: $schema=../schema.json\n';
+  const files = {
+    [`${root}/schema.json`]: JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      properties: {
+        mocktype: {
+          type: 'object',
+          properties: { origins: { type: 'array', description: '[required] Mock origins.' } },
+          patternProperties: { '^(\\S+ )?fn\\.[a-z0-9_]+\\*?$': {} },
+        },
+      },
+    }),
+    [common]: 'mocktype: {}\n',
+    [one]: `${modeline}mocktype:\n  origins fn.formatlist*: ["https://%s", mock-domain]\n`,
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: configText(sampleEntry({ function: markerFunction() })), dir: '/repo' }]);
+  for (const filePath of [common, one]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  assert.equal(
+    ws.hover(`file://${one}`, at(files[one], 'origins fn')).contents.value,
+    '`origins`: *array*    `[required]`\n\nMock origins.',
+  );
+});
+
 test('a schema that changes on disk revalidates every file reading it, the common layer included', async () => {
   const modeline = (schemaPath) => `# yaml-language-server: $schema=${schemaPath}\n`;
   const schemaPath = `${root}/schema.json`;
