@@ -101,6 +101,43 @@ test('an alternative none of whose branches holds is one failure, without the br
   assert.deepEqual(failures.map(({ path, keyword }) => [path, keyword]), [[['mocktype', 'primary', 'size'], 'anyOf']]);
 });
 
+test('an alternative failure carries each set of missing fields whose presence would make it hold, nested ones '
+  + 'combined, and none for a branch failing otherwise', () => {
+  for (const draftUri of DRAFT_URIS) {
+    const schema = {
+      $schema: draftUri,
+      properties: {
+        mocktype: {
+          oneOf: [
+            { type: 'string' },
+            {
+              type: 'object',
+              required: ['label'],
+              properties: {
+                label: { type: 'string' },
+                mode: { anyOf: [{ type: 'object', required: ['kind'] }, { type: 'object', required: ['ref'] }] },
+              },
+            },
+          ],
+        },
+      },
+    };
+    const validator = schemaValidatorFor(schema);
+    const requirementSetsOf = (value) => validator.documentFailures(value)
+      .map(({ path, keyword, requirementSetsToPass }) => [path, keyword, requirementSetsToPass]);
+    const missing = (path, requiredField) => ({ path, keyword: 'required', requiredField });
+    assert.deepEqual(requirementSetsOf({ mocktype: { mode: {} } }), [
+      [['mocktype'], 'oneOf', [
+        [missing(['mocktype'], 'label'), missing(['mocktype', 'mode'], 'kind')],
+        [missing(['mocktype'], 'label'), missing(['mocktype', 'mode'], 'ref')],
+      ]],
+    ], draftUri);
+    assert.deepEqual(requirementSetsOf({ mocktype: { label: 1 } }), [
+      [['mocktype'], 'oneOf', undefined],
+    ], draftUri);
+  }
+});
+
 test('a key its map\'s key schema rejects is one failure naming the key, without the key schema\'s own', () => {
   const validator = schemaValidatorFor({
     $schema: DRAFT_URIS[0],

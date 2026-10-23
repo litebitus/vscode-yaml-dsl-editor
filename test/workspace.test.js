@@ -451,6 +451,41 @@ test('each overlay\'s fold is validated, each error placed in the file that wrot
   assert.deepEqual(validationMessages(unruled, two), [[2, '`name` is required']]);
 });
 
+test('a field a call key supplies inside one of a field\'s allowed forms is present in each fold', async () => {
+  const modeline = (schemaPath) => `# yaml-language-server: $schema=${schemaPath}\n`;
+  const corsSchema = {
+    type: 'object',
+    properties: {
+      origins: { type: 'array', description: '[required] Mock origins.' },
+      methods: { type: 'array', description: '[required] Mock methods.' },
+    },
+  };
+  const routesSchema = {
+    oneOf: [
+      { type: 'string', pattern: '^local\\.' },
+      { type: 'array', items: { type: 'object', properties: { cors: corsSchema } } },
+    ],
+  };
+  const files = {
+    [`${root}/schema.json`]: JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      properties: { mocktype: { additionalProperties: { properties: { routes: routesSchema } } } },
+    }),
+    [common]: `${modeline('schema.json')}mocktype:\n  mock-app:\n    routes:\n      - cors:\n`
+      + '          origins fn.formatlist*: ["https://%s", ref mocktype.mock_domains]\n          methods: [GET]\n',
+    [one]: `${modeline('../schema.json')}mocktype:\n  mock-other-app: {}\n`,
+    [two]: `${modeline('../schema.json')}mocktype:\n  mock-other-app: {}\n`,
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: configText(sampleEntry({ function: markerFunction() })), dir: '/repo' }]);
+  for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
+  await visitStack(ws, one);
+  assert.deepEqual(validationMessages(ws, common), []);
+  const withoutOrigins = files[common].replace(/ {10}origins.*\n/, '');
+  await ws.sync(`file://${common}`, common, withoutOrigins);
+  assert.deepEqual(validationMessages(ws, common), [[3, '`routes` matches none of its allowed forms (one, two)']]);
+});
+
 test('hover on a key that sets a field of its entry documents the entry, then the field it sets', async () => {
   const modeline = '# yaml-language-server: $schema=../schema.json\n';
   const identifiedSchema = JSON.stringify({

@@ -70,6 +70,21 @@ test('a field a call key of the marker function supplies is not reported missing
   assert.equal(withoutCalls.reports(missing(['mocktype', 'doors'], 'value')), true);
 });
 
+test('an alternative is not reported when every field of one of its missing sets is supplied', () => {
+  const written = { mocktype: { doors: { cors: { 'origins fn.formatlist*': [] } } } };
+  const document = validationDocumentOf(written, dsl);
+  const missing = (path, requiredField) => ({ keyword: 'required', path, requiredField });
+  const cors = ['mocktype', 'doors', 'cors'];
+  const alternative = (requirementSetsToPass) => (
+    { keyword: 'oneOf', path: ['mocktype', 'doors'], requirementSetsToPass }
+  );
+  const dependency = { keyword: 'dependentRequired', path: cors, requiredField: 'origins' };
+  assert.equal(document.reports(alternative([[missing(cors, 'methods')], [missing(cors, 'origins')]])), false);
+  assert.equal(document.reports(alternative([[missing(cors, 'origins'), missing(cors, 'methods')]])), true);
+  assert.equal(document.reports(alternative([[dependency]])), true);
+  assert.equal(document.reports(alternative(undefined)), true);
+});
+
 test('a DSL without validator rules is validated as written', () => {
   const written = { mocktype: { defaults: { size: 1 }, 'name mock-primary': {} } };
   const document = validationDocumentOf(written, { validator: null, function: null });
