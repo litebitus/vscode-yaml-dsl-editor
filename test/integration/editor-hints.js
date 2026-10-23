@@ -130,6 +130,7 @@ async function definitionLineAt(doc, position) {
 
 async function undoInEditorOf(document) {
   await vscode.window.showTextDocument(document);
+  await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
   await vscode.commands.executeCommand('undo');
 }
 
