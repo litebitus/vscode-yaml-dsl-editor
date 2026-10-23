@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.7 - 2026-10-23
 
 - Hover
   - A key the DSL's `marker_function` reads as a call naming a field documents that field, its requirement included.
