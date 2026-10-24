@@ -1,0 +1,11 @@
+locals:
+  buckets:
+    mock-east: mock-east-bucket
+    mock-west: mock-west-bucket
+
+bucket:
+  objects:
+    name: ${local.buckets.${region}}
+    pattern: ${local.buckets.${region}}/*
+  unread:
+    pattern: ${local.buckets.${9}}/*

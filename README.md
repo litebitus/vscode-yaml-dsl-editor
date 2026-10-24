@@ -10,6 +10,7 @@ Open [`examples/`](examples) as a workspace to try the editor. Each folder is on
 |---|---|---|
 | CloudFormation | [`examples/cloudformation/`](examples/cloudformation) | [docs/cloudformation.md](docs/cloudformation.md) |
 | A mock DSL with a merge macro | [`examples/merge-macro/`](examples/merge-macro) | [`README.md`](examples/merge-macro/README.md) |
+| A mock DSL with nested placeholders | [`examples/nested-placeholders/`](examples/nested-placeholders) | [`README.md`](examples/nested-placeholders/README.md) |
 
 ## Features
 
