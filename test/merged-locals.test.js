@@ -215,6 +215,51 @@ test('a merge macro beside a Terraform function of its name still documents the 
   assert.equal(hover.contents.value, '`size`: *integer*    `[required]`\n\nMock size, in two.');
 });
 
+test('a common layer with no schema of its own checks its calls against each overlay\'s function table', async () => {
+  const tableRoot = '/repo/mock-tables';
+  const tableCommon = `${tableRoot}/mock.yml`;
+  const withOnlyFunction = (description) => {
+    const parsed = JSON.parse(schemaWith(description));
+    parsed['x-yaml-dsl-functions'].only_one = {
+      description: 'Mock function only overlay one publishes.',
+      arguments: [{ name: 'value', type: 'text', required: true, repeated: false, description: 'The mock value.' }],
+      return: { type: 'text', description: 'The mock result.' },
+    };
+    return JSON.stringify(parsed);
+  };
+  const commonText = [
+    'locals:',
+    '  mock_defaults:',
+    '    size: 1',
+    '  mock_label fn.only_one: mock-value',
+    'mocktype:',
+    '  first:',
+    '    fn.merge: local.mock_defaults',
+    '    mode: fast',
+    '',
+  ].join('\n');
+  const tableFiles = {
+    [`${tableRoot}/one/.schema/sample.schema.json`]: withOnlyFunction('[required] Mock size.'),
+    [`${tableRoot}/two/.schema/sample.schema.json`]: schemaWith('[required] Mock size.'),
+    [tableCommon]: commonText,
+    [`${tableRoot}/one/mock.yml`]: 'mocktype: {}\n',
+    [`${tableRoot}/two/mock.yml`]: 'mocktype: {}\n',
+  };
+  const ws = createWorkspace({
+    readFile: async (filePath) => (Object.hasOwn(tableFiles, filePath) ? tableFiles[filePath] : null),
+    fetchText: async () => null,
+  });
+  await ws.setConfigs([{ text: configText(mergingEntry), dir: '/repo' }]);
+  for (const filePath of Object.keys(tableFiles).filter((filePath) => filePath.endsWith('mock.yml'))) {
+    await ws.sync(`file://${filePath}`, filePath, tableFiles[filePath]);
+  }
+  await ws.setActive(tableCommon);
+  const callProblemsOf = () => ws.problems(`file://${tableCommon}`)
+    .filter((problem) => /function|only key/.test(problem.message))
+    .map((problem) => [problem.range.start.line, problem.message]);
+  assert.deepEqual(callProblemsOf(), [[3, 'unknown function only_one (two)']]);
+});
+
 test('a fold merging one local into maps with different schemas is an error at each merge call', async () => {
   const ws = await mergingWorkspace();
   const mergeProblemsOf = (filePath) => ws.problems(`file://${filePath}`)

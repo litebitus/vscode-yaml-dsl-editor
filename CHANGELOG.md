@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Functions
+  - A common layer's calls are checked and expanded with each overlay's function table.
+
 ## 0.8.7 - 2026-10-23
 
 - Hover

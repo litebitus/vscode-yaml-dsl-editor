@@ -1274,6 +1274,7 @@ A placeholder splices a value into a scalar or a key, whole or as part of a long
 | `schema` | the table the file's schema publishes at `#/x-yaml-dsl-functions`, none when it publishes none; a malformed one is a problem on the modeline line |
 
 - While a source has not answered the vocabulary is open, and an unknown function is a problem only once every source has.
+- A common layer's calls are read with each overlay's function table: a call's problem in an overlay's table is the common layer's, naming the overlays it holds in, as `unknown function only_one (two)`. A common layer whose stack has no overlay files reads its own.
 - A key that calls a macro is a macro call, never a function call.
 - Every call is checked: its function against the vocabulary, its argument count against the function's arity, and each literal argument against its type. A reference or a call standing as an argument is not typed, a reference written as its tag's key included.
 - Hover on a function shows its signature, colored by the extension's own signature language, `yaml-dsl-signature`, with the return type, then its description, each argument's description and the return's description, or its type where it has none, read as markdown. A function with no `return` returns `void`.
