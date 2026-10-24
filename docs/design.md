@@ -1249,6 +1249,7 @@ A placeholder splices a value into a scalar or a key, whole or as part of a long
 | `unscanned_paths` | the paths whose text belongs to another language, such as shell commands or a Dockerfile, where `${…}` is not the DSL's and is not read; each entry has `path` and `skip_keys` |
 
 - A body is read by the reference rules whose `positions` list a placeholder position: `${local.name}` holds `local.name`, read by a `local` rule, and `${env}` holds `env`, read by a rule in a logical scope such as `GLOBAL`.
+- A body may hold placeholders, as far as the `pattern` nests them, each read as a placeholder of its own: `${local.buckets.${region}}` holds `local.buckets.${region}`, read by a `local` rule, and `${region}` inside it. Hover and navigation at a position inside the nested placeholder are the nested one's.
 - Every placeholder is validated. A body no rule reads, text after the name where the rule's `text_after_name_allowed` is `false`, and a position the rule does not list are problems.
 - A valid body is classified like any other reference.
 

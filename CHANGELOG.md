@@ -4,6 +4,8 @@
 
 - Functions
   - A common layer's calls are checked and expanded with each overlay's function table.
+- Placeholders
+  - A placeholder inside another's body is read as its own, as the DSL's `pattern` nests them.
 
 ## 0.8.7 - 2026-10-23
 

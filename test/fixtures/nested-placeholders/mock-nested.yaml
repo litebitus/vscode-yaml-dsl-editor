@@ -1,0 +1,5 @@
+locals:
+  buckets:
+    mock-east: mock-east-bucket
+mock-objects: ${local.buckets.${region}}/*
+mock-unread: ${local.buckets.${9}}/*

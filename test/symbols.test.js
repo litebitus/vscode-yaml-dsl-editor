@@ -174,6 +174,35 @@ test('references are found in each position their rule allows, and refused in th
   assert.equal(analyzed.placeholders.filter((scanned) => scanned.valid).length, 4);
 });
 
+test('a placeholder inside a placeholder\'s body is read as its own, the outer reference spanning the whole body', () => {
+  const text = [
+    'objects: ${local.buckets.${region}}/*',
+    'unread: ${local.buckets.${9}}/*',
+    '',
+  ].join('\n');
+  const analyzed = doc(text, {
+    placeholder: placeholder({ pattern: '\\$\\{(?<body>(?:[^{}\\n]|\\$\\{[^{}\\n]*\\})*)\\}' }),
+    scopes: { GLOBAL: scope({ builtin_names: ['region'] }), local: scope() },
+    references: [
+      reference('^local\\.(?<name>[a-z0-9_]+)(?=$|\\.)', 'local', {
+        positions: ['placeholder_in_text'],
+        text_after_name_allowed: true,
+      }),
+      reference('^(?<name>[a-z_]+)$', 'GLOBAL', { positions: ['placeholder_in_text'] }),
+    ],
+  });
+  const textOf = (ref) => text.split('\n')[ref.range.start.line]
+    .slice(ref.range.start.character, ref.range.end.character);
+  assert.deepEqual(analyzed.references.map(textOf), ['local.buckets.${region}', 'region', 'local.buckets.${9}']);
+  assert.deepEqual(analyzed.placeholders.map((scanned) => scanned.text), [
+    '${local.buckets.${region}}',
+    '${region}',
+    '${local.buckets.${9}}',
+    '${9}',
+  ]);
+  assert.deepEqual(analyzed.referenceProblems.map((problem) => problem.message), ['unknown placeholder ${9}']);
+});
+
 test('a placeholder reference spans its whole body, the path after the name included', () => {
   const text = 'get: "${setup.login.body.token} x"\n';
   const analyzed = doc(text, {
