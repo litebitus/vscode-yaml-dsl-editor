@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.8 - 2026-10-24
 
 - Functions
   - A common layer's calls are checked and expanded with each overlay's function table.
