@@ -76,13 +76,13 @@ suite('CloudFormation templates', () => {
     ].join('\n')), documentation);
   });
 
-  test('a function is offered from its name typed without the call marker', async () => {
+  test('a function is not offered before the call marker is typed', async () => {
     const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
     const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-template.yaml'));
     const cursor = await typedAfter(editor, 'Value: !GetAtt MockQueue.Arn', '\n  MockJoined:\n    Value:\n      jo');
     const labels = (await completionItemsAt(editor.document, cursor))
       .map((item) => (typeof item.label === 'string' ? item.label : item.label.label));
-    assert.ok(labels.includes('Fn::Join'), labels.join(', '));
+    assert.ok(!labels.includes('Fn::Join'), labels.join(', '));
   });
 
   test('a value starting with `!` is offered the tags the config declares', async () => {

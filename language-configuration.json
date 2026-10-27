@@ -1,6 +1,6 @@
 {
   "comments": {
-    "lineComment": "#"
+    "lineComment": { "comment": "#" }
   },
   "brackets": [
     ["{", "}"],
@@ -12,5 +12,11 @@
     { "open": "[", "close": "]" },
     { "open": "\"", "close": "\"" },
     { "open": "'", "close": "'" }
+  ],
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*- [^\\s#-][^#]*?:\\s+\\S.*$",
+      "action": { "indent": "none", "appendText": "  " }
+    }
   ]
 }

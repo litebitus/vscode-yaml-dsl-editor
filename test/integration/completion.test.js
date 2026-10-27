@@ -83,6 +83,23 @@ suite('schema completion', () => {
     assert.equal(typedLine(), '  mode: fast');
   });
 
+  test('accepting a map field writes its key and a line one level under it, the key\'s own indentation not added again',
+    async () => {
+      const editor = await shownDocument(path.join(fixtureCopy('schema-completion'), 'mock.yml'));
+      const cursor = await typedAtEnd(editor, '  sett');
+      editor.selection = new vscode.Selection(cursor, cursor);
+      await completionItemsAt(editor.document, cursor);
+      const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+      const keyLine = () => editor.document.lineAt(cursor.line).text;
+      while (Date.now() < deadline && keyLine() !== '  settings:') {
+        await vscode.commands.executeCommand('editor.action.triggerSuggest');
+        await new Promise((resolve) => { setTimeout(resolve, 300); });
+        await vscode.commands.executeCommand('acceptSelectedSuggestion');
+      }
+      assert.equal(keyLine(), '  settings:');
+      assert.equal(editor.document.lineAt(cursor.line + 1).text, '    ');
+    });
+
   test('accepting a field with a default writes the default, selected', async () => {
     const editor = await shownDocument(path.join(fixtureCopy('schema-completion'), 'mock.yml'));
     const cursor = await typedAtEnd(editor, '  enab');
@@ -141,6 +158,39 @@ suite('schema completion', () => {
     const cursor = await typedAtEnd(editor, '  mode: ');
     const labels = await completionLabelsAt(editor.document, cursor);
     assert.ok(labels.includes('fast') && labels.includes('slow'), JSON.stringify(labels));
+  });
+});
+
+suite('Enter', () => {
+  isolateEachTest();
+
+  // The language's Enter rules load after the document switches to it, so Enter
+  // is pressed again, undone in between, until the expected line appears.
+  async function lineAfterEnterAt(lineText, expected) {
+    const editor = await shownDocument(path.join(fixtureCopy('schema-completion'), 'mock.yml'));
+    const cursor = await typedAtEnd(editor, `\n${lineText}`);
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    let entered = null;
+    while (Date.now() < deadline) {
+      editor.selection = new vscode.Selection(cursor, cursor);
+      await vscode.commands.executeCommand('type', { text: '\n' });
+      entered = { text: editor.document.lineAt(cursor.line + 1).text, character: editor.selection.active.character };
+      if (entered.text === expected.text && entered.character === expected.character) break;
+      await undoInEditorOf(editor.document);
+      await new Promise((resolve) => { setTimeout(resolve, 100); });
+    }
+    return entered;
+  }
+
+  test('Enter after a list item holding a key and a value lines the cursor up with the key, for the item\'s next field',
+    async () => {
+      const expected = { text: '      ', character: 6 };
+      assert.deepEqual(await lineAfterEnterAt('    - resource: a.b', expected), expected);
+    });
+
+  test('Enter after a scalar list item keeps the cursor under the item marker, for the next item', async () => {
+    const expected = { text: '    ', character: 4 };
+    assert.deepEqual(await lineAfterEnterAt('    - mock-a', expected), expected);
   });
 });
 

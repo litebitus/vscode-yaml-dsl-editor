@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Functions
+  - A function is offered only once the call marker is typed: a call with a name is offered every function and macro, one with no name beside other keys only the macros, and none is offered where `calls_not_allowed_at` refuses calls.
+- Fixed
+  - Completion: accepting a map or list field indented its new line by the key's own column twice, so the line sat two levels under the key; it now sits one.
+  - Enter after a list item holding a key and a value left the cursor under the item's `-`; it now lines up with the key, for the item's next field.
+
 ## 0.9.0 - 2026-10-27
 
 - Macros

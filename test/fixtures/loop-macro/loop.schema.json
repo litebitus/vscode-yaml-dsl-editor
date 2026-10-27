@@ -16,6 +16,12 @@
         }
       ],
       "macro": { "kind": "loop", "loop_variables": "for", "collection": "in", "body": "body" }
+    },
+    "mock_join": {
+      "description": "Joins the mock values.",
+      "arguments": [
+        { "name": "values", "type": "list", "required": true, "repeated": false, "description": "The mock values." }
+      ]
     }
   },
   "type": "object",

@@ -643,9 +643,12 @@ The list holds what the file's fold sees and what is visible from the cursor:
 | the common layer | its own symbols, and those declared in every overlay |
 | inside a placeholder | every reference a placeholder body may be, builtins included |
 | in a loop's body | each loop variable around it, written by every rule of the loop scope |
-| a word typed where a key starts | the vocabulary, each entry with its call marker and signature |
+| a key typed `<name> <call_marker>` | every function and macro, each with its call marker and signature |
+| a key typed `<call_marker>` with no name, beside other keys of its map | the macros, whose call stands as a whole key |
+| a key typed `<call_marker>` with no name, the only key of its map, `calls_without_name_allowed` true | every function and macro |
+| a key with no `<call_marker>` typed, or at a path `calls_not_allowed_at` lists | no function |
 | a key in a map binding a call's arguments by name | the arguments not yet written, each with its signature and description; a `map` or `list` argument writes its key and an indented line, one with a `default` writes `key: <default>` with the default selected, any other `key: ` |
-| a value starting with `!` | each tag `tag_keys` declares, with the signature of the function its key calls |
+| a value starting with `!`, a call's tag | each tag `tag_keys` declares, with the signature of the function its key calls |
 | at a `function_call` macro's callee typed `function` or `macro` | the vocabulary's entries of that kind, without the call marker, each with its signature |
 
 - A declaration keyed by a local is offered under the local's value, the spelling a ref uses for it.
@@ -684,6 +687,8 @@ Enter after a key whose map is still empty fills the map's required fields:
 - The fields are ordered by `formatter.key_sort_orders` for the map, and in the schema's written order where it does not decide.
 - A scalar field is written `key: `, its values a pick list when it has any, or `key: <default>` with the default as the stop's text when its schema states a `default`; a map or list field is written `key:` and an indented line.
 - The cursor waits at the first value; the fill is one undo step, and leaves the new line.
+
+Enter after a list item holding a key and a value, `- <key>: <value>`, starts the next line under the key, for the item's next field; after any other line it keeps the line's indentation.
 
 ### Keys in the list
 
