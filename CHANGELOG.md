@@ -3,8 +3,8 @@
 ## Unreleased
 
 - Macros
-  - A loop binds one or two names, iterates a list or a map, and yields a map from a map body or a list from a one-element list body, under the call's name when it has one.
-  - `loops.scope_name` names the scope whose reference rules read loop names, which resolve, hover and complete in the loop's body.
+  - A loop binds one or two loop variables, iterates a list or a map, and yields a map from a map body or a list from a one-element list body, under the call's name when it has one.
+  - `loops.scope_name` names the scope whose reference rules read loop variables, which resolve, hover and complete in the loop's body.
 - Functions
   - An optional argument's `default` is shown in signatures and bound when a call leaves the argument out.
   - A call's argument keys are documented on hover and completed in the map binding them by name.

@@ -24,7 +24,7 @@
           "required": false,
           "repeated": false,
           "default": ["it"],
-          "description": "The loop's names: one binds each item, two bind each key or index and its value."
+          "description": "The loop variables: one binds each item, two bind each key or index and its value."
         }
       ],
       "macro": { "kind": "loop", "loop_variables": "for", "collection": "in", "body": "body" }

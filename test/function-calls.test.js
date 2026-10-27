@@ -846,7 +846,7 @@ test('a loop macro names its loop variables argument, a text or a list, '
   );
 });
 
-test('a loop holds one or two names, and a list body holds one element '
+test('a loop holds one or two loop variables, and a list body holds one element '
   + 'and stands alone when the call has no name', () => {
   const loopTable = schemaVocabulary({ x: { loop: namedLoopMacro } }, '#/x').vocabulary;
   const vocabulary = { table: loopTable, complete: true };
@@ -869,7 +869,7 @@ test('a loop holds one or two names, and a list body holds one element '
     '',
   ].join('\n');
   assert.deepEqual(problemsFor(text, vocabulary), [
-    'loop argument for holds one or two names',
+    'loop argument for holds one or two loop variables',
     'loop argument body as a list holds one element',
     'a loop with a list body and no name must be the only key of its map',
   ]);

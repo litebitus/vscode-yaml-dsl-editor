@@ -252,14 +252,14 @@
     },
     "loops": {
       "type": "object",
-      "description": "The names a loop macro binds within its body. Left out for a DSL that reads no loop names.",
+      "description": "The loop variables a loop macro binds within its body. Left out for a DSL that reads no loop variables.",
       "required": ["scope_name"],
       "additionalProperties": false,
       "properties": {
         "scope_name": {
           "type": "string",
           "minLength": 1,
-          "description": "The scope, declared under scopes, whose reference rules read loop names."
+          "description": "The scope, declared under scopes, whose reference rules read loop variables."
         }
       }
     },

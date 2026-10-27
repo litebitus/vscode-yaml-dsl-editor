@@ -158,14 +158,14 @@ suite('CloudFormation templates', () => {
     await hoverTextHolds(
       doc,
       positionInText(doc, '${TopicName}', 2),
-      '`TopicName`: a loop name of `Fn::ForEach::Topics`, bound to `MockA`, `MockB`',
+      '`TopicName`: a loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `MockB`',
     );
   });
 
   test('a placeholder opened in a loop\'s body offers its loop variable, in either of the pattern\'s openings', async () => {
     const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
     const editor = await shownDocument(path.join(fixtures, 'cloudformation-template', 'mock-loop.yaml'));
-    const documentation = '`TopicName`: a loop name of `Fn::ForEach::Topics`, bound to `MockA`, `MockB`';
+    const documentation = '`TopicName`: a loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `MockB`';
     const dollarCursor = await typedAfter(editor, 'DisplayName: mock-${TopicName}', '\n          FifoTopic: ${');
     assert.equal(await offeredDocumentationOf(editor.document, dollarCursor, '${TopicName}'), documentation);
     const ampersandCursor = await typedAfter(editor, 'FifoTopic: ${', '\n          ContentBasedDeduplication: &{');

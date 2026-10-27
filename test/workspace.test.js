@@ -1451,7 +1451,7 @@ test('a loop declares its loop variable in its body and each item\'s names where
   assert.match(messages[1][1], / \(for `mock-b`\)$/);
   assert.equal(
     ws.hover(`file://${common}`, { line: 7, character: 17 }).contents.value,
-    '`TopicName`: a loop name of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
+    '`TopicName`: a loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
   );
   assert.match(ws.hover(`file://${common}`, { line: 6, character: 9 }).contents.value, /The mock resource type\./);
   const typed = text.replace('        Label: ${TopicName}', '        Label: &{');
@@ -1460,7 +1460,7 @@ test('a loop declares its loop variable in its body and each item\'s names where
   const loopVariableItem = offered.find((item) => item.label === '&{TopicName}');
   assert.deepEqual([loopVariableItem.kind, loopVariableItem.documentation], [
     'variable',
-    '`TopicName`: a loop name of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
+    '`TopicName`: a loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
   ]);
   assert.ok(offered.some((item) => item.label === '&{MockBucket}'));
   assert.deepEqual(loopVariableItem.range.end, { line: 8, character: 17 });
@@ -1477,6 +1477,73 @@ test('a loop declares its loop variable in its body and each item\'s names where
   const outsideLabels = ws.completion(`file://${common}`, { line: 11, character: 12 }).map((item) => item.label);
   assert.ok(outsideLabels.includes('${MockBucket}'));
   assert.ok(!outsideLabels.includes('${TopicName}'));
+});
+
+test('a loop variable in the common layer resolves in each overlay\'s fold', async () => {
+  const loopArgument = (name, type, required) => ({
+    name,
+    type,
+    required,
+    repeated: false,
+    description: `The mock ${name}.`,
+  });
+  const loopSchema = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    'x-yaml-dsl-functions': {
+      loop: {
+        description: 'Repeats the mock body.',
+        arguments: [
+          loopArgument('in', 'any', true),
+          loopArgument('body', 'any', true),
+          { ...loopArgument('for', 'list', false), default: ['it'] },
+        ],
+        macro: { kind: 'loop', loop_variables: 'for', collection: 'in', body: 'body' },
+      },
+    },
+    type: 'object',
+  });
+  const loopConfig = configText(dslEntry('mock-sigil', {
+    schema_search_paths: ['schema.json', '../schema.json'],
+    layers: {
+      overlay_folders: ['one'],
+      common_layer_discovery: 'parent',
+      duplicate_check: { depth: 3, key_depths: {}, skip_keys: [] },
+    },
+    placeholder: placeholder(),
+    function: markerFunction({ definitions: ['schema'] }),
+    locals: { scope_name: 'local' },
+    loops: { scope_name: 'LOOP' },
+    scopes: { local: scope(), LOOP: scope() },
+    declarations: [declaration('$.locals.*', 'local', { key_token: 'first_word' })],
+    references: [
+      reference('^local\\.(?<name>[a-z0-9_]+)', 'local', { positions: ['whole_scalar', ...inPlaceholders] }),
+      reference('^~(?<name>[a-z_][a-z0-9_]*)', 'LOOP', {
+        positions: ['whole_scalar', ...inPlaceholders],
+        text_after_name_allowed: true,
+      }),
+    ],
+  }));
+  const stackRoot = '/repo/mock-stack';
+  const commonPath = `${stackRoot}/mock.yml`;
+  const overlayPath = `${stackRoot}/one/mock.yml`;
+  const commonText = 'locals:\n  names fn.loop:\n    in: [mock-a]\n    body:\n      - ~it.label\n';
+  const overlayText = 'locals:\n  other: 1\n';
+  const ws = workspace({
+    [`${stackRoot}/schema.json`]: loopSchema,
+    [commonPath]: commonText,
+    [overlayPath]: overlayText,
+  });
+  await ws.setConfigs([{ text: loopConfig, dir: '/repo' }]);
+  await ws.sync(`file://${commonPath}`, commonPath, commonText);
+  await ws.sync(`file://${overlayPath}`, overlayPath, overlayText);
+  await visitStack(ws, commonPath);
+  const loopVariableLine = 4;
+  const kinds = ws.references(`file://${commonPath}`).map((found) => [found.range.start.line, found.kind]);
+  assert.deepEqual(kinds.filter(([line]) => line === loopVariableLine), [[loopVariableLine, 'local']]);
+  assert.equal(
+    ws.hover(`file://${commonPath}`, { line: loopVariableLine, character: 9 }).contents.value,
+    '`it`: a loop variable of `names fn.loop`, bound to `mock-a`',
+  );
 });
 
 test('an include\'s key is a function_call macro call, at its marked and unmarked keys, '

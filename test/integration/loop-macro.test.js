@@ -41,12 +41,12 @@ suite('loop macros', () => {
     );
   });
 
-  test('a loop name in the body is documented as the loop\'s, bound to its items', async () => {
+  test('a loop variable in the body is documented as the loop\'s, bound to its items', async () => {
     const doc = (await shownDocument(loopFixture('mock.yaml'))).document;
     await hoverTextBecomes(
       doc,
       positionInText(doc, '${~it}-label', 3),
-      '`it`: a loop name of `labels fn.loop`, bound to `mock-a`, `mock-b`',
+      '`it`: a loop variable of `labels fn.loop`, bound to `mock-a`, `mock-b`',
     );
   });
 
@@ -68,7 +68,7 @@ suite('loop macros', () => {
     assert.ok(!items.some((item) => ['in', 'body', 'size'].includes(labelOf(item))), items.map(labelOf).join(', '));
   });
 
-  test('a value typed in a loop\'s body offers its loop names as the loop scope spells them', async () => {
+  test('a value typed in a loop\'s body offers its loop variables as the loop scope spells them', async () => {
     const editor = await shownDocument(loopFixture('mock.yaml'));
     const cursor = await typedAfter(editor, 'size: 1', '\n        source: ~');
     const labels = (await completionItemsAt(editor.document, cursor)).map(labelOf);

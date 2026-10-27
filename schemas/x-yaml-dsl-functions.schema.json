@@ -98,7 +98,7 @@
             "loop_variables": {
               "type": "string",
               "minLength": 1,
-              "description": "On a loop macro, required: the argument naming the loop's names, a text or a list of one or two."
+              "description": "On a loop macro, required: the argument holding the loop variables, a text or a list of one or two."
             },
             "loop_variable": {
               "type": "string",
