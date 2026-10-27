@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 - 2026-10-27
 
 - Macros
   - A loop binds one or two loop variables, iterates a list or a map, and yields a map from a map body or a list from a one-element list body, under the call's name when it has one.
