@@ -372,6 +372,69 @@ test('an owned file deleted from disk while open with no unsaved edits is closed
   ]);
 });
 
+test('a DSL file whose last tab closes while the IDE keeps its document is closed for the server', async () => {
+  const fileUri = (path) => ({ scheme: 'file', toString: () => `file://${path}` });
+  const tabOf = (path) => ({ input: { uri: fileUri(path) } });
+  let tabsChanged = null;
+  const tabGroups = {
+    all: [{ tabs: [tabOf('/repo/twice/mock.yml'), { input: null }] }],
+    onDidChangeTabs(fn) { tabsChanged = fn; return disposable(); },
+  };
+  const vscode = fakeVscode({ tabGroups });
+  const client = fakeClient();
+  await activatedFully(vscode, { subscriptions: [] }, () => client);
+  const held = (path, fields) => ({ uri: fileUri(path), languageId: 'yaml-dsl', isDirty: false, ...fields });
+  vscode.workspace.textDocuments = [
+    held('/repo/clean/mock.yml'),
+    held('/repo/dirty/mock.yml', { isDirty: true }),
+    held('/repo/twice/mock.yml'),
+    held('/repo/plain.yml', { languageId: 'yaml' }),
+  ];
+  tabsChanged({
+    closed: [
+      tabOf('/repo/clean/mock.yml'),
+      tabOf('/repo/clean/mock.yml'),
+      tabOf('/repo/dirty/mock.yml'),
+      tabOf('/repo/twice/mock.yml'),
+      tabOf('/repo/plain.yml'),
+      tabOf('/repo/released/mock.yml'),
+      { input: { uri: { scheme: 'yaml-dsl-fold', toString: () => 'yaml-dsl-fold:/x' } } },
+      { input: null },
+    ],
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(client.sent.filter((item) => item.method === 'yaml-dsl/editorClosed'), [
+    { method: 'yaml-dsl/editorClosed', params: { uri: 'file:///repo/clean/mock.yml' } },
+  ]);
+  tabsChanged({ opened: [tabOf('/repo/clean/mock.yml'), tabOf('/repo/twice/mock.yml')] });
+  tabsChanged({ changed: [tabOf('/repo/clean/mock.yml')] });
+  tabsChanged({});
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(client.sent.filter((item) => item.method === 'yaml-dsl/editorReopened'), [
+    { method: 'yaml-dsl/editorReopened', params: { uri: 'file:///repo/clean/mock.yml' } },
+  ]);
+});
+
+test('a document the IDE closes after its last tab closed is no longer reopened for the server', async () => {
+  const fileUri = (path) => ({ scheme: 'file', toString: () => `file://${path}` });
+  const tabOf = (path) => ({ input: { uri: fileUri(path) } });
+  let tabsChanged = null;
+  let documentClosed = null;
+  const tabGroups = { all: [], onDidChangeTabs(fn) { tabsChanged = fn; return disposable(); } };
+  const vscode = fakeVscode({ tabGroups });
+  vscode.workspace.onDidCloseTextDocument = (fn) => { documentClosed = fn; return disposable(); };
+  const client = fakeClient();
+  await activatedFully(vscode, { subscriptions: [] }, () => client);
+  const document = { uri: fileUri('/repo/mock.yml'), languageId: 'yaml-dsl', isDirty: false };
+  vscode.workspace.textDocuments = [document];
+  tabsChanged({ closed: [tabOf('/repo/mock.yml')] });
+  documentClosed(document);
+  documentClosed(null);
+  tabsChanged({ opened: [tabOf('/repo/mock.yml')] });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(client.sent.filter((item) => item.method === 'yaml-dsl/editorReopened'), []);
+});
+
 test('a workspace folder added or removed reloads the configs', async () => {
   const vscode = fakeVscode();
   let foldersChanged = null;

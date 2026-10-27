@@ -62,10 +62,11 @@ function rangeOf(text, needle) {
   return { start: at(index), end: at(endIndex) };
 }
 
-function fakeDocuments() {
+function fakeDocuments(heldByUri = {}) {
   const listeners = {};
   const fire = (name, event) => (listeners[name] ? listeners[name](event) : undefined);
   return {
+    get: (uri) => heldByUri[uri],
     handlers: {
       open: (event) => Promise.all([fire('open', event), fire('change', event)]),
       change: (event) => fire('change', event),
@@ -508,7 +509,7 @@ test('a layer file that changes on disk is watched and read again', async () => 
   assert.deepEqual(patterns, ['mock.json', 'mock.yml']);
 });
 
-test('an open file deleted from disk is closed, as a closed tab is', async () => {
+test('an open file deleted from disk, or whose last tab closed, is closed, as a closed document is', async () => {
   const connection = fakeConnection();
   const events = [];
   const workspace = {
@@ -519,15 +520,24 @@ test('an open file deleted from disk is closed, as a closed tab is', async () =>
     onSuggestions() {},
     onKeptSchemasChanged() {},
     close: async (uri) => { events.push(['close', uri]); },
+    sync: async (uri, filePath, text) => { events.push(['sync', uri, filePath, text]); },
     takeEvicted: () => [],
     takeReanalyzedUris: () => [],
     schemaWatchTargets: () => [],
     layerWatchTargets: () => [],
   };
-  bind(connection, fakeDocuments(), { workspace });
+  const held = { uri: 'file:///repo/other.yml', getText: () => 'mock: held\n' };
+  bind(connection, fakeDocuments({ [held.uri]: held }), { workspace });
   connection.handlers['yaml-dsl/fileDeleted']({ uri: 'file:///repo/mock.yml' });
+  connection.handlers['yaml-dsl/editorClosed']({ uri: held.uri });
+  connection.handlers['yaml-dsl/editorReopened']({ uri: held.uri });
+  connection.handlers['yaml-dsl/editorReopened']({ uri: 'file:///repo/released.yml' });
   await workspace.whenIdle();
-  assert.deepEqual(events, [['close', 'file:///repo/mock.yml']]);
+  assert.deepEqual(events, [
+    ['close', 'file:///repo/mock.yml'],
+    ['close', held.uri],
+    ['sync', held.uri, '/repo/other.yml', 'mock: held\n'],
+  ]);
 });
 
 test('a file the editor opens is analyzed once, though the library reports the open as a change too', async () => {

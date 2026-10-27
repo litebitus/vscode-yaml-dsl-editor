@@ -241,7 +241,8 @@ What the extension holds is a copy of what the files say: a resident stack's ana
 | a layer file of a resident stack changes on disk while no editor has it open | on the change | the file is read again | background |
 | a layer file is deleted from disk | on the deletion | the file leaves the stack, even while an editor holds it with no unsaved edits, and comes back when it returns to disk | background |
 | the file an include's location maps to is written to or removed from disk | on the change | the include is followed or left, and the stack of the overlay holding it is built again | background |
-| a layer file's editor closes | on the close | the file is read from disk again, so discarded edits, or a file gone from disk, leave the stack with what the disk holds | background |
+| a layer file's tab opens again on a document the IDE kept after its last tab closed | on the open | the editor's copy is analyzed again, as on an open | foreground |
+| a layer file's editor closes: its document closes, or its last tab closes with no unsaved edits while the IDE keeps the document | on the close | the file is read from disk again, so discarded edits, or a file gone from disk, leave the stack with what the disk holds | background |
 | a path a resident file's schema search reads changes on disk | on the change | that file's schema reloads, its stack is analyzed and validated again, and its hover documentation reads the new schema, the common layer's for that overlay; a schema on disk changes when its stack is initialized again | background |
 | a schema URL's kept copy is older than the max age a file gives it | when a stack reading it loads | the copy is checked with the server, as under Schema URLs | foreground |
 | an overlay's schema reloads | on the reload | the common layer's validation errors are worked out again, each naming exactly the overlays whose current schema its value fails | background |

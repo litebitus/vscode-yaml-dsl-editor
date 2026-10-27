@@ -8,6 +8,8 @@
 - Functions
   - An optional argument's `default` is shown in signatures and bound when a call leaves the argument out.
   - A call's argument keys are documented on hover and completed in the map binding them by name.
+- Fixed
+  - Layers: in Antigravity 2.6.0, closing a layer file's last tab left its discarded edits, or a file deleted from disk, in the stack, because the IDE keeps the document open. The file is now read from disk again when its last tab closes, and analyzed again when a tab reopens it.
 - Deprecated
   - A loop macro's `loop_variable`, replaced by `loop_variables`.
 
