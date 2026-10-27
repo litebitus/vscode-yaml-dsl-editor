@@ -1,16 +1,23 @@
 locals:
   slow_queue:
+    # deliberate error: not an integer, reported where payments and refunds merge it
     visibility_seconds: slow
 
 queue:
   payments:
+    # deliberate error: local.slow_queue merges last, so its visibility_seconds: slow
+    # replaces the integer from local.queue_defaults, and the field must be an integer
     fn.merge*:
       - local.queue_defaults
       - local.slow_queue
   refunds:
+    # deliberate error: ref queue.orders is known only when the document is used, so the
+    # missing required fields are not reported, but local.slow_queue's wrong type still is
     fn.merge*:
       - ref queue.orders
       - local.slow_queue
+  # deliberate error: no merge supplies retention_seconds or visibility_seconds,
+  # so both required fields are missing
   audits:
     encrypted: true
   notifications:

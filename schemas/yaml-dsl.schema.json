@@ -75,6 +75,7 @@
         "placeholder": { "$ref": "#/$defs/placeholder" },
         "function": { "$ref": "#/$defs/function" },
         "locals": { "$ref": "#/$defs/locals" },
+        "loops": { "$ref": "#/$defs/loops" },
         "validator": { "$ref": "#/$defs/validator" },
         "performance": { "$ref": "#/$defs/performance" },
         "key_sort_orders": {
@@ -247,6 +248,19 @@
           "description": "Paths where a call is a problem."
         },
         "marker_function": { "$ref": "#/$defs/marker_function" }
+      }
+    },
+    "loops": {
+      "type": "object",
+      "description": "The names a loop macro binds within its body. Left out for a DSL that reads no loop names.",
+      "required": ["scope_name"],
+      "additionalProperties": false,
+      "properties": {
+        "scope_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The scope, declared under scopes, whose reference rules read loop names."
+        }
       }
     },
     "locals": {

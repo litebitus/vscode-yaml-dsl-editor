@@ -17,6 +17,7 @@ const pathedEntry = dslEntry('pathed', {
   placeholder: placeholder(),
   function: markerFunction({ definitions: ['schema'] }),
   locals: { scope_name: 'local', path_separator: '.' },
+  loops: { scope_name: 'LOOP' },
   scopes: { local: scope(), ENTRY: scope({ named_by_parent_key: true }), LOOP: scope() },
   declarations: [
     declaration('$.locals.*', 'local'),
@@ -45,7 +46,7 @@ const schema = JSON.stringify({
     for_each: {
       description: 'Repeats the mock body.',
       arguments: [mockArgument('variable', 'text'), mockArgument('items', 'list'), mockArgument('body', 'map')],
-      macro: { kind: 'loop', loop_variable: 'variable', collection: 'items', body: 'body' },
+      macro: { kind: 'loop', loop_variables: 'variable', collection: 'items', body: 'body' },
     },
   },
   type: 'object',

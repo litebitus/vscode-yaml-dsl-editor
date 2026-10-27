@@ -59,10 +59,18 @@
             },
             {
               "if": { "properties": { "kind": { "const": "loop" } } },
-              "then": { "required": ["loop_variable", "collection", "body"] },
+              "then": {
+                "required": ["collection", "body"],
+                "anyOf": [{ "required": ["loop_variables"] }, { "required": ["loop_variable"] }]
+              },
               "else": {
                 "not": {
-                  "anyOf": [{ "required": ["loop_variable"] }, { "required": ["collection"] }, { "required": ["body"] }]
+                  "anyOf": [
+                    { "required": ["loop_variables"] },
+                    { "required": ["loop_variable"] },
+                    { "required": ["collection"] },
+                    { "required": ["body"] }
+                  ]
                 }
               }
             }
@@ -87,10 +95,16 @@
               "minLength": 1,
               "description": "On a merge macro, required: the argument holding the content or its location."
             },
+            "loop_variables": {
+              "type": "string",
+              "minLength": 1,
+              "description": "On a loop macro, required: the argument naming the loop's names, a text or a list of one or two."
+            },
             "loop_variable": {
               "type": "string",
               "minLength": 1,
-              "description": "On a loop macro, required: the argument naming the loop variable."
+              "deprecated": true,
+              "description": "Deprecated: use loop_variables."
             },
             "collection": {
               "type": "string",
@@ -133,7 +147,8 @@
         "name": { "type": "string", "minLength": 1, "description": "Argument name." },
         "type": { "$ref": "#/$defs/valueType" },
         "required": { "type": "boolean", "description": "Whether a call must pass the argument." },
-        "repeated": { "type": "boolean", "description": "Whether the argument takes every remaining value." }
+        "repeated": { "type": "boolean", "description": "Whether the argument takes every remaining value." },
+        "default": { "description": "On an optional argument, the value it takes when a call leaves it out." }
       }
     },
     "valueType": {

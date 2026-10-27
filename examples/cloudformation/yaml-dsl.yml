@@ -45,6 +45,8 @@ dsls:
         call_marker: "Fn::"
         splat_operator: null
         calls_without_name_allowed: true
+    loops:
+      scope_name: LOGICAL_ID
     validator:
       child_values_from_parent_key: []
       allow_quoted_values: [boolean, integer, number]

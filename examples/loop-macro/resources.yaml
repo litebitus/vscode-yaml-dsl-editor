@@ -1,0 +1,45 @@
+locals:
+  queue_names: ["orders", "payments"]
+  replica_regions:
+    east: "mock-east-1"
+    west: "mock-west-2"
+
+queue:
+  fn.loop:
+    for: ["name"]
+    in: local.queue_names
+    body:
+      "${~name}":
+        retention_seconds: 345600
+        label: "${~name} queue"
+  audits:
+    retention_seconds: 86400
+    dead_letters fn.loop:
+      in: local.queue_names
+      body:
+        - "${~it}-failed"
+    replicas fn.loop:
+      for: ["replica", "region"]
+      in: local.replica_regions
+      body:
+        "audits-${~replica}": ~region
+    regions fn.loop:
+      in: local.replica_regions
+      body:
+        - ~it
+    endpoints fn.loop:
+      for: ["region"]
+      in: ["east", "west"]
+      body:
+        - fn.loop:
+            in: local.queue_names
+            body:
+              - "${~region}/${~it}"
+  reports:
+    fn.loop:
+      in: local.queue_names
+      body:
+        # deliberate error: no such queue field
+        "${~it}_retention": 30
+    retention_seconds: 3600
+    dead_letters: [ref queue.orders]

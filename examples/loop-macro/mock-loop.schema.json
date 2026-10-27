@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-yaml-dsl-functions": {
+    "loop": {
+      "description": "Repeats the body once per item of the collection: a map body yields a map, a list body of one element yields a list.",
+      "arguments": [
+        {
+          "name": "in",
+          "type": "any",
+          "required": true,
+          "repeated": false,
+          "description": "The collection, a list or a map."
+        },
+        {
+          "name": "body",
+          "type": "any",
+          "required": true,
+          "repeated": false,
+          "description": "What each pass yields: a map's entries, or a list's one element."
+        },
+        {
+          "name": "for",
+          "type": "list",
+          "required": false,
+          "repeated": false,
+          "default": ["it"],
+          "description": "The loop's names: one binds each item, two bind each key or index and its value."
+        }
+      ],
+      "macro": { "kind": "loop", "loop_variables": "for", "collection": "in", "body": "body" }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "locals": { "type": "object", "description": "Named values the document references as `local.<name>`." },
+    "queue": {
+      "type": "object",
+      "description": "The queues, by name.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["retention_seconds"],
+        "properties": {
+          "retention_seconds": { "type": "integer", "description": "[required] How long a message is kept." },
+          "label": { "type": "string", "description": "[optional] The queue's display label." },
+          "dead_letters": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "[optional] The queues failed messages move to."
+          },
+          "replicas": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "description": "[optional] The region of each replica, by replica name."
+          },
+          "regions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "[optional] The regions the queue is served in."
+          },
+          "endpoints": {
+            "type": "array",
+            "items": { "type": "array", "items": { "type": "string" } },
+            "description": "[optional] The queue's endpoints, grouped by region."
+          }
+        }
+      }
+    }
+  }
+}

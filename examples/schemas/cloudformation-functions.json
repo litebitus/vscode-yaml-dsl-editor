@@ -291,7 +291,7 @@
       ],
       "macro": {
         "kind": "loop",
-        "loop_variable": "identifier",
+        "loop_variables": "identifier",
         "collection": "collection",
         "body": "fragment",
         "name_suffix_pattern": "::[A-Za-z0-9]+"

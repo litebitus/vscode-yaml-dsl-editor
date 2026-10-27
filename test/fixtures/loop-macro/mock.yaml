@@ -1,0 +1,22 @@
+locals:
+  mock_names: ["mock-a", "mock-b"]
+mocktype:
+  fn.loop:
+    for: ["name"]
+    in: ["looped_a", "looped_b"]
+    body:
+      "${~name}":
+        size: 1
+  holder:
+    size: 2
+    labels fn.loop:
+      in: local.mock_names
+      body:
+        - "${~it}-label"
+    source: ref mocktype.looped_a
+  wrong:
+    size: 3
+    labels fn.loop:
+      in: ["mock-c"]
+      body:
+        - 4

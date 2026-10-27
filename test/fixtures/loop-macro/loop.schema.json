@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-yaml-dsl-functions": {
+    "loop": {
+      "description": "Repeats the mock body once per item.",
+      "arguments": [
+        { "name": "in", "type": "any", "required": true, "repeated": false, "description": "The mock collection." },
+        { "name": "body", "type": "any", "required": true, "repeated": false, "description": "The mock body." },
+        {
+          "name": "for",
+          "type": "list",
+          "required": false,
+          "repeated": false,
+          "default": ["it"],
+          "description": "The mock names."
+        }
+      ],
+      "macro": { "kind": "loop", "loop_variables": "for", "collection": "in", "body": "body" }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "locals": { "type": "object" },
+    "mocktype": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["size"],
+        "properties": {
+          "size": { "type": "integer", "description": "[required] The mock size." },
+          "labels": { "type": "array", "items": { "type": "string" }, "description": "[optional] The mock labels." },
+          "source": { "type": "string", "description": "[optional] The mock source." }
+        }
+      }
+    }
+  }
+}

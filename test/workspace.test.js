@@ -1306,7 +1306,7 @@ test('a macro the schema\'s table publishes is called beside sibling keys by its
         ],
         macro: {
           kind: 'loop',
-          loop_variable: 'identifier',
+          loop_variables: 'identifier',
           collection: 'collection',
           body: 'fragment',
           name_suffix_pattern: '::[A-Za-z0-9]+',
@@ -1382,7 +1382,7 @@ test('a loop declares its loop variable in its body and each item\'s names where
         ],
         macro: {
           kind: 'loop',
-          loop_variable: 'identifier',
+          loop_variables: 'identifier',
           collection: 'collection',
           body: 'fragment',
           name_suffix_pattern: '::[A-Za-z0-9]+',
@@ -1430,6 +1430,7 @@ test('a loop declares its loop variable in its body and each item\'s names where
       calls_not_allowed_at: [],
       marker_function: { call_marker: 'Fn::', splat_operator: null, calls_without_name_allowed: true },
     },
+    loops: { scope_name: 'LOGICAL_ID' },
   }));
   const ws = workspace({ [`${root}/schema.json`]: loopSchema, [common]: text });
   await ws.setConfigs([{ text: loopConfig, dir: '/repo' }]);
@@ -1450,7 +1451,7 @@ test('a loop declares its loop variable in its body and each item\'s names where
   assert.match(messages[1][1], / \(for `mock-b`\)$/);
   assert.equal(
     ws.hover(`file://${common}`, { line: 7, character: 17 }).contents.value,
-    '`TopicName`: the loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
+    '`TopicName`: a loop name of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
   );
   assert.match(ws.hover(`file://${common}`, { line: 6, character: 9 }).contents.value, /The mock resource type\./);
   const typed = text.replace('        Label: ${TopicName}', '        Label: &{');
@@ -1459,7 +1460,7 @@ test('a loop declares its loop variable in its body and each item\'s names where
   const loopVariableItem = offered.find((item) => item.label === '&{TopicName}');
   assert.deepEqual([loopVariableItem.kind, loopVariableItem.documentation], [
     'variable',
-    '`TopicName`: the loop variable of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
+    '`TopicName`: a loop name of `Fn::ForEach::Topics`, bound to `MockA`, `mock-b`',
   ]);
   assert.ok(offered.some((item) => item.label === '&{MockBucket}'));
   assert.deepEqual(loopVariableItem.range.end, { line: 8, character: 17 });

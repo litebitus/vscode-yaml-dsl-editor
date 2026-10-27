@@ -10,6 +10,8 @@ const {
   terraformVocabulary,
   schemaVocabulary,
   signatureText,
+  argumentSignatureText,
+  argumentDocumentationOf,
   functionDocumentationOf,
   callProblems,
   unmarkedCallsOf,
@@ -193,7 +195,7 @@ const loopMacro = {
     kind: 'loop',
     nameSuffixPattern: '::[A-Za-z0-9]+',
     unmarkedKeyPaths: [],
-    roles: { loopVariable: 'identifier', collection: 'collection', body: 'fragment' },
+    roles: { loopVariables: 'identifier', collection: 'collection', body: 'fragment' },
   },
 };
 
@@ -439,14 +441,14 @@ test('a macro is a table entry with a macro object, taking no return, its argume
     ),
     macro: {
       kind: 'loop',
-      loop_variable: 'identifier',
+      loop_variables: 'identifier',
       collection: 'collection',
       body: 'fragment',
       name_suffix_pattern: '::[A-Za-z0-9]+',
     },
   };
-  const loopRoles = { kind: 'loop', loop_variable: 'identifier', collection: 'collection', body: 'fragment' };
-  const publishedLoopRoles = { loopVariable: 'identifier', collection: 'collection', body: 'fragment' };
+  const loopRoles = { kind: 'loop', loop_variables: 'identifier', collection: 'collection', body: 'fragment' };
+  const publishedLoopRoles = { loopVariables: 'identifier', collection: 'collection', body: 'fragment' };
   assert.deepEqual(published(loopEntry).vocabulary.f.macro, {
     kind: 'loop',
     nameSuffixPattern: '::[A-Za-z0-9]+',
@@ -500,7 +502,7 @@ test('a macro is a table entry with a macro object, taking no return, its argume
     withRoles(mergeMacro, textArgument('Location')),
     withRoles({ ...mergeMacro, content: 'contents' }, mockArgument('contents', 'map', true, true)),
     withRoles(
-      { kind: 'loop', loop_variable: 'variable', collection: 'items', body: 'body' },
+      { kind: 'loop', loop_variables: 'variable', collection: 'items', body: 'body' },
       mockArgument('items', 'any', true, false),
       mockArgument('body', 'any', true, false),
       mockArgument('variable', 'any', true, false),
@@ -581,7 +583,11 @@ test('a macro is documented by its signature after macro, its arguments and what
     description: null,
     arguments: ['items', 'body', 'variable'].map((name) => mockArgument(name, 'any', true, false)),
     return: null,
-    macro: { kind: 'loop', nameSuffixPattern: null, roles: { loopVariable: 'variable', collection: 'items', body: 'body' } },
+    macro: {
+      kind: 'loop',
+      nameSuffixPattern: null,
+      roles: { loopVariables: 'variable', collection: 'items', body: 'body' },
+    },
   };
   assert.equal(
     functionDocumentationOf('f', reorderedLoop).split('\n\n').pop(),
@@ -747,13 +753,25 @@ test('the shipped schema of the table is a draft 2020-12 schema stating the argu
     ...loopMacro,
     macro: {
       kind: 'loop',
-      loop_variable: 'identifier',
+      loop_variables: 'identifier',
       collection: 'collection',
       body: 'fragment',
       name_suffix_pattern: '::[A-Za-z0-9]+',
     },
   };
   assert.equal(validate({ ForEach: loopEntry }), true, JSON.stringify(validate.errors));
+  const { loop_variables: namesArgument, ...otherRoles } = loopEntry.macro;
+  const deprecatedRole = { ...otherRoles, loop_variable: namesArgument };
+  assert.equal(validate({ ForEach: { ...loopEntry, macro: deprecatedRole } }), true, JSON.stringify(validate.errors));
+  const withDefault = {
+    ...loopEntry,
+    arguments: [
+      ...loopEntry.arguments.slice(1),
+      { ...mockArgument('names', 'list', false, false), description: 'The mock names.', default: ['it'] },
+    ],
+    macro: { ...loopEntry.macro, loop_variables: 'names' },
+  };
+  assert.equal(validate({ ForEach: withDefault }), true, JSON.stringify(validate.errors));
   assert.equal(validate({ ForEach: { ...loopEntry, macro: { kind: 'mock-kind' } } }), false);
   const returned = { type: 'map', description: 'The mock expansion.' };
   assert.equal(validate({ ForEach: { ...loopEntry, return: returned } }), false);
@@ -781,4 +799,78 @@ test('a function is documented by its signature, its description, each described
     functionDocumentationOf('ssm', typedOnly),
     '```yaml-dsl-signature\nssm(parameter: text): text\n```\n\n*Returns:* `text`',
   );
+});
+
+const namedLoopMacro = {
+  description: 'Mock loop.',
+  arguments: [
+    mockArgument('in', 'any', true, false),
+    mockArgument('body', 'any', true, false),
+    { ...mockArgument('for', 'list', false, false), default: ['it'] },
+  ],
+  macro: { kind: 'loop', loop_variables: 'for', collection: 'in', body: 'body' },
+};
+
+test('an optional argument may state a default, shown in its signature and its documentation', () => {
+  const entry = schemaVocabulary({ x: { loop: namedLoopMacro } }, '#/x').vocabulary.loop;
+  assert.equal(signatureText('loop', entry), 'macro loop(in: any, body: any, for?: list = ["it"])');
+  assert.equal(argumentSignatureText(entry.arguments[2]), 'for?: list = ["it"]');
+  assert.equal(
+    argumentDocumentationOf(entry.arguments[2]),
+    '```yaml-dsl-signature\nfor?: list = ["it"]\n```\n\nThe mock for.',
+  );
+  const [collection, ...rest] = namedLoopMacro.arguments;
+  const requiredDefault = { ...namedLoopMacro, arguments: [{ ...collection, default: [] }, ...rest] };
+  assert.equal(
+    schemaVocabulary({ x: { loop: requiredDefault } }, '#/x').problem,
+    '#/x loop.arguments[0].default is read only on an optional argument',
+  );
+});
+
+test('a loop macro names its loop variables argument, a text or a list, '
+  + 'and the deprecated field is still read', () => {
+  const { loop_variables: namesArgument, ...otherRoles } = namedLoopMacro.macro;
+  const deprecated = { ...namedLoopMacro, macro: { ...otherRoles, loop_variable: namesArgument } };
+  const published = schemaVocabulary({ x: { loop: deprecated } }, '#/x');
+  assert.deepEqual(published.vocabulary.loop.macro.roles, { loopVariables: 'for', collection: 'in', body: 'body' });
+  assert.equal(
+    published.notice,
+    '#/x loop.macro.loop_variable is deprecated: name the argument in macro.loop_variables',
+  );
+  const [collection, body, names] = namedLoopMacro.arguments;
+  const typed = (type) => ({ ...namedLoopMacro, arguments: [collection, { ...body, type }, names] });
+  assert.equal(schemaVocabulary({ x: { loop: typed('list') } }, '#/x').problem, null);
+  assert.equal(
+    schemaVocabulary({ x: { loop: typed('text') } }, '#/x').problem,
+    '#/x loop argument body is the body, so its type is map or list',
+  );
+});
+
+test('a loop holds one or two names, and a list body holds one element '
+  + 'and stands alone when the call has no name', () => {
+  const loopTable = schemaVocabulary({ x: { loop: namedLoopMacro } }, '#/x').vocabulary;
+  const vocabulary = { table: loopTable, complete: true };
+  const text = [
+    'a:',
+    '  b fn.loop:',
+    '    for: [x, y, z]',
+    '    in: [1]',
+    '    body: [x, y]',
+    'c:',
+    '  fn.loop:',
+    '    in: [1]',
+    '    body: [x]',
+    '  other: 1',
+    'd:',
+    '  e fn.loop:',
+    '    for: [k, v]',
+    '    in: { m: 1 }',
+    '    body: [x]',
+    '',
+  ].join('\n');
+  assert.deepEqual(problemsFor(text, vocabulary), [
+    'loop argument for holds one or two names',
+    'loop argument body as a list holds one element',
+    'a loop with a list body and no name must be the only key of its map',
+  ]);
 });

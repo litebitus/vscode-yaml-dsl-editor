@@ -6,13 +6,22 @@ const { collectSymbols } = require('../lib/symbols');
 const {
   loopContextOf,
   loopsOf,
-  loopOfVariableAt,
+  loopOfNameAt,
+  loopNamesEnclosing,
+  loopNameDocumentationOf,
   expandedTreeOf,
   expandedValueOf,
   expandedPathOf,
   sourceProblemsOf,
 } = require('../lib/loops');
-const { configText, dslEntry, scope, declaration, reference } = require('./config-builders');
+const {
+  configText,
+  dslEntry,
+  scope,
+  declaration,
+  reference,
+  markerFunction,
+} = require('./config-builders');
 
 const mockArgument = (name, type) => ({ name, type, required: true, repeated: false, description: null });
 
@@ -29,7 +38,7 @@ const table = {
       kind: 'loop',
       nameSuffixPattern: '::[A-Za-z0-9]+',
       unmarkedKeyPaths: [],
-      roles: { loopVariable: 'identifier', collection: 'collection', body: 'fragment' },
+      roles: { loopVariables: 'identifier', collection: 'collection', body: 'fragment' },
     },
   },
 };
@@ -47,6 +56,7 @@ const [dsl] = parseConfig(configText(dslEntry('mock-template', {
     calls_not_allowed_at: [],
     marker_function: { call_marker: 'Fn::', splat_operator: null, calls_without_name_allowed: true },
   },
+  loops: { scope_name: 'LOGICAL_ID' },
 }))).dsls;
 
 const context = loopContextOf(dsl, table);
@@ -74,31 +84,31 @@ const text = [
 
 const doc = analyzeDocument(text, '/repo/mock.yml', dsl);
 
-test('a loop is a call of a loop macro, with its loop variable, its literal items and its body path', () => {
+test('a loop is a call of a loop macro, with its loop names, its literal items and its body path', () => {
   const loops = loopsOf(doc.tree, context);
-  assert.deepEqual(loops.map((loop) => [loop.key, loop.holdingPath, loop.bodyPath, loop.loopVariable, loop.items]), [
-    ['Fn::ForEach::Topics', ['Resources'], ['Resources', 'Fn::ForEach::Topics', 2], 'TopicName', ['MockA', 'MockB']],
+  assert.deepEqual(loops.map((loop) => [loop.key, loop.holdingPath, loop.bodyPath, loop.names, loop.items]), [
+    ['Fn::ForEach::Topics', ['Resources'], ['Resources', 'Fn::ForEach::Topics', 2], ['TopicName'], ['MockA', 'MockB']],
     [
       'Fn::ForEach::Queues',
       ['Resources', 'Fn::ForEach::Topics', 2, 'Topic${TopicName}'],
       ['Resources', 'Fn::ForEach::Topics', 2, 'Topic${TopicName}', 'Fn::ForEach::Queues', 2],
-      'QueueName',
+      ['QueueName'],
       ['One'],
     ],
-    ['Fn::ForEach::Unknown', ['Resources'], ['Resources', 'Fn::ForEach::Unknown', 2], 'ItemName', null],
+    ['Fn::ForEach::Unknown', ['Resources'], ['Resources', 'Fn::ForEach::Unknown', 2], ['ItemName'], null],
   ]);
   assert.equal(loops[1].enclosing, loops[0]);
-  assert.deepEqual(loops[0].loopVariableRange.start, { line: 2, character: 6 });
+  assert.deepEqual(loops[0].nameRanges[0].start, { line: 2, character: 6 });
   assert.deepEqual(loopsOf(doc.tree, loopContextOf(dsl, {})), []);
 });
 
-test('a name inside a loop\'s body that is its loop variable is the innermost loop\'s', () => {
+test('a name inside a loop\'s body that is its loop name is the innermost loop\'s', () => {
   const loops = loopsOf(doc.tree, context);
   const queueBody = ['Resources', 'Fn::ForEach::Topics', 2, 'Topic${TopicName}', 'Fn::ForEach::Queues', 2, 'x'];
-  assert.equal(loopOfVariableAt(loops, queueBody, 'TopicName'), loops[0]);
-  assert.equal(loopOfVariableAt(loops, queueBody, 'QueueName'), loops[1]);
-  assert.equal(loopOfVariableAt(loops, ['Resources', 'MockBucket'], 'TopicName'), null);
-  assert.equal(loopOfVariableAt(loops, queueBody, 'MockBucket'), null);
+  assert.equal(loopOfNameAt(loops, queueBody, 'TopicName'), loops[0]);
+  assert.equal(loopOfNameAt(loops, queueBody, 'QueueName'), loops[1]);
+  assert.equal(loopOfNameAt(loops, ['Resources', 'MockBucket'], 'TopicName'), null);
+  assert.equal(loopOfNameAt(loops, queueBody, 'MockBucket'), null);
 });
 
 test('a loop\'s expansion declares each item\'s names where its body lands, '
@@ -184,7 +194,7 @@ test('a loop whose arguments are written by name reads each role from the argume
         kind: 'loop',
         nameSuffixPattern: '::[A-Za-z0-9]+',
         unmarkedKeyPaths: [],
-        roles: { loopVariable: 'variable', collection: 'items', body: 'body' },
+        roles: { loopVariables: 'variable', collection: 'items', body: 'body' },
       },
     },
   };
@@ -200,8 +210,8 @@ test('a loop whose arguments are written by name reads each role from the argume
   ].join('\n');
   const byNameDoc = analyzeDocument(byNameText, '/repo/mock.yml', dsl);
   const [loop] = loopsOf(byNameDoc.tree, byNameContext);
-  assert.deepEqual([loop.loopVariable, loop.items, loop.bodyPath], [
-    'Name',
+  assert.deepEqual([loop.names, loop.items, loop.bodyPath], [
+    ['Name'],
     ['MockA'],
     ['Resources', 'Fn::Repeat::Topics', 'body'],
   ]);
@@ -237,4 +247,151 @@ test('a problem in an expansion is placed at the body\'s source, naming the item
     [['Resources', 'Fn::ForEach::Unknown', 2, 'Item&{ItemName}'], 'mock unknown'],
     [['Resources', 'MockBucket'], 'mock written'],
   ]);
+});
+
+const sigilTable = {
+  loop: {
+    description: 'Repeats the mock body.',
+    arguments: [
+      mockArgument('in', 'any'),
+      mockArgument('body', 'any'),
+      { ...mockArgument('for', 'list'), required: false, default: ['it'] },
+    ],
+    return: null,
+    macro: {
+      kind: 'loop',
+      nameSuffixPattern: null,
+      unmarkedKeyPaths: [],
+      roles: { loopVariables: 'for', collection: 'in', body: 'body' },
+    },
+  },
+};
+
+const [sigilDsl] = parseConfig(configText(dslEntry('mock-sigil', {
+  placeholder: { pattern: '\\$\\{(?<body>[^}]+)\\}', unscanned_paths: [] },
+  function: markerFunction({ definitions: ['schema'] }),
+  locals: { scope_name: 'local' },
+  loops: { scope_name: 'LOOP' },
+  scopes: { local: scope(), LOOP: scope() },
+  declarations: [declaration('$.locals.*', 'local', { key_token: 'first_word' })],
+  references: [
+    reference('^local\\.(?<name>[a-z0-9_]+)', 'local', {
+      positions: ['whole_scalar', 'whole_placeholder', 'placeholder_in_text'],
+      text_after_name_allowed: true,
+    }),
+    reference('^~(?<name>[a-z_][a-z0-9_]*)', 'LOOP', {
+      positions: ['whole_scalar', 'whole_placeholder', 'placeholder_in_text'],
+      text_after_name_allowed: true,
+    }),
+  ],
+}))).dsls;
+
+const sigilContext = loopContextOf(sigilDsl, sigilTable);
+
+const sigilText = [
+  'locals:',
+  '  names: [mock-a, mock-b]',
+  'lambda:',
+  '  mock-fn:',
+  '    queue_names fn.loop:',
+  '      in: [mock-a, mock-b]',
+  '      body:',
+  '        - "${~it}-queue"',
+  '    topics fn.loop:',
+  '      for: [topic]',
+  '      in: [mock-a, mock-b]',
+  '      body:',
+  '        "${~topic}-topic":',
+  '          name: ~topic',
+  '    labels fn.loop:',
+  '      for: [key, value]',
+  '      in: { mock-y: two, mock-x: one }',
+  '      body:',
+  '        "${~key}": ~value',
+  '    environment:',
+  '      fn.loop:',
+  '        in: [mock-a]',
+  '        body:',
+  '          "${~it}_TOPIC": "${~it}-topic"',
+  '      LOG_LEVEL: info',
+  '    flattened fn.flatten:',
+  '      fn.loop:',
+  '        in: [mock-a]',
+  '        body: ["local.it-${~it}"]',
+  '    unknown fn.loop:',
+  '      in: local.names',
+  '      body:',
+  '        - ~it.label',
+  '',
+].join('\n');
+
+const sigilDoc = analyzeDocument(sigilText, '/repo/mock.yml', sigilDsl);
+
+test('a loop binds its default names when it states none, '
+  + 'one name to each item, two to each key and value', () => {
+  const loops = loopsOf(sigilDoc.tree, sigilContext);
+  assert.deepEqual(loops.map((loop) => [loop.key, loop.names, loop.keys, loop.items]), [
+    ['queue_names fn.loop', ['it'], ['0', '1'], ['mock-a', 'mock-b']],
+    ['topics fn.loop', ['topic'], ['0', '1'], ['mock-a', 'mock-b']],
+    ['labels fn.loop', ['key', 'value'], ['mock-x', 'mock-y'], ['one', 'two']],
+    ['fn.loop', ['it'], ['0'], ['mock-a']],
+    ['fn.loop', ['it'], ['0'], ['mock-a']],
+    ['unknown fn.loop', ['it'], null, null],
+  ]);
+  assert.deepEqual(loops[0].nameRanges[0], loops[0].keyRange);
+  assert.equal(
+    loopNameDocumentationOf(loops[2], 'key'),
+    '`key`: a loop name of `labels fn.loop`, bound to `mock-x`, `mock-y`',
+  );
+  assert.equal(
+    loopNameDocumentationOf(loops[5], 'it'),
+    '`it`: a loop name of `unknown fn.loop`, bound to each item of its collection',
+  );
+  const topicBody = ['lambda', 'mock-fn', 'topics fn.loop', 'body', '${~topic}-topic', 'name'];
+  const filedLoops = loops.map((loop) => ({ ...loop, file: '/repo/mock.yml' }));
+  const enclosing = loopNamesEnclosing(filedLoops, '/repo/mock.yml', topicBody);
+  assert.deepEqual(enclosing.map(({ name, loop }) => [name, loop.key]), [['topic', 'topics fn.loop']]);
+});
+
+test('a named loop lands its result under its name, a list body yielding a list, and a nameless one '
+  + 'among the holding map\'s entries or as its value', () => {
+  const { value, pathMap } = expandedValueOf(sigilDoc.value, sigilContext);
+  assert.deepEqual(value.lambda['mock-fn'], {
+    queue_names: ['mock-a-queue', 'mock-b-queue'],
+    topics: { 'mock-a-topic': { name: 'mock-a' }, 'mock-b-topic': { name: 'mock-b' } },
+    labels: { 'mock-x': 'one', 'mock-y': 'two' },
+    environment: { 'mock-a_TOPIC': 'mock-a-topic', LOG_LEVEL: 'info' },
+    'flattened fn.flatten': ['local.it-mock-a'],
+    unknown: ['~it.label'],
+  });
+  const topicName = ['lambda', 'mock-fn', 'topics fn.loop', 'body', '${~topic}-topic', 'name'];
+  assert.deepEqual(expandedPathOf(pathMap, topicName), ['lambda', 'mock-fn', 'topics', 'mock-a-topic', 'name']);
+  const problems = sourceProblemsOf([
+    { path: ['lambda', 'mock-fn', 'queue_names', 1], message: 'mock second' },
+    { path: ['lambda', 'mock-fn', 'topics'], message: 'mock whole' },
+  ], pathMap);
+  assert.deepEqual(problems.map((problem) => [problem.path, problem.message]), [
+    [['lambda', 'mock-fn', 'queue_names fn.loop', 'body', 0], 'mock second (for `mock-b`)'],
+    [['lambda', 'mock-fn', 'topics fn.loop'], 'mock whole'],
+  ]);
+});
+
+test('a loop expanded in the tree lands under its name, '
+  + 'and only the loop scope\'s rules read its names', () => {
+  const expanded = expandedTreeOf(sigilDoc.tree, sigilContext);
+  const mockFn = expanded.entries[1].value.entries[0].value;
+  assert.deepEqual(mockFn.entries.map((entry) => entry.key), [
+    'queue_names',
+    'topics',
+    'labels',
+    'environment',
+    'flattened fn.flatten',
+    'unknown',
+  ]);
+  assert.deepEqual(mockFn.entries[0].value.items.map((item) => item.value), ['mock-a-queue', 'mock-b-queue']);
+  assert.deepEqual(mockFn.entries[4].value.kind, 'seq');
+  assert.deepEqual(mockFn.entries[4].value.items.map((item) => item.value), ['local.it-mock-a']);
+  const unscoped = loopContextOf({ ...sigilDsl, loops: null }, sigilTable);
+  const { value } = expandedValueOf(sigilDoc.value, unscoped);
+  assert.deepEqual(value.lambda['mock-fn'].queue_names, ['${~it}-queue', '${~it}-queue']);
 });

@@ -552,6 +552,19 @@ A local is a named value. `locals.scope_name` names the scope whose declarations
 - A step the value lacks is an error on the reference: `` `local.defaults` holds no `queues` ``. A step into a value known only when the document is used is no problem.
 - Moving a block into the common layer writes each difference as a local.
 
+## Loop names
+
+A loop names its items within its body. `loops.scope_name` names the scope whose reference rules read loop names; that scope is declared under `scopes` like any other. A DSL without the `loops` block reads no loop names.
+
+| DSL | Rule | A loop name reads |
+|---|---|---|
+| CloudFormation | `^(?<name>[A-Za-z0-9]+)` in placeholders, `^!Ref (?<name>…)$` | `${TopicName}`, `&{TopicName}`, `!Ref TopicName` |
+| a DSL with a `~` sigil | `^~(?<name>[a-z_][a-z0-9_]*)` as a whole scalar and in placeholders, text after the name allowed | `~item`, `~item.label`, `${~item}` |
+
+- A reference by a rule of the loop scope resolves to the innermost loop around it that names it, before any builtin or symbol.
+- A reference by a rule of any other scope never resolves to a loop name.
+- Hover on a loop name shows the loop that names it and the items it is bound to.
+
 ## Navigating references
 
 | Action | On a reference naming one declaration | On a reference naming several | On a builtin, or nothing visible |
@@ -627,8 +640,10 @@ The list holds what the file's fold sees and what is visible from the cursor:
 |---|---|
 | an overlay | the common layer's symbols and its own |
 | the common layer | its own symbols, and those declared in every overlay |
-| inside a placeholder | every reference a placeholder body may be, builtins included, and in a loop's body the loop variable of each loop around it |
+| inside a placeholder | every reference a placeholder body may be, builtins included |
+| in a loop's body | each loop name around it, written by every rule of the loop scope |
 | a word typed where a key starts | the vocabulary, each entry with its call marker and signature |
+| a key in a map binding a call's arguments by name | the arguments not yet written, each with its signature and description; a `map` or `list` argument writes its key and an indented line, one with a `default` writes `key: <default>` with the default selected, any other `key: ` |
 | a value starting with `!` | each tag `tag_keys` declares, with the signature of the function its key calls |
 | at a `function_call` macro's callee typed `function` or `macro` | the vocabulary's entries of that kind, without the call marker, each with its signature |
 
@@ -1296,10 +1311,11 @@ A schema publishes a DSL's functions as a mapping of function name to its descri
 | `name` | the argument's name |
 | `type` | `text`, `number`, `whole_number`, `boolean`, `list`, `map`, `function`, `macro` or `any`; `function` and `macro` hold the name of a table entry of that kind |
 | `required` | whether it is required; optional arguments follow the required ones |
+| `default` | on an optional argument, the value it takes when a call leaves it out; left out, none |
 | `repeated` | whether it takes every remaining value; a repeated argument is last |
 | `description` | what the argument holds, in markdown |
 
-Every field but `return` and `macro` is required.
+Every field but `default`, `return` and `macro` is required.
 
 ```json
 "x-yaml-dsl-functions": {
@@ -1345,7 +1361,7 @@ The editor follows the preprocessing, so it reads the document as it will be: an
 |---|---|---|
 | `function_call` | `callee`, a `text`, `function` or `macro`; `callee_arguments`, a `map`, left out when the callee takes none | a call of the macro or function the callee names, the callee arguments its arguments by name |
 | `merge` | `content`, a `text` location or a `map`, repeated for contents merged in order | the map holding the call, combined with the contents by `merge_behavior` |
-| `loop` | `loop_variable`, a `text`; `collection`, a `list`; `body`, a `map` | the body once per item of the collection, the loop variable bound to the item |
+| `loop` | `loop_variables`, a `text` or a `list` of one or two names; `collection`, a `list` or a `map`; `body`, a `map` or a `list` | the body once per item of the collection, its loop names bound: one name to the item, two to the item's key or index and its value |
 | `transform` | none | the map holding the call, rewritten by the macro |
 
 - A role names one of the entry's arguments, so arguments sit in whatever order the DSL writes them. An argument no role names is one the editor does not read.
@@ -1358,6 +1374,16 @@ The editor follows the preprocessing, so it reads the document as it will be: an
 
 - A macro is called as a function is, through `marker_function` or its tag through `tag_keys`, and also by a key at one of its `unmarked_key_paths`.
 - A function yields a value, so its call stands where a value does. A macro yields entries, so its call may stand as a whole key among siblings. YAML refuses two equal keys in one map, so the text `name_suffix_pattern` matches keeps sibling calls distinct; the editor reads nothing from it.
+- A loop's result lands where its call stands:
+
+  | Call | A map body | A list body |
+  |---|---|---|
+  | with a name, `<name> <call_marker><function>` | a map under the name | a list under the name |
+  | with no name | its entries among the holding map's | the holding map's value, the call its only key |
+
+- A map body yields its entries once per item. A list body holds one element and yields it once per item.
+- A map collection's items are its values in key order, and two loop names bind its keys to the first.
+- A call that leaves out an optional argument binds the argument's `default`, so a loop with no names argument binds the default names.
 - A `function_call`'s value binds its arguments by name, or is the callee's name alone, or is a list holding one call per item.
 - A call whose name only a function or only a macro holds calls that one.
 - A function and a macro of one name, from two of a DSL's `definitions`, are both kept, and a call tells them apart by syntax: written in its macro kind's usage pattern, it calls the macro, and otherwise the function. A `merge` macro's pattern is a whole key.
@@ -1371,7 +1397,7 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 |---|---|
 | `function_call` | the call is checked against the macro's own entry alone |
 | `merge` | a location no `location_mappings` entry covers, or whose file does not exist, declares every name, as a `declares_every_name` key does, and is an info problem; a content left to when the document is used supplies every field the holding map requires |
-| `loop` | the body is checked once, the loop variable bound to its own name; a key in it that names the loop variable declares every name it can spell, so `Topic${TopicName}` declares `TopicA`, and a reference to such a name is not a problem |
+| `loop` | the body is checked once, each loop name bound to itself; a key in it that names a loop name declares every name it can spell, so `Topic${TopicName}` declares `TopicA`, and a reference to such a name is not a problem |
 | `transform` | always: the map holding the call is checked as written |
 
 ### What an expansion gives
@@ -1379,7 +1405,7 @@ A macro is expanded when every input resolves to a constant: a literal, or a loc
 - The holding map validates with the expansion in place.
 - A loop's body is read at the position its entries land: their schema, completion and hover are the holding map's.
 - A problem in one item's expansion is reported at the body's source, naming the item; one every item shares is reported once.
-- The loop variable is a name the loop declares within its body, read by the DSL's placeholders and reference rules as any name is; an inner loop's loop variable hides an outer one of the same name.
+- A loop name is a name the loop declares within its body, read by the reference rules of the loop scope (see Loop names); an inner loop's name hides an outer one of the same name.
 - The names an expansion declares are declared where they land.
 - A merge whose content is at a location is an include, its location mapped by `layers.overlay_includes`.
 - A merge's contents are merged in order, and the holding map's own keys over them. A content that is a local, or a path into one, is read as that value in the fold, whichever layer declares it, and a name it declares resolves to the key the local writes.
@@ -1403,6 +1429,10 @@ macro ForEach(identifier: text, collection: list, fragment: map)
 > - `fragment`: The output key and value repeated for each item.
 >
 > *Expands to:* `fragment` once per item of `collection`, `identifier` bound to the item.
+
+An argument with a `default` shows it after its type: `names?: list = ["it"]`.
+
+Hover on an argument's key, in a map that binds a call's arguments by name, shows the argument's signature, `names?: list = ["it"]`, then its description.
 
 ### Phases
 
@@ -1453,6 +1483,8 @@ dsls:
     locals:
       scope_name: local
       path_separator: "."
+    loops:
+      scope_name: LOOP
     validator:
       child_values_from_parent_key:
         - pattern: '^(?<field>[a-z][a-z0-9_]*) (?<value>[a-z0-9-]+)$'
@@ -1518,6 +1550,11 @@ dsls:
         later_items_of_declaring_list: false
         named_by_parent_key: false
         builtin_names: []
+      LOOP:
+        regions: ["$"]
+        later_items_of_declaring_list: false
+        named_by_parent_key: false
+        builtin_names: []
     declarations:
       - path: "$.locals.*"
         skip_keys: []
@@ -1548,6 +1585,12 @@ dsls:
         positions: [whole_scalar, whole_placeholder, placeholder_in_text]
         text_after_name_allowed: true
         scope_name: local
+        scope_group: null
+        name_group: name
+      - pattern: "^~(?<name>[a-z_][a-z0-9_]*)"
+        positions: [whole_scalar, whole_placeholder, placeholder_in_text]
+        text_after_name_allowed: true
+        scope_name: LOOP
         scope_group: null
         name_group: name
       - pattern: "^(?<name>[a-z_]+)$"

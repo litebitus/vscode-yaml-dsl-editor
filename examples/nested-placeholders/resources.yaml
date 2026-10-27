@@ -8,4 +8,6 @@ bucket:
     name: ${local.buckets.${region}}
     pattern: ${local.buckets.${region}}/*
   unread:
+    # deliberate error: no reference rule reads the inner body 9, so ${9} is an unknown
+    # placeholder, while the outer one is still read as local.buckets
     pattern: ${local.buckets.${9}}/*

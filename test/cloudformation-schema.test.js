@@ -155,7 +155,7 @@ test('the template schema publishes every intrinsic and condition function in it
     nameSuffixPattern: '::[A-Za-z0-9]+',
     unmarkedKeyPaths: [],
     mergeBehavior: null,
-    roles: { loopVariable: 'identifier', collection: 'collection', body: 'fragment' },
+    roles: { loopVariables: 'identifier', collection: 'collection', body: 'fragment' },
   });
   assert.deepEqual(published.vocabulary.Transform.macro, {
     kind: 'function_call',
