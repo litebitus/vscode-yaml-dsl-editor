@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fixed
+  - Validation: a `required` list inside an `anyOf` or `oneOf` branch selects a form and is kept as written, so a `oneOf` over two `[optional]` fields no longer fails as matching more than one of its forms.
+
 ## 0.9.1 - 2026-10-28
 
 - Completion

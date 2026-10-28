@@ -787,6 +787,7 @@ A requirement marker is the extension's standard for saying whether a key must b
 - A marker states the field author's intent beside the field itself, so where a field carries one, the marker decides and its parent's `required` array is not read for that key.
 - A field without a marker is required when its parent's `required` array lists it.
 - A `required` array inside `not` or `if` is a condition, not a requirement, and markers leave it as written.
+- A `required` array inside an `anyOf` or `oneOf` branch selects the form the value takes, and markers leave it as written.
 - Every schema check the extension runs reads requiredness this way.
 - A fragment requires no key, so its hover shows each field's marker struck.
 

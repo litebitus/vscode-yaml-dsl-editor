@@ -230,7 +230,7 @@ const markedSchemas = {
       kind: { type: 'string' },
     },
   }),
-  'marker-removes-in-branch': markedSchemaOf({
+  'marker-leaves-branch-form': markedSchemaOf({
     type: 'object',
     anyOf: [{ required: ['name'] }, { required: ['kind'] }],
     properties: {
@@ -266,7 +266,14 @@ test('a field\'s requirement marker decides its key over the parent\'s required 
   assert.deepEqual(checks.nodeCheck('marker-removes', ['entry']).optOutFailures(), [
     messageFailure("must have required property 'kind'"),
   ]);
-  assert.deepEqual(checks.nodeCheck('marker-removes-in-branch', ['entry']).optOutFailures(), []);
+  assert.deepEqual(checks.nodeCheck('marker-leaves-branch-form', ['entry']).optOutFailures(), [{
+    kind: FAILURE_KINDS.alternatives,
+    text: null,
+    alternatives: [
+      [messageFailure("must have required property 'name'")],
+      [messageFailure("must have required property 'kind'")],
+    ],
+  }]);
 });
 
 test('a conditionally required field is reported, not failed, and its marker counts in the fingerprint', () => {
@@ -444,4 +451,36 @@ test('a required list inside not or if is a condition the markers leave as writt
   assert.deepEqual(checks.documentProblems('mock-condition', { group: { node_type: 'master' } }), []);
   const counted = checks.documentProblems('mock-condition', { group: { node_type: 'master', count: 1 } });
   assert.deepEqual(counted.map(({ path, message }) => [path, message]), [[['group'], '`group` must NOT be valid']]);
+});
+
+test('a required list inside an anyOf or oneOf branch selects a form the markers leave as written', () => {
+  const formSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      one_of: {
+        type: 'object',
+        properties: {
+          host: { type: 'string', description: '[optional] Mock host.' },
+          host_ssm: { type: 'string', description: '[optional] Mock host parameter.' },
+        },
+        oneOf: [{ required: ['host'] }, { required: ['host_ssm'] }],
+      },
+      any_of: {
+        type: 'object',
+        properties: {
+          host: { type: 'string', description: '[optional] Mock host.' },
+          host_ssm: { type: 'string', description: '[optional] Mock host parameter.' },
+        },
+        anyOf: [{ required: ['host'] }, { required: ['host_ssm'] }],
+      },
+    },
+  };
+  const checks = createSchemaChecks(() => formSchema);
+  const messagesOf = (document) => checks.documentProblems('mock-form', document)
+    .map(({ path, message }) => [path, message]);
+  assert.deepEqual(messagesOf({ one_of: { host: 'mock-host' }, any_of: { host_ssm: '/mock/host' } }), []);
+  assert.deepEqual(messagesOf({ one_of: { host: 'mock-host', host_ssm: '/mock/host' } }), [
+    [['one_of'], '`one_of` matches more than one of its allowed forms'],
+  ]);
+  assert.deepEqual(messagesOf({ one_of: {}, any_of: {} }).map(([path]) => path), [['one_of'], ['any_of']]);
 });
