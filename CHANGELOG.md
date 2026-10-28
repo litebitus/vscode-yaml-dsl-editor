@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.1 - 2026-10-28
 
 - Completion
   - A key in a map whose `additionalProperties` admits open keys offers each open key with the shape of its value, documented by the field holding the map, and a `const` value shows its own description.
