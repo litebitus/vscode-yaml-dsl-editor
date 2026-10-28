@@ -8,6 +8,23 @@ AWS CloudFormation templates written in YAML are the editor's first public DSL. 
 
 The DSL is a config like any other. The engine features it needs are generic and designed in the editor's design doc, so later public DSLs use them too.
 
+## The published schema
+
+Each release of the editor attaches the CloudFormation schema to its GitHub release, so a repository outside the editor's names a fixed version by URL. That version never changes, so the URL takes a long max age:
+
+```yaml
+schema_search_paths:
+  - https://github.com/litebitus/vscode-yaml-dsl-editor/releases/download/v<version>/cloudformation-2010-09-09.schema.json?yaml_dsl_max_age_days=365
+```
+
+### Changelog
+
+`examples/schemas/cloudformation-2010-09-09.CHANGELOG.md` records each regeneration of the schema, headed by the date its provider schemas were downloaded:
+
+- the Region and the download date of the provider schemas, replacing the previous ones, and the count of resource types;
+- the changes to the function table;
+- a table of the resource types added, removed and changed.
+
 ## CloudFormation in the editor's terms
 
 | CloudFormation | The editor |
@@ -169,13 +186,6 @@ The hand-written part covers each top-level section and its entries: `Parameters
 ### Where it lives
 
 The schema is `examples/schemas/cloudformation-<format version>.schema.json`, beside every other public DSL's schema. `schema_search_paths` names it once, through `{config_root}`, for a template at any depth.
-
-Each release of the editor attaches the schema to its GitHub release, so a repository outside the editor's names a fixed version by URL. That version never changes, so the URL takes a long max age:
-
-```yaml
-schema_search_paths:
-  - https://github.com/litebitus/vscode-yaml-dsl-editor/releases/download/v<version>/cloudformation-2010-09-09.schema.json?yaml_dsl_max_age_days=365
-```
 
 ### Versions
 

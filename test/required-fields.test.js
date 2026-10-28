@@ -145,8 +145,20 @@ test('a key with a value, a map that already holds lines, a scalar field and an 
   assert.equal(fill('queue:\n  alerts:\n    \n    name: mock\n', 1), null);
   assert.equal(fill('queue:\n  alerts:\n    name:\n', 2), null);
   assert.equal(fill('queue:\n  alerts:\n', 1, { ...schema, $schema: 'https://example.com/mock-draft' }), null);
+});
+
+test('Enter after a key whose value is a map with nothing required, or a list, answers the value kind with no fields', () => {
+  const fill = (text, keyLine, fillSchema) => requiredFieldsToFill({
+    text,
+    keyLine,
+    schema: fillSchema,
+    dsl: dslWith([]),
+    heldKeysAt: noHeldKeys,
+  });
   const optionalOnly = { properties: { queue: { type: 'object', properties: { alerts: { type: 'object' } } } } };
-  assert.equal(fill('queue:\n  alerts:\n', 1, optionalOnly), null);
+  assert.deepEqual(fill('queue:\n  alerts:\n', 1, optionalOnly), { keyColumn: 2, valueKind: 'map', fields: [] });
+  const listed = { properties: { queue: { type: 'object', properties: { alerts: { type: 'array' } } } } };
+  assert.deepEqual(fill('queue:\n  alerts:\n', 1, listed), { keyColumn: 2, valueKind: 'list', fields: [] });
 });
 
 test('Enter after an empty key fills the required fields of the branch the document selects', () => {

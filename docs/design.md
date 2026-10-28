@@ -664,8 +664,27 @@ The file's schema completes keys and values, read by the parser of the schema's 
 | Where | The list holds |
 |---|---|
 | a key in a map | the fields the schema lists for the map |
+| a key in a map whose `additionalProperties` admits keys | one entry per open key, written `<key>: <value>` |
 | a list item | the fields of the item schema, or its values |
-| a value after a key | the field's `enum` and `const` values, and `true` / `false` for a boolean |
+| a value after a key | the field's `enum` and `const` values, and `true` / `false` for a boolean, each `const` with its own description |
+
+An open key's entry is built from the map's schema, and its full text is the description of the field holding the map:
+
+| Key schema | Key written |
+|---|---|
+| `propertyNames` with `enum` or `const` | each name, one entry per name |
+| `additionalProperties` | `<key>` |
+
+| Value schema | Row | Inserted after the key |
+|---|---|---|
+| `enum`, `const` or `boolean` in every form | `<key>: a \| b` | a choice of the values |
+| one type | `<key>: <type>` | `<type>` as a placeholder |
+| several types | `<key>: <type> \| <type>` | an empty placeholder |
+| a map | `<key>:` | a new line indented one level |
+| a list | `<key>:` | a new line holding `- `, the item's placeholder after it when the item is a scalar |
+
+- A placeholder key is selected on insert, and Tab moves to the value.
+- Keys `patternProperties` admits are validated, never offered.
 
 - A field's row shows its requirement marker and description, cut to the row's width, and the full text shows beside the list; a field the parent's `required` array lists is `[required]`.
 - A deprecated field is struck through in a draft that reads `deprecated`.
@@ -688,7 +707,22 @@ Enter after a key whose map is still empty fills the map's required fields:
 - A scalar field is written `key: `, its values a pick list when it has any, or `key: <default>` with the default as the stop's text when its schema states a `default`; a map or list field is written `key:` and an indented line.
 - The cursor waits at the first value; the fill is one undo step, and leaves the new line.
 
+Enter after a key with no value whose schema expects a map with nothing to fill starts the next line one level under the key; one whose schema expects a list writes `- ` there. Both open the shape hint.
+
 Enter after a list item holding a key and a value, `- <key>: <value>`, starts the next line under the key, for the item's next field; after any other line it keeps the line's indentation.
+
+### Shape hint
+
+The shape hint is the editor's parameter hints widget, showing what the schema expects at the cursor's line:
+
+| Where | The hint shows |
+|---|---|
+| a key in a map | a row per field not yet written and per open key, each `key: <value>` as completion writes it, under the description of the field holding the map |
+| a new list item | the item's fields, or its values as `- a \| b` |
+| a value after a key | `key: <value>`, under the field's description and each value with its own description |
+
+- It opens after Enter writes a value line, and by the editor's parameter hints command anywhere.
+- It stays open while the cursor is on that line, and closes once the cursor leaves it.
 
 ### Keys in the list
 

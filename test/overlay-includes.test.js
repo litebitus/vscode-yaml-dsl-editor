@@ -318,7 +318,7 @@ test('Enter on an overlay key the common layer already fills fills nothing it ho
   const ws = await includeWorkspace({ ...stackFiles, [BUCKET]: typed });
   await ws.sync(`file://${BUCKET}`, BUCKET, typed);
   const keyLine = at(typed, '  MockWait:').line;
-  assert.equal(ws.requiredFieldsAt(`file://${BUCKET}`, keyLine), null);
+  assert.deepEqual(ws.requiredFieldsAt(`file://${BUCKET}`, keyLine).fields, []);
   const fresh = bucketText.replace('  MockShared:\n    Type: Mock::Shared\n', '  MockFresh:\n');
   await ws.sync(`file://${BUCKET}`, BUCKET, fresh);
   const filled = ws.requiredFieldsAt(`file://${BUCKET}`, at(fresh, '  MockFresh:').line);

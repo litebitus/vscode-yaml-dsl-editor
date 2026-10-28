@@ -28,6 +28,7 @@ function fakeConnection() {
     onRenameRequest(fn) { handlers.rename = fn; },
     onDocumentLinks(fn) { handlers.links = fn; },
     onCompletion(fn) { handlers.completion = fn; },
+    onSignatureHelp(fn) { handlers.signatureHelp = fn; },
     tokenRefreshes: 0,
     languages: {
       semanticTokens: {
@@ -403,6 +404,43 @@ test('a schema field completes as an editor item that inserts its key and strike
   assert.deepEqual(byLabel.mode.command, { title: 'Suggest values', command: 'editor.action.triggerSuggest' });
   assert.deepEqual([byLabel.legacy.tags, byLabel.legacy.command], [[1], undefined]);
   assert.equal(byLabel.mode.tags, undefined);
+});
+
+test('the shape hint answers signature help, one signature per row sharing the documentation', async () => {
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  const schemaText = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      mock_map: {
+        type: 'object',
+        description: '[optional] The mock map.',
+        additionalProperties: { enum: ['low', 'high'] },
+      },
+    },
+  });
+  const workspace = bind(connection, documents, {
+    readFile: async (filePath) => (filePath === '/repo/mock.schema.json' ? schemaText : null),
+    fetchText: async () => null,
+  });
+  const config = configText(dslEntry('note', { file_includes: ['**/note.yml'] }));
+  await connection.handlers['yaml-dsl/config']({ entries: [{ text: config, dir: '/repo' }] });
+  const note = '# yaml-language-server: $schema=mock.schema.json\nmock_map:\n  ';
+  documents.handlers.open({ document: { uri: 'file:///repo/note.yml', getText: () => note } });
+  await workspace.whenIdle();
+  const hintAt = (line, character) => connection.handlers.signatureHelp({
+    textDocument: { uri: 'file:///repo/note.yml' },
+    position: { line, character },
+  });
+  assert.deepEqual(await hintAt(2, 2), {
+    signatures: [{ label: '<key>: low | high', documentation: { kind: 'markdown', value: 'The mock map.' } }],
+    activeSignature: 0,
+  });
+  assert.equal(await hintAt(1, 9), null);
+  assert.deepEqual(connection.handlers.initialize().capabilities.signatureHelpProvider, {
+    triggerCharacters: [],
+    retriggerCharacters: [],
+  });
 });
 
 test('semantic tokens are encoded with the legend, and a config change asks the editor to refresh them', async () => {

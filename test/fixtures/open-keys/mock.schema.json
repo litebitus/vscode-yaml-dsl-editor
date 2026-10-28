@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "mock_choices": {
+      "type": "object",
+      "description": "[optional] The mock choices.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "const": "low",
+            "description": "The mock low."
+          },
+          {
+            "const": "high",
+            "description": "The mock high."
+          }
+        ]
+      }
+    },
+    "mock_booleans": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "mock_integers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "mock_mixed": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number"
+        ]
+      }
+    },
+    "mock_maps": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "mock_size": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "mock_strings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "mock_objects": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "mock_name": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "mock_named": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "mock-a",
+          "mock-b"
+        ]
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "mock_patterned": {
+      "type": "object",
+      "properties": {
+        "mock_listed": {
+          "type": "string"
+        }
+      },
+      "patternProperties": {
+        "^mock-": {
+          "type": "integer"
+        }
+      }
+    },
+    "mock_both": {
+      "type": "object",
+      "properties": {
+        "mock_fixed": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "mock_seed": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    }
+  }
+}

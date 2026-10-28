@@ -2,11 +2,15 @@
 
 ## Unreleased
 
+- Completion
+  - A key in a map whose `additionalProperties` admits open keys offers each open key with the shape of its value, documented by the field holding the map, and a `const` value shows its own description.
+  - Enter after a key whose value is a map or a list starts its first line, and a shape hint shows what the schema expects on that line.
 - Functions
   - A function is offered only once the call marker is typed: a call with a name is offered every function and macro, one with no name beside other keys only the macros, and none is offered where `calls_not_allowed_at` refuses calls.
 - Fixed
   - Completion: accepting a map or list field indented its new line by the key's own column twice, so the line sat two levels under the key; it now sits one.
   - Enter after a list item holding a key and a value left the cursor under the item's `-`; it now lines up with the key, for the item's next field.
+  - Completion and the shape hint read a key holding `[` or `]` after its first character, such as a JSONPath, as a key.
 
 ## 0.9.0 - 2026-10-27
 

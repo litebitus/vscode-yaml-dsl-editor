@@ -1274,3 +1274,21 @@ test('a hover reads # as a comment only at a line start or after whitespace', as
   assert.match(lightHover.contents.value, /color:var\(--vscode-yamlDslEditor-light-declaration-commentForeground\);/);
   assert.match(body, /<span style="color:var\(--vscode-yamlDslEditor-dark-declaration-commentForeground\);"># trailing<\/span>/);
 });
+
+test('the shape hint answers on the line it was opened on, and closes for good once the cursor leaves that line', async () => {
+  const vscode = { ...paintingVscode([]), SignatureHelpTriggerKind: { Invoke: 1, ContentChange: 3 } };
+  const mid = editorMiddleware(vscode, () => [], clickOpenedPopup(vscode));
+  const document = { uri: { toString: () => 'file:///repo/mock.yml' } };
+  const hintOf = (line, triggerKind) => mid.provideSignatureHelp(
+    document,
+    { line, character: 4 },
+    { triggerKind },
+    null,
+    async () => `hint at line ${line}`,
+  );
+  assert.equal(await hintOf(2, 3), null);
+  assert.equal(await hintOf(2, 1), 'hint at line 2');
+  assert.equal(await hintOf(2, 3), 'hint at line 2');
+  assert.equal(await hintOf(3, 3), null);
+  assert.equal(await hintOf(2, 3), null);
+});

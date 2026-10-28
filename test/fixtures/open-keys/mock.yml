@@ -1,0 +1,3 @@
+# yaml-language-server: $schema=./mock.schema.json
+mock_seed:
+  mock-seed: 1

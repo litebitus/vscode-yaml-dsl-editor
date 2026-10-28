@@ -161,6 +161,167 @@ suite('schema completion', () => {
   });
 });
 
+suite('open key completion', () => {
+  isolateEachTest();
+
+  async function openKeyEditor(mapLine) {
+    const editor = await shownDocument(path.join(fixtureCopy('open-keys'), 'mock.yml'));
+    const cursor = await typedAtEnd(editor, `${mapLine}\n  `);
+    return { editor, cursor };
+  }
+
+  async function acceptedOpenKey(editor, cursor, label) {
+    editor.selection = new vscode.Selection(cursor, cursor);
+    assert.ok((await completionLabelsAt(editor.document, cursor)).includes(label));
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    const keyLine = () => editor.document.lineAt(cursor.line).text;
+    while (Date.now() < deadline && !keyLine().includes('<key>')) {
+      await vscode.commands.executeCommand('editor.action.triggerSuggest');
+      await new Promise((resolve) => { setTimeout(resolve, 300); });
+      await vscode.commands.executeCommand('acceptSelectedSuggestion');
+    }
+    return keyLine();
+  }
+
+  async function assertShapesOffered(copyLabel, expected) {
+    const editor = await shownDocument(path.join(fixtureCopy('open-keys', copyLabel), 'mock.yml'));
+    for (const [mapKey, labels] of Object.entries(expected)) {
+      const cursor = await typedAtEnd(editor, `\n${mapKey}:\n  `);
+      const offered = await completionLabelsAt(editor.document, cursor);
+      const shaped = offered.filter((label) => label.includes(':') || labels.includes(label));
+      assert.deepEqual(shaped.sort(), [...labels].sort(), mapKey);
+    }
+  }
+
+  test('ctrl-space under a map whose open keys hold scalars offers each key with its values or types', async () => {
+    await assertShapesOffered('open-keys-scalars', {
+      mock_choices: ['<key>: low | high'],
+      mock_booleans: ['<key>: true | false'],
+      mock_integers: ['<key>: <integer>'],
+      mock_mixed: ['<key>: <string> | <number>'],
+    });
+  });
+
+  test('ctrl-space under a map whose open keys hold maps or lists offers each key alone', async () => {
+    await assertShapesOffered('open-keys-blocks', {
+      mock_maps: ['<key>:'],
+      mock_strings: ['<key>:'],
+      mock_objects: ['<key>:'],
+    });
+  });
+
+  test('ctrl-space offers propertyNames by name and named fields beside open keys, and no patternProperties', async () => {
+    await assertShapesOffered('open-keys-names', {
+      mock_named: ['mock-a: <string>', 'mock-b: <string>'],
+      mock_patterned: ['mock_listed'],
+      mock_both: ['mock_fixed', '<key>: true | false'],
+    });
+  });
+
+  test('the open key\'s entry carries the description of the map holding it', async () => {
+    const { editor, cursor } = await openKeyEditor('mock_choices:');
+    const items = await completionItemsAt(editor.document, cursor);
+    const entry = items.find((item) => labelOf(item) === '<key>: low | high');
+    assert.equal(entry.documentation.value, 'The mock choices.');
+  });
+
+  test('accepting an open key writes the key placeholder selected, then Tab selects the value', async () => {
+    const { editor, cursor } = await openKeyEditor('mock_choices:');
+    assert.equal(await acceptedOpenKey(editor, cursor, '<key>: low | high'), '  <key>: low');
+    assert.equal(editor.document.getText(editor.selection), '<key>');
+    await vscode.commands.executeCommand('type', { text: 'mock-x' });
+    await vscode.commands.executeCommand('jumpToNextSnippetPlaceholder');
+    assert.equal(editor.document.lineAt(cursor.line).text, '  mock-x: low');
+    assert.equal(editor.document.getText(editor.selection), 'low');
+    await vscode.commands.executeCommand('leaveSnippet');
+  });
+
+  test('accepting an open key whose value is a map writes the key and a line one level under it', async () => {
+    const { editor, cursor } = await openKeyEditor('mock_maps:');
+    assert.equal(await acceptedOpenKey(editor, cursor, '<key>:'), '  <key>:');
+    assert.equal(editor.document.lineAt(cursor.line + 1).text, '    ');
+    await vscode.commands.executeCommand('leaveSnippet');
+  });
+
+  test('a value under an open key offers each value with its own description', async () => {
+    const { editor } = await openKeyEditor('mock_choices:');
+    const valueCursor = await typedAtEnd(editor, 'mock-x: ');
+    const items = await completionItemsAt(editor.document, valueCursor);
+    const documented = Object.fromEntries(items.map((item) => [labelOf(item), item.documentation && item.documentation.value]));
+    assert.deepEqual([documented.low, documented.high], ['The mock low.', 'The mock high.']);
+  });
+});
+
+suite('shape hint', () => {
+  isolateEachTest();
+
+  // The fill after Enter asks the server, which may not have read the file yet,
+  // so Enter is pressed again, undone in between, until the value line appears.
+  async function enteredAfter(keyLine, copyLabel, expectedLine) {
+    const editor = await shownDocument(path.join(fixtureCopy('open-keys', copyLabel), 'mock.yml'));
+    const cursor = await typedAtEnd(editor, keyLine);
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    const nextLine = () => (cursor.line + 1 < editor.document.lineCount ? editor.document.lineAt(cursor.line + 1).text : null);
+    while (Date.now() < deadline) {
+      editor.selection = new vscode.Selection(cursor, cursor);
+      await vscode.commands.executeCommand('type', { text: '\n' });
+      const settled = Date.now() + 1000;
+      while (Date.now() < settled && nextLine() !== expectedLine) {
+        await new Promise((resolve) => { setTimeout(resolve, 50); });
+      }
+      if (nextLine() === expectedLine) break;
+      await undoInEditorOf(editor.document);
+    }
+    return editor;
+  }
+
+  async function hintRowsAt(editor) {
+    const help = await vscode.commands.executeCommand(
+      'vscode.executeSignatureHelpProvider',
+      editor.document.uri,
+      editor.selection.active,
+    );
+    return help ? help.signatures.map((signature) => signature.label) : [];
+  }
+
+  test('Enter after a key whose value is a map lands one level under it, hinted with the map\'s shape', async () => {
+    const editor = await enteredAfter('mock_choices:', 'shape-hint-map', '  ');
+    assert.deepEqual([editor.selection.active.line, editor.selection.active.character], [4, 2]);
+    assert.deepEqual(await hintRowsAt(editor), ['<key>: low | high']);
+  });
+
+  test('Enter after a key whose value is a list writes the item marker, hinted with the item\'s shape', async () => {
+    const editor = await enteredAfter('mock_objects:\n  mock-x:', 'shape-hint-list', '    - ');
+    assert.deepEqual([editor.selection.active.line, editor.selection.active.character], [5, 6]);
+    assert.deepEqual(await hintRowsAt(editor), ['mock_name: <string>']);
+  });
+
+  test('a value typed under an open key is hinted with each value and its description', async () => {
+    const editor = await enteredAfter('mock_choices:', 'shape-hint-value', '  ');
+    await vscode.commands.executeCommand('type', { text: 'mock-x: ' });
+    const help = await vscode.commands.executeCommand(
+      'vscode.executeSignatureHelpProvider',
+      editor.document.uri,
+      editor.selection.active,
+    );
+    assert.equal(help.signatures[0].label, 'mock-x: low | high');
+    assert.match(help.signatures[0].documentation.value, /- `low`: The mock low\./);
+  });
+
+  test('a value typed after a key holding brackets is hinted and completed like any other', async () => {
+    const editor = await enteredAfter('mock_choices:', 'shape-hint-brackets', '  ');
+    await vscode.commands.executeCommand('type', { text: '$.mock[*].size: ' });
+    const help = await vscode.commands.executeCommand(
+      'vscode.executeSignatureHelpProvider',
+      editor.document.uri,
+      editor.selection.active,
+    );
+    assert.equal(help.signatures[0].label, '$.mock[*].size: low | high');
+    const labels = await completionLabelsAt(editor.document, editor.selection.active);
+    assert.ok(labels.includes('low') && labels.includes('high'), JSON.stringify(labels));
+  });
+});
+
 suite('Enter', () => {
   isolateEachTest();
 

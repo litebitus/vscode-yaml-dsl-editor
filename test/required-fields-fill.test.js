@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   REQUIRED_FIELDS_REQUEST,
   requiredFieldsSnippetText,
+  valueLineSnippetText,
   fillRequiredFieldsAfterEnter,
 } = require('../lib/required-fields-fill');
 
@@ -55,8 +56,11 @@ function fillingVscode(document) {
     options: { tabSize: 2 },
     insertSnippet: async (snippet, range, options) => { inserted.push({ snippet: snippet.value, range, options }); },
   };
+  const executed = [];
   return {
     inserted,
+    executed,
+    commands: { executeCommand: async (command) => { executed.push(command); } },
     window: { activeTextEditor: editor },
     SnippetString: class {
       constructor(value) { this.value = value; }
@@ -102,4 +106,20 @@ test('typing other than Enter after a key, an undo, a text changed meanwhile, or
   answer = null;
   await fillRequiredFieldsAfterEnter(keyVscode, client, enterEvent(keyDocument));
   assert.deepEqual([...vscode.inserted, ...keyVscode.inserted], []);
+});
+
+test('Enter after a key whose value is a map or a list writes the line one level under it and opens the shape hint', async () => {
+  for (const [valueKind, lineText] of [['map', '    $0'], ['list', '    - $0']]) {
+    const document = documentOf(['queue:', '  alerts:', '  ']);
+    const vscode = fillingVscode(document);
+    const client = { sendRequest: async () => ({ keyColumn: 2, valueKind, fields: [] }) };
+    await fillRequiredFieldsAfterEnter(vscode, client, enterEvent(document));
+    assert.deepEqual(vscode.inserted.map((insert) => [insert.snippet, insert.range]), [[lineText, { line: 2 }]]);
+    assert.deepEqual(vscode.executed, ['editor.action.triggerParameterHints']);
+  }
+});
+
+test('the value line of a scalar or an unknown kind is nothing', () => {
+  assert.equal(valueLineSnippetText('scalar', 2, 2), null);
+  assert.equal(valueLineSnippetText(undefined, 2, 2), null);
 });
