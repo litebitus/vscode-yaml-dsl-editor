@@ -19,8 +19,6 @@ Any DSL written this way is a block in the workspace config, `yaml-dsl.yml`. Not
 - when the DSL has layers, which directories are overlays;
 - a fallback schema for a document that names none.
 
-A block may also carry `code_generation`, which belongs to a code generator reading the same config, such as the YAML DSL compiler; the editor does not read it.
-
 Scopes, references, placeholders and calls are generic: the editor validates, navigates, completes and hovers them the same way in every DSL. Each DSL's block supplies the syntax, and those syntaxes differ.
 
 `mock-dsl.yml` is the DSL this document works through:

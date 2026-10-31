@@ -2,9 +2,6 @@
 
 ## Unreleased
 
-- Config
-  - A DSL block may carry `code_generation`, which a code generator reading the same config states and the editor does not read.
-
 ## 0.9.2 - 2026-10-28
 
 - Fixed

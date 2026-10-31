@@ -78,10 +78,6 @@
         "loops": { "$ref": "#/$defs/loops" },
         "validator": { "$ref": "#/$defs/validator" },
         "performance": { "$ref": "#/$defs/performance" },
-        "code_generation": {
-          "type": "object",
-          "description": "What a code generator reading this config compiles the DSL to. The generator states its fields; the editor does not read them."
-        },
         "key_sort_orders": {
           "type": "array",
           "items": { "$ref": "#/$defs/key_sort_order" },
