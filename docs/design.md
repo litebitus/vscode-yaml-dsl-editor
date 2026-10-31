@@ -19,6 +19,8 @@ Any DSL written this way is a block in the workspace config, `yaml-dsl.yml`. Not
 - when the DSL has layers, which directories are overlays;
 - a fallback schema for a document that names none.
 
+A block may also carry `code_generation`, which belongs to a code generator reading the same config, such as the YAML DSL compiler; the editor does not read it.
+
 Scopes, references, placeholders and calls are generic: the editor validates, navigates, completes and hovers them the same way in every DSL. Each DSL's block supplies the syntax, and those syntaxes differ.
 
 `mock-dsl.yml` is the DSL this document works through:
@@ -329,6 +331,7 @@ Under this entry, `concern-group/overlay-1/concern-1/mock-dsl.yml` takes `concer
 An author editing one of those files sees only that file, so the language server buffers the stack in the editor view:
 
 - Each overlay's folded document is the common layer merged with that overlay.
+- An overlay's `{}` or `[]` at a key the common layer holds is an opt-out: the key is deleted from the fold, at any depth. At a key the common layer does not hold, it is content.
 - Shared config lives in the common layer, a local that an entry references included.
 - While any file of the stack is active, refs and locals resolve in that file's fold.
 - Across overlays the editor diffs the folded documents.
@@ -907,7 +910,7 @@ Each document is validated against its schema, with the requirement markers deci
 - A missing required field is marked on its map's key, and an unknown field on its own key.
 - A dependency a key does not meet is marked on that key, its message naming what the key needs.
 - A fold holding a file with a YAML error is not validated.
-- An overlay's `{}` or `[]` at a key the common layer holds is an opt-out, and the fold is validated without that key; at a key the common layer does not hold, it is content and is validated as written.
+- Validation reads the fold, so an opted-out key is not validated.
 - A key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode`, supplies that field, so the field is not reported missing.
 - The error's message names the field and what it must be. A field whose allowed forms are a described definition reads as that description's first sentence, and any other reads that it matches none of its allowed forms.
 
