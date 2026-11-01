@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Placeholders
+  - `placeholder.escape_prefix` keeps a placeholder written right after it as literal text.
+- Schemas
+  - Private schema URLs are read with the machine's credentials: GitHub release assets with `GH_TOKEN`, `GITHUB_TOKEN` or the `gh` login, other hosts with `.netrc`.
+  - A `schema_search_paths` entry may hold `*` in its steps.
+
 ## 0.9.2 - 2026-10-28
 
 - Fixed

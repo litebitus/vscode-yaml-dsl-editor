@@ -48,7 +48,7 @@
         "schema_search_paths": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
-          "description": "Schemas tried in order when a file names none, or the one it names is not on disk. Each path is relative to the file, or to the config's folder when it starts with {config_root}/; a URL is fetched."
+          "description": "Schemas tried in order when a file names none, or the one it names is not on disk. Each path is relative to the file, or to the config's folder when it starts with {config_root}/, and a * in a step matches within it; a URL is fetched."
         },
         "tag_keys": {
           "type": "array",
@@ -218,6 +218,11 @@
           "type": "string",
           "pattern": "\\(\\?<body>",
           "description": "Regular expression of a placeholder, with a (?<body>...) group."
+        },
+        "escape_prefix": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Text that, written right before a placeholder, keeps it as literal text. Left out for none."
         },
         "unscanned_paths": {
           "type": "array",

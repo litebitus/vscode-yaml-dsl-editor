@@ -444,6 +444,15 @@ test('a path is a JSONPath listed once per list; ..* ends it, and includes_subtr
   ]) assert.ok(parsed.error.includes(message), message);
 });
 
+test('escape_prefix is optional non-empty text', () => {
+  const escaped = (id, escapePrefix) => dslEntry(id, {
+    placeholder: { pattern: '\\$\\{(?<body>[^}]*)\\}', escape_prefix: escapePrefix, unscanned_paths: [] },
+  });
+  const parsed = parseConfig(configText(escaped('dollar', '$'), escaped('empty', '')));
+  assert.equal(parsed.dsls[0].placeholder.escapePrefix, '$');
+  assert.ok(parsed.error.includes('empty.placeholder.escape_prefix must be non-empty text'), parsed.error);
+});
+
 test('first_keys and last_keys are distinct keys, apart from each other, and [] under alphabetical', () => {
   const ordered = (id, order, firstKeys, lastKeys) => dslEntry(id, {
     key_sort_orders: [{
