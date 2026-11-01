@@ -116,6 +116,12 @@ A schema URL may carry query param `yaml_dsl_max_age_days=<days>`: the downloade
 # yaml-language-server: $schema=https://github.com/litebitus/vscode-yaml-dsl-editor/releases/download/<release>/cloudformation-2010-09-09.schema.json?yaml_dsl_max_age_days=365
 ```
 
+A schema URL is read without credentials. A private one opts in to the machine's credentials with `yaml_dsl_machine_credentials=true`: a GitHub release is then read with `GH_TOKEN`, `GITHUB_TOKEN` or the `gh` login, and any other host with `.netrc`, when the read without credentials is refused.
+
+```yaml
+# yaml-language-server: $schema=https://github.com/mock-org/mock-schemas/releases/latest/download/mock.schema.json?yaml_dsl_machine_credentials=true
+```
+
 ### Fragments
 
 A modeline marks a file as a fragment by the fragment of its schema's URI. A fragment is validated from its own root with no key required, and its hover shows the requirement markers struck.

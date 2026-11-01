@@ -591,7 +591,7 @@ Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus
 Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/spec.md), under Schema URLs.
 
 - A downloaded copy is kept in the extension's storage, across sessions and workspaces.
-- Each refusal is logged.
+- What a credentialed read reports, a refused credential, a missing release or asset, an unseen repository, is logged.
 
 ### Branches the document selects
 

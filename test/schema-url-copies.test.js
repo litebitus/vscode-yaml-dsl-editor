@@ -30,13 +30,21 @@ test('the editor\'s parameters leave the URL, and every other parameter stays as
   assert.deepEqual(editorParametersOf('https://example.test/mock.json'), {
     fetchUrl: 'https://example.test/mock.json',
     maxAgeDays: null,
+    machineCredentials: false,
     problem: null,
   });
   assert.deepEqual(editorParametersOf('https://example.test/mock.json?b=2&yaml_dsl_max_age_days=7&a=%20x&flag'), {
     fetchUrl: 'https://example.test/mock.json?b=2&a=%20x&flag',
     maxAgeDays: 7,
+    machineCredentials: false,
     problem: null,
   });
+  const optedIn = editorParametersOf('https://example.test/mock.json?yaml_dsl_machine_credentials=true');
+  assert.deepEqual([optedIn.fetchUrl, optedIn.machineCredentials], ['https://example.test/mock.json', true]);
+  assert.equal(editorParametersOf('https://example.test/mock.json?yaml_dsl_machine_credentials=false')
+    .machineCredentials, false);
+  assert.equal(editorParametersOf('https://example.test/mock.json?yaml_dsl_machine_credentials=yes').problem,
+    '`yaml_dsl_machine_credentials` must be `true` or `false`');
   assert.equal(editorParametersOf('https://example.test/mock.json?yaml_dsl_max_age_days=0').maxAgeDays, null);
   assert.equal(editorParametersOf('https://example.test/mock.json?yaml_dsl_max_age_days=0').fetchUrl,
     'https://example.test/mock.json');
