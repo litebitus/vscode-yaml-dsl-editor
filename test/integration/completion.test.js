@@ -330,14 +330,20 @@ suite('Enter', () => {
   async function lineAfterEnterAt(lineText, expected) {
     const editor = await shownDocument(path.join(fixtureCopy('schema-completion'), 'mock.yml'));
     const cursor = await typedAtEnd(editor, `\n${lineText}`);
+    const document = editor.document;
+    const textBeforeEnter = document.getText();
     const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
     let entered = null;
     while (Date.now() < deadline) {
-      editor.selection = new vscode.Selection(cursor, cursor);
+      const focused = await vscode.window.showTextDocument(document);
+      await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+      focused.selection = new vscode.Selection(cursor, cursor);
       await vscode.commands.executeCommand('type', { text: '\n' });
-      entered = { text: editor.document.lineAt(cursor.line + 1).text, character: editor.selection.active.character };
-      if (entered.text === expected.text && entered.character === expected.character) break;
-      await undoInEditorOf(editor.document);
+      if (document.lineCount > cursor.line + 1) {
+        entered = { text: document.lineAt(cursor.line + 1).text, character: focused.selection.active.character };
+        if (entered.text === expected.text && entered.character === expected.character) break;
+      }
+      if (document.getText() !== textBeforeEnter) await undoInEditorOf(document);
       await new Promise((resolve) => { setTimeout(resolve, 100); });
     }
     return entered;
