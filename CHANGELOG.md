@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Config
-  - `yaml-dsl.yml` is read through the yaml-dsl-spec package: each problem is underlined at the field it is about, and `version: "1.0"` is read.
+  - `yaml-dsl.yml` is read through the yaml-dsl-spec package: each problem is worded as the standard words it and underlined at the field it is about, and `version: "1.0"` is read.
   - A folder keeps the DSLs its `yaml-dsl.yml` last read cleanly while the file holds problems.
   - A `yaml-dsl.yml` opens as a YAML DSL Definition, with hover and completion from the standard's schema at the version it states.
 - Placeholders

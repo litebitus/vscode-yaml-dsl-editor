@@ -268,11 +268,11 @@ test('a yaml-dsl.yml problem is at the field it is about, and the folder keeps t
   assert.deepEqual(problems.map((problem) => [problem.range, problem.message]), [
     [
       { start: { line: 2, character: 4 }, end: { line: 2, character: 6 } },
-      'field `file_excludes` is required\n\n`dsls[0]` has no field `file_excludes`',
+      '`file_excludes` is required\n\n`dsls[0]` has no field `file_excludes`',
     ],
     [
       { start: { line: 5, character: 4 }, end: { line: 5, character: 16 } },
-      'field `file_exclude` is not allowed\n\n`dsls[0]` has no field `file_exclude`; did you mean `file_excludes`?',
+      '`file_exclude` is not a field of `dsls[0]`\n\n`dsls[0]` has no field `file_exclude`; did you mean `file_excludes`?',
     ],
   ]);
   const text = 'name: kept\n';
@@ -311,8 +311,8 @@ test('a yaml-dsl.yml shows the reader\'s problems only, never its schema\'s agai
   await ws.setConfigs([{ text: misspelt, dir: '/repo' }]);
   await ws.sync('file:///repo/yaml-dsl.yml', '/repo/yaml-dsl.yml', misspelt);
   assert.deepEqual(ws.problems('file:///repo/yaml-dsl.yml').map((problem) => problem.message.split('\n')[0]), [
-    'field `file_excludes` is required',
-    'field `file_exclude` is not allowed',
+    '`file_excludes` is required',
+    '`file_exclude` is not a field of `dsls[0]`',
   ]);
 });
 

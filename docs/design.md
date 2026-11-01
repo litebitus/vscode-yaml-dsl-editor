@@ -572,18 +572,8 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 ### Requirement markers
 
-A requirement marker is the extension's standard for saying whether a key must be present. A field's `description` opens with it:
+Specified by the YAML DSL standard's [package design](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/package-design.md), under Requirement markers.
 
-| Marker | The key |
-|---|---|
-| `[required]` | is present in every folded document |
-| `[~required]` | is present under a condition the schema does not state |
-| `[optional]` | may be absent |
-
-- A marker states the field author's intent beside the field itself, so where a field carries one, the marker decides and its parent's `required` array is not read for that key.
-- A field without a marker is required when its parent's `required` array lists it.
-- A `required` array inside `not` or `if` is a condition, not a requirement, and markers leave it as written.
-- A `required` array inside an `anyOf` or `oneOf` branch selects the form the value takes, and markers leave it as written.
 - Every schema check the extension runs reads requiredness this way.
 - A fragment requires no key, so its hover shows each field's marker struck.
 
@@ -658,7 +648,9 @@ A part of a schema is compiled on its own, with only the schema's nodes its `$re
 
 ### Validation
 
-Each document is validated against its schema, with the requirement markers deciding which fields are required:
+Specified by the YAML DSL standard's [package design](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/package-design.md), under Schema validation: how a document is read by its DSL's `validator` block before it is validated, and how each problem is worded.
+
+Each document is validated against its schema:
 
 | File | Validated |
 |---|---|
@@ -672,14 +664,8 @@ Each document is validated against its schema, with the requirement markers deci
 - A fold holding a file with a YAML error is not validated.
 - Validation reads the fold, so an opted-out key is not validated.
 - A key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode`, supplies that field, so the field is not reported missing.
-- The error's message names the field and what it must be. A field whose allowed forms are a described definition reads as that description's first sentence, and any other reads that it matches none of its allowed forms.
-
-A DSL's `validator` block states how a document is read before it is validated; validation reads it, and hover reads `child_values_from_parent_key` to document the field a key sets:
-
-| Field | What it states |
-|---|---|
-| `child_values_from_parent_key` | patterns of a key that sets a field of the entry it keys, with `field` and `value` groups. A field the entry writes itself stays as written |
-| `allow_quoted_values` | types from `boolean`, `integer` and `number` a quoted value is validated as, where the schema expects that type and the string spells one; `[]` when left out. A quoted value that spells none stays a string. Hover and completion show the schema's types, and what the extension writes stays unquoted |
+- Hover reads `child_values_from_parent_key` to document the field a key sets.
+- Where `allow_quoted_values` reads a quoted value, hover and completion show the schema's types, and what the extension writes stays unquoted.
 
 The `validator.*` settings show validation errors at a chosen severity, turn them off, and color the files holding them in the Explorer.
 
@@ -1192,9 +1178,7 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 
 - A move turns list and map differences into locals, and on a tie the common layer declares a list's local as `[]` and a map's as `{}`.
 - The config states what a placeholder form does to the value it puts in, such as CloudFormation's `&{…}` dropping non-alphanumeric characters, so a name written with it is spelled as the expansion spells it.
-- `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Definition". The extension offers help on authoring this file.
 - Find All References on a declaration lists every reference to it across the common layer and each overlay.
 - The formatter, as designed under Formatting.
 - The package ships the client, the server and the validation worker each bundled by esbuild, with the code cache keyed by the bundles and ajv's runtime modules bundled in, in place of `lib/` and `node_modules`.
-- The editor reads the YAML DSL standard through the [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec) package, in place of its own code for it: the schemas of `yaml-dsl.yml` and of the function table, the reading and validation of `yaml-dsl.yml`, and, as the package takes them on, discovery, folding, references, scopes, locals, macros and the validation of documents.
 - A call key reads as its field everywhere, as the YAML DSL standard states: `message fn.format*` is the field `message`. Hover and the required-field check read the field, while validation of unknown fields and of the field's type, field-name completion and required-field filling read the key as written. A schema written before the standard, admitting the call key as written, is still read.

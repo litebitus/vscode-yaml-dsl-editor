@@ -348,8 +348,8 @@ test('a config is read by the YAML DSL standard, each problem a diagnostic at it
     problem.notes.help,
   ]);
   assert.deepEqual(placed, [
-    [3, 5, 'field `file_excludes` is required', null],
-    [6, 5, 'field `file_exclude` is not allowed', 'did you mean `file_excludes`?'],
+    [3, 5, '`file_excludes` is required', null],
+    [6, 5, '`file_exclude` is not a field of `dsls[0]`', 'did you mean `file_excludes`?'],
   ]);
   assert.equal(parsed.problems[0].position.file, '/repo/yaml-dsl.yml');
 });
@@ -361,7 +361,7 @@ test('a config states its version, and only a version the standard reads is read
   }
   const versionless = parseConfig('dsls: []\n');
   assert.equal(versionless.ok, false);
-  assert.equal(versionless.problems[0].message, 'field `version` is required');
+  assert.equal(versionless.problems[0].message, '`version` is required');
   assert.equal(parseConfig('version: 1\ndsls: []\n').ok, false);
   assert.equal(parseConfig('version: "2"\ndsls: []\n').ok, false);
 });
