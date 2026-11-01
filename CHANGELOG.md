@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 - 2026-11-01
 
 - Config
   - `yaml-dsl.yml` is read through the yaml-dsl-spec package: each problem is worded as the standard words it and underlined at the field it is about, and `version: "1.0"` is read.
