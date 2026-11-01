@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Config
+  - `yaml-dsl.yml` is read through the yaml-dsl-spec package: each problem is underlined at the field it is about, and `version: "1.0"` is read.
+  - A folder keeps the DSLs its `yaml-dsl.yml` last read cleanly while the file holds problems.
 - Placeholders
   - `placeholder.escape_prefix` keeps a placeholder written right after it as literal text.
 - Schemas

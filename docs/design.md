@@ -1123,9 +1123,11 @@ Each phase is one kind, built and validated before the next:
 
 Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/spec.md), under What the workspace defines.
 
-A `yaml-dsl.yml` anywhere in the workspace is a config, and its folder is its scope. The extension ships its JSON Schema at `schemas/yaml-dsl.schema.json`.
+A `yaml-dsl.yml` anywhere in the workspace is a config, and its folder is its scope. The extension reads it through the [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec) package, at the version its dependency pins.
 
 - A DSL without layers still formats, navigates and hovers.
+- Each problem the package finds is underlined at the text it is about, and its hover shows the message, then its label and help.
+- A config holding problems gives its folder no new DSLs: the folder keeps the DSLs its config last read cleanly, until the config reads cleanly again.
 
 ### The config index
 
@@ -1184,11 +1186,6 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 - Every behavior that nags has a setting that turns it off.
 - A change to a setting applies at once.
 - The README lists every setting.
-
-## Out of scope
-
-- Running the engine that accepts the file.
-- A DSL's schema or definition shipped inside the extension.
 
 ## TODO
 

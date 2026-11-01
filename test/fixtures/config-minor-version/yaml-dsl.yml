@@ -1,0 +1,10 @@
+version: "1.0"
+dsls:
+  - id: minor
+    file_includes: ["{config_root}/**/*.yaml"]
+    file_excludes: []
+    schema_search_paths: ["{config_root}/schemas/minor.schema.json"]
+    key_sort_orders: []
+    scopes: {}
+    declarations: []
+    references: []

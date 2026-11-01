@@ -1,21 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const Ajv2020 = require('ajv/dist/2020');
 const {
-  COMMON_LAYER_DISCOVERIES,
   CONFIG_VERSIONS,
-  FUNCTION_DEFINITIONS,
-  KEY_SORT_ORDERS,
-  KEY_TOKENS,
-  LOGICAL_SCOPE_NAME,
-  NAME_SOURCES,
-  NAME_SPELLINGS,
   parseConfig,
+  createConfigReader,
   claimFile,
   configPathOf,
   ownsFile,
 } = require('../lib/config');
-const { REFERENCE_POSITIONS } = require('../lib/reference-positions');
 const {
   scope,
   declaration,
@@ -28,11 +20,11 @@ const completeConfig = `
 version: "1"
 dsls:
   - id: sample
-    file_includes: ["**/mock.yml", 1]
+    file_includes: ["**/mock.yml"]
     file_excludes: ["**/skip/**"]
     schema_search_paths: [https://example.test/schema.json]
     layers:
-      overlay_folders: [one, 2]
+      overlay_folders: [one]
       common_layer_discovery: ancestor
       common_layer_files:
         mock.yml: ["{concern}.mock.yml", mock.yml]
@@ -84,7 +76,7 @@ dsls:
         regions: ["$"]
         later_items_of_declaring_list: false
         named_by_parent_key: false
-        builtin_names: [env, 1]
+        builtin_names: [env]
       ENTRY:
         regions: ["$"]
         later_items_of_declaring_list: false
@@ -111,7 +103,7 @@ dsls:
         declares_every_name: false
         scope_name: local
       - path: "$.*.*"
-        skip_keys: [locals, 3]
+        skip_keys: [locals]
         exclude_candidates: [defaults]
         name_source: key
         key_token: last_word
@@ -143,9 +135,13 @@ dsls:
         name_group: name
 `;
 
+function withFields(fields) {
+  return parseConfig(configText(dslEntry('mock', fields)));
+}
+
 test('a complete config states every field and keeps them', () => {
   const parsed = parseConfig(completeConfig);
-  assert.equal(parsed.error, null);
+  assert.deepEqual(parsed.problems, []);
   const [sample] = parsed.dsls;
   assert.deepEqual(sample.fileIncludes, ['**/mock.yml']);
   const keySortOrderFields = (entry) => [entry.path, entry.skipKeys, entry.order, entry.firstKeys, entry.lastKeys];
@@ -216,189 +212,177 @@ test('a complete config states every field and keeps them', () => {
 });
 
 test('a block the config leaves out is a feature the DSL does not have', () => {
-  const parsed = parseConfig([
-    'version: "1"',
-    'dsls:',
-    '  - id: flat',
-    '    file_includes: ["**/flat.yml"]',
-    '    file_excludes: []',
-    '    schema_search_paths: []',
-    '    key_sort_orders: []',
-    '    scopes: {}',
-    '    declarations: []',
-    '    references: []',
-    '    function:',
-    '      definitions: [schema]',
-    '      call_result_reference_positions: []',
-    '      calls_not_allowed_at: []',
-    '',
-  ].join('\n'));
-  assert.equal(parsed.error, null);
+  const parsed = withFields({
+    function: { definitions: ['schema'], call_result_reference_positions: [], calls_not_allowed_at: [] },
+  });
+  assert.deepEqual(parsed.problems, []);
   const [flat] = parsed.dsls;
   assert.equal(flat.layers, null);
   assert.equal(flat.placeholder, null);
   assert.equal(flat.locals, null);
+  assert.equal(flat.loops, null);
   assert.equal(flat.validator, null);
+  assert.deepEqual(flat.tagKeys, []);
   assert.deepEqual(flat.performance, { compiledSchemaCache: false });
   assert.equal(flat.function.markerFunction, null);
 });
 
 test('the performance block states whether the compiled schema is kept', () => {
-  const withPerformance = (performanceLines) => parseConfig([
-    'version: "1"',
-    'dsls:',
-    '  - id: mock',
-    '    file_includes: ["**/mock.yml"]',
-    '    file_excludes: []',
-    '    schema_search_paths: []',
-    '    key_sort_orders: []',
-    '    scopes: {}',
-    '    declarations: []',
-    '    references: []',
-    ...performanceLines.map((line) => `    ${line}`),
-    '',
-  ].join('\n'));
-  const kept = withPerformance(['performance:', '  compiled_schema_cache: true']);
-  assert.equal(kept.error, null);
-  assert.deepEqual(kept.dsls[0].performance, { compiledSchemaCache: true });
-  assert.deepEqual(withPerformance(['performance: { compiled_schema_cache: false }']).dsls[0].performance, {
+  assert.deepEqual(withFields({ performance: { compiled_schema_cache: true } }).dsls[0].performance, {
+    compiledSchemaCache: true,
+  });
+  assert.deepEqual(withFields({ performance: { compiled_schema_cache: false } }).dsls[0].performance, {
     compiledSchemaCache: false,
   });
-  assert.match(withPerformance(['performance: []']).error, /mock\.performance must be a mapping/);
-  assert.match(withPerformance(['performance: {}']).error, /mock\.performance\.compiled_schema_cache is required/);
 });
 
-test('the validator block states its merge base keys and child value patterns, each pattern naming field and value', () => {
-  const withValidator = (validatorLines) => parseConfig([
-    'version: "1"',
-    'dsls:',
-    '  - id: mock',
-    '    file_includes: ["**/mock.yml"]',
-    '    file_excludes: []',
-    '    schema_search_paths: []',
-    '    key_sort_orders: []',
-    '    scopes: {}',
-    '    declarations: []',
-    '    references: []',
-    ...validatorLines.map((line) => `    ${line}`),
-    '',
-  ].join('\n'));
-  assert.match(withValidator(['validator: []']).error, /mock\.validator must be a mapping/);
-  assert.doesNotMatch(withValidator(['validator: {}']).error, /merge_base_keys/);
-  assert.match(withValidator(['validator: {}']).error, /\.child_values_from_parent_key is required/);
-  const withoutMergeBases = withValidator(['validator:', '  child_values_from_parent_key: []']);
-  assert.deepEqual(withoutMergeBases.dsls[0].validator.mergeBaseKeys, []);
-  const unnamed = withValidator([
-    'validator:',
-    '  merge_base_keys: []',
-    '  child_values_from_parent_key:',
-    "    - pattern: '^(?<field>[a-z]+) (.+)$'",
-    '    - pattern: "("',
-    '    - mock',
+test('the validator block states its merge base keys, child value patterns and quoted value types', () => {
+  const pattern = '^(?<field>[a-z]+) (?<value>.+)$';
+  const listed = withFields({
+    validator: {
+      merge_base_keys: ['defaults'],
+      child_values_from_parent_key: [{ pattern }],
+      allow_quoted_values: ['boolean', 'integer', 'number'],
+    },
+  });
+  assert.deepEqual(listed.dsls[0].validator, {
+    mergeBaseKeys: ['defaults'],
+    childValuesFromParentKey: [{ pattern }],
+    allowQuotedValues: ['boolean', 'integer', 'number'],
+  });
+  const bare = withFields({ validator: { child_values_from_parent_key: [] } });
+  assert.deepEqual(bare.dsls[0].validator, { mergeBaseKeys: [], childValuesFromParentKey: [], allowQuotedValues: [] });
+});
+
+test('layers state their overlay folders, discovery and duplicate check, and no common layer files when left out', () => {
+  const layers = {
+    overlay_folders: ['one'],
+    common_layer_discovery: 'parent',
+    duplicate_check: { depth: 2, key_depths: { locals: 1 }, skip_keys: ['schema_version'] },
+  };
+  const [dsl] = withFields({ layers }).dsls;
+  assert.deepEqual(dsl.layers, {
+    overlayFolders: ['one'],
+    commonLayerDiscovery: 'parent',
+    commonLayerFiles: {},
+    overlayIncludes: [],
+    duplicateCheck: { depth: 2, keyDepths: { locals: 1 }, skipKeys: ['schema_version'] },
+  });
+});
+
+test('path entries keep their path, its steps, their skipped keys and includes_subtree', () => {
+  const [dsl] = withFields({
+    placeholder: {
+      pattern: '\\$\\{(?<body>[^}]*)\\}',
+      escape_prefix: '$',
+      unscanned_paths: [
+        { path: '$.build', skip_keys: ['local'] },
+        { path: '$.cloud', skip_keys: [], includes_subtree: true },
+      ],
+    },
+  }).dsls;
+  assert.equal(dsl.placeholder.escapePrefix, '$');
+  assert.deepEqual(dsl.placeholder.unscannedPaths, [
+    { path: '$.build', tokens: [{ kind: 'name', key: 'build' }], skipKeys: ['local'], includesSubtree: false },
+    { path: '$.cloud', tokens: [{ kind: 'name', key: 'cloud' }], skipKeys: [], includesSubtree: true },
   ]);
-  assert.match(unnamed.error, /child_values_from_parent_key\[0\]\.pattern must name the child field and its value/);
-  assert.match(unnamed.error, /child_values_from_parent_key\[1\]\.pattern is required/);
-  assert.match(unnamed.error, /child_values_from_parent_key\[2\] must be a mapping with pattern/);
-  assert.deepEqual(unnamed.dsls[0].validator, { mergeBaseKeys: [], childValuesFromParentKey: [], allowQuotedValues: [] });
 });
 
-test('the validator block states the types a quoted value is read as, none when left out', () => {
-  const withQuotedValues = (allowQuotedValuesLine) => parseConfig([
-    'version: "1"',
-    'dsls:',
-    '  - id: mock',
-    '    file_includes: ["**/mock.yml"]',
-    '    file_excludes: []',
-    '    schema_search_paths: []',
-    '    key_sort_orders: []',
-    '    scopes: {}',
-    '    declarations: []',
-    '    references: []',
-    '    validator:',
-    '      merge_base_keys: []',
-    '      child_values_from_parent_key: []',
-    ...(allowQuotedValuesLine ? [`      ${allowQuotedValuesLine}`] : []),
-    '',
-  ].join('\n'));
-  const listed = withQuotedValues('allow_quoted_values: [boolean, integer, number]');
-  assert.equal(listed.error, null);
-  assert.deepEqual(listed.dsls[0].validator.allowQuotedValues, ['boolean', 'integer', 'number']);
-  assert.deepEqual(withQuotedValues(null).dsls[0].validator.allowQuotedValues, []);
-  assert.match(
-    withQuotedValues('allow_quoted_values: [boolean, string]').error,
-    /mock\.validator\.allow_quoted_values must be a list from boolean, integer, number/,
-  );
-  assert.match(
-    withQuotedValues('allow_quoted_values: boolean').error,
-    /mock\.validator\.allow_quoted_values must be a list from boolean, integer, number/,
-  );
+test('locals and loops name their scopes, and locals may state a path separator', () => {
+  const [dsl] = withFields({
+    scopes: { local: scope(), item: scope() },
+    declarations: [declaration('$.locals.*', 'local')],
+    references: [reference('^local\\.(?<name>[a-z]+)$', 'local'), reference('^(?<name>it)$', 'item')],
+    locals: { scope_name: 'local', path_separator: '.' },
+    loops: { scope_name: 'item' },
+  }).dsls;
+  assert.deepEqual(dsl.locals, { scopeName: 'local', pathSeparator: '.' });
+  assert.deepEqual(dsl.loops, { scopeName: 'item' });
 });
 
-test('the duplicate check states its depth and the keys it passes over', () => {
-  const layered = (id, duplicateCheck) => dslEntry(id, {
-    layers: { overlay_folders: ['one'], common_layer_discovery: 'parent', duplicate_check: duplicateCheck },
-  });
-  const parsed = parseConfig(configText(
-    layered('stated', { depth: 2, key_depths: { locals: 1 }, skip_keys: ['schema_version'] }),
-    layered('shallow', { depth: 0, key_depths: { locals: 0 }, skip_keys: 1 }),
-    layered('unmapped', { depth: 1, key_depths: 1, skip_keys: [] }),
-  ));
-  assert.deepEqual(parsed.dsls[0].layers.duplicateCheck, {
-    depth: 2,
-    keyDepths: { locals: 1 },
-    skipKeys: ['schema_version'],
-  });
-  assert.equal(parsed.dsls[1].layers, null);
-  assert.equal(parsed.dsls[2].layers, null);
-  for (const message of [
-    'shallow.layers.duplicate_check.depth is required: a whole number from 1',
-    'shallow.layers.duplicate_check.key_depths.locals must be a whole number from 1',
-    'shallow.layers.duplicate_check.skip_keys is required',
-    'unmapped.layers.duplicate_check.key_depths is required: a mapping of keys to whole numbers from 1',
-  ]) assert.ok(parsed.error.includes(message), message);
+test('tag_keys pairs each tag with the key it stands for, and a DSL without reads none', () => {
+  const tagged = withFields({ tag_keys: [{ tag: '!Ref', key: 'Ref' }, { tag: '!GetAtt', key: 'Fn::GetAtt' }] });
+  assert.deepEqual(tagged.dsls[0].tagKeys, [{ tag: '!Ref', key: 'Ref' }, { tag: '!GetAtt', key: 'Fn::GetAtt' }]);
+  assert.deepEqual(withFields({}).dsls[0].tagKeys, []);
 });
 
-test('common layer files list the names a common layer may take, each a file name, one without {concern}', () => {
-  const layered = (id, discovery, commonLayerFiles) => dslEntry(id, {
-    layers: {
-      overlay_folders: ['one'],
-      common_layer_discovery: discovery,
-      common_layer_files: commonLayerFiles,
-      duplicate_check: { depth: 1, key_depths: {}, skip_keys: [] },
-    },
-  });
-  const parsed = parseConfig(configText(
-    layered('stated', 'ancestor', { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] }),
-    layered('unmapped', 'ancestor', ['mock.yml']),
-    layered('empty', 'ancestor', { 'mock.yml': [] }),
-    layered('pathed', 'ancestor', { 'mock.yml': ['nested/mock.yml'] }),
-    layered('twice', 'ancestor', { 'mock.yml': ['mock.yml', 'mock.yml'] }),
-    layered('doubled', 'ancestor', { 'mock.yml': ['{concern}.{concern}.yml', 'mock.yml'] }),
-    layered('concerned', 'ancestor', { 'mock.yml': ['{concern}.mock.yml'] }),
-    layered('parented', 'parent', { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] }),
-    layered('keyed', 'ancestor', { '..': ['mock.yml'] }),
-  ));
-  assert.deepEqual(parsed.dsls[0].layers.commonLayerFiles, { 'mock.yml': ['{concern}.mock.yml', 'mock.yml'] });
-  assert.ok(parsed.dsls.slice(1).every((dsl) => dsl.layers === null));
-  for (const message of [
-    'unmapped.layers.common_layer_files must be a mapping of a layer file name to the names its common layer may take',
-    'empty.layers.common_layer_files.mock.yml is required: a list of file names, the first tried first',
-    'pathed.layers.common_layer_files.mock.yml is required: a list of file names',
-    'twice.layers.common_layer_files.mock.yml lists a name more than once',
-    'doubled.layers.common_layer_files.mock.yml holds {concern} more than once in a name',
-    'concerned.layers.common_layer_files.mock.yml holds no name without {concern}',
-    'parented.layers.common_layer_files.mock.yml names a {concern} common layer, which only '
-      + 'common_layer_discovery: ancestor reaches',
-    'keyed.layers.common_layer_files... is keyed by a layer file name',
-  ]) assert.ok(parsed.error.includes(message), message);
-  const unstated = parseConfig(configText(dslEntry('unstated', {
-    layers: {
-      overlay_folders: ['one'],
-      common_layer_discovery: 'ancestor',
-      duplicate_check: { depth: 1, key_depths: {}, skip_keys: [] },
-    },
-  })));
-  assert.deepEqual(unstated.dsls[0].layers.commonLayerFiles, {});
+test('overlay_includes pairs an overlay with the common layers its includes name, and reads no overlay folders', () => {
+  const layers = {
+    common_layer_discovery: 'overlay_includes',
+    overlay_includes: [{
+      key_paths: ['$.Include', "$..['Mock::Include']"],
+      value_conditions: [{ key: 'Name', value: 'Mock::Snippet' }],
+      location_path: '$.Parameters.Location',
+      location_mappings: [{ local: '{config_root}/snippets/', remote: 's3://mock-bucket/snippets/' }],
+    }],
+    duplicate_check: { depth: 2, key_depths: {}, skip_keys: [] },
+  };
+  const parsed = withFields({ layers });
+  assert.deepEqual(parsed.problems, []);
+  const [include] = parsed.dsls[0].layers.overlayIncludes;
+  assert.equal(parsed.dsls[0].layers.commonLayerDiscovery, 'overlay_includes');
+  assert.deepEqual(parsed.dsls[0].layers.overlayFolders, []);
+  assert.deepEqual(include.keyPaths, [
+    [{ kind: 'name', key: 'Include' }],
+    [{ kind: 'descendant_name', key: 'Mock::Include' }],
+  ]);
+  assert.deepEqual(include.valueConditions, [{ key: 'Name', value: 'Mock::Snippet' }]);
+  assert.deepEqual(include.locationPath, [{ kind: 'name', key: 'Parameters' }, { kind: 'name', key: 'Location' }]);
+  assert.deepEqual(include.locationMappings, [
+    { local: '{config_root}/snippets/', remote: 's3://mock-bucket/snippets/' },
+  ]);
+});
+
+test('a config is read by the YAML DSL standard, each problem a diagnostic at its field, and no DSL read', () => {
+  const misspelt = configText(dslEntry('mock')).replace('file_excludes', 'file_exclude');
+  const parsed = parseConfig(misspelt, '/repo/yaml-dsl.yml');
+  assert.equal(parsed.ok, false);
+  assert.deepEqual(parsed.dsls, []);
+  const placed = parsed.problems.map((problem) => [
+    problem.position.line,
+    problem.position.column,
+    problem.message,
+    problem.notes.help,
+  ]);
+  assert.deepEqual(placed, [
+    [3, 5, 'field `file_excludes` is required', null],
+    [6, 5, 'field `file_exclude` is not allowed', 'did you mean `file_excludes`?'],
+  ]);
+  assert.equal(parsed.problems[0].position.file, '/repo/yaml-dsl.yml');
+});
+
+test('a config states its version, and only a version the standard reads is read', () => {
+  assert.deepEqual(CONFIG_VERSIONS, ['1', '1.0', '1.1']);
+  for (const version of CONFIG_VERSIONS) {
+    assert.deepEqual(parseConfig(`version: "${version}"\ndsls: []\n`), { ok: true, problems: [], dsls: [] });
+  }
+  const versionless = parseConfig('dsls: []\n');
+  assert.equal(versionless.ok, false);
+  assert.equal(versionless.problems[0].message, 'field `version` is required');
+  assert.equal(parseConfig('version: 1\ndsls: []\n').ok, false);
+  assert.equal(parseConfig('version: "2"\ndsls: []\n').ok, false);
+});
+
+test('a config that is not a mapping, or not YAML, is rejected', () => {
+  assert.equal(parseConfig('- a\n- b\n').ok, false);
+  assert.equal(parseConfig('key: [unclosed\n').ok, false);
+});
+
+test('a folder keeps the DSLs its config last read cleanly while the config holds problems', () => {
+  const readConfig = createConfigReader();
+  const clean = configText(dslEntry('mock'));
+  const broken = clean.replace('file_excludes', 'file_exclude');
+  const first = readConfig('/repo/a', broken);
+  assert.deepEqual([first.ok, first.dsls], [false, []]);
+  assert.equal(readConfig('/repo/a', clean).dsls[0].id, 'mock');
+  const editing = readConfig('/repo/a', broken);
+  assert.equal(editing.ok, false);
+  assert.ok(editing.problems.length > 0);
+  assert.deepEqual(editing.dsls.map((dsl) => dsl.id), ['mock']);
+  assert.deepEqual(readConfig('/repo/b', broken).dsls, []);
+  const renamed = configText(dslEntry('renamed'));
+  assert.deepEqual(readConfig('/repo/a', renamed).dsls.map((dsl) => dsl.id), ['renamed']);
+  assert.deepEqual(readConfig('/repo/a', broken).dsls.map((dsl) => dsl.id), ['renamed']);
 });
 
 test('a concern common layer belongs to its DSL whatever file_includes says, and file_excludes still applies', () => {
@@ -413,267 +397,6 @@ test('a concern common layer belongs to its DSL whatever file_includes says, and
   assert.equal(ownsFile(layered, '/repo/mock-stack/mock-common.yml'), false);
   assert.equal(ownsFile(layered, '/repo/mock-stack/other.yml'), false);
   assert.equal(ownsFile({ ...layered, layers: null }, '/repo/mock-stack/config.mock.yml'), false);
-});
-
-test('a path is a JSONPath listed once per list; ..* ends it, and includes_subtree is read only where it shipped', () => {
-  const pathEntries = (id, unscannedPaths, keySortOrders) => dslEntry(id, {
-    placeholder: { pattern: '\\$\\{(?<body>[^}]*)\\}', unscanned_paths: unscannedPaths },
-    key_sort_orders: keySortOrders,
-  });
-  const sortEntry = (fields) => ({ path: '$', skip_keys: [], order: 'alphabetical', first_keys: [], last_keys: [], ...fields });
-  const parsed = parseConfig(configText(
-    pathEntries('listed', [
-      { path: '$.build', skip_keys: [] },
-      { path: '$.build..*', skip_keys: [] },
-      { path: '$.cloud', skip_keys: [], includes_subtree: true },
-    ], [sortEntry({})]),
-    pathEntries('twice', [{ path: '$.build', skip_keys: [] }, { path: '$.build', skip_keys: [] }], []),
-    pathEntries('inner', [{ path: '$..*.name', skip_keys: [] }], []),
-    pathEntries('retired', [], [sortEntry({ includes_subtree: true })]),
-  ));
-  const [listed] = parsed.dsls;
-  assert.deepEqual(listed.placeholder.unscannedPaths.map((entry) => [entry.path, entry.includesSubtree]), [
-    ['$.build', false],
-    ['$.build..*', false],
-    ['$.cloud', true],
-  ]);
-  for (const message of [
-    'twice.placeholder.unscanned_paths[1].path $.build is listed more than once in unscanned_paths',
-    'inner.placeholder.unscanned_paths[0].path is required: a JSONPath such as $.build or $.build..*',
-    'retired.key_sort_orders[0].includes_subtree is not read here: list the path ending in ..* as its own entry',
-  ]) assert.ok(parsed.error.includes(message), message);
-});
-
-test('escape_prefix is optional non-empty text', () => {
-  const escaped = (id, escapePrefix) => dslEntry(id, {
-    placeholder: { pattern: '\\$\\{(?<body>[^}]*)\\}', escape_prefix: escapePrefix, unscanned_paths: [] },
-  });
-  const parsed = parseConfig(configText(escaped('dollar', '$'), escaped('empty', '')));
-  assert.equal(parsed.dsls[0].placeholder.escapePrefix, '$');
-  assert.ok(parsed.error.includes('empty.placeholder.escape_prefix must be non-empty text'), parsed.error);
-});
-
-test('first_keys and last_keys are distinct keys, apart from each other, and [] under alphabetical', () => {
-  const ordered = (id, order, firstKeys, lastKeys) => dslEntry(id, {
-    key_sort_orders: [{
-      path: '$',
-      skip_keys: [],
-      order,
-      first_keys: firstKeys,
-      last_keys: lastKeys,
-    }],
-  });
-  const parsed = parseConfig(configText(
-    ordered('ranked', 'significance', ['env'], ['outputs']),
-    ordered('sorted', 'alphabetical', ['env'], []),
-    ordered('both', 'significance', ['env', 'outputs'], ['outputs']),
-    ordered('repeated', 'significance', ['env', 'env'], []),
-    ordered('unnamed', 'significance', ['env', ''], [1]),
-  ));
-  const firstAndLastKeys = (entry) => [entry.firstKeys, entry.lastKeys];
-  assert.deepEqual(parsed.dsls[0].keySortOrders.map(firstAndLastKeys), [[['env'], ['outputs']]]);
-  for (const dsl of parsed.dsls.slice(1)) assert.deepEqual(dsl.keySortOrders, []);
-  for (const message of [
-    'sorted.key_sort_orders[0] lists first_keys or last_keys under alphabetical order; both are [] there',
-    'both.key_sort_orders[0] lists outputs in both first_keys and last_keys',
-    'repeated.key_sort_orders[0].first_keys lists a key more than once',
-    'unnamed.key_sort_orders[0].first_keys is required: a list of keys, [] when empty',
-    'unnamed.key_sort_orders[0].last_keys is required: a list of keys, [] when empty',
-  ]) assert.ok(parsed.error.includes(message), message);
-});
-
-test('locals name a declared scope that a key declaration and a reference rule read, and may state a path separator',
-() => {
-  const localsDsl = (id, fields) => dslEntry(id, {
-    scopes: { local: scope(), step: scope() },
-    declarations: [declaration('$.locals.*', 'local'), declaration('$.steps.*', 'step', { declares_every_name: true })],
-    references: [reference('^local\\.(?<name>[a-z]+)$', 'local')],
-    ...fields,
-  });
-  const parsed = parseConfig(configText(
-    localsDsl('named', { locals: { scope_name: 'local' } }),
-    localsDsl('mapless', { locals: 'local' }),
-    localsDsl('nameless', { locals: {} }),
-    localsDsl('undeclared', { locals: { scope_name: 'missing' } }),
-    localsDsl('unread', { locals: { scope_name: 'step' } }),
-    localsDsl('pathed', { locals: { scope_name: 'local', path_separator: '.' } }),
-    localsDsl('emptyseparator', { locals: { scope_name: 'local', path_separator: '' } }),
-  ));
-  assert.deepEqual(parsed.dsls.map((dsl) => dsl.locals), [
-    { scopeName: 'local', pathSeparator: null },
-    null,
-    null,
-    null,
-    null,
-    { scopeName: 'local', pathSeparator: '.' },
-    null,
-  ]);
-  for (const message of [
-    'mapless.locals must be a mapping with scope_name',
-    'nameless.locals.scope_name is required',
-    'undeclared.locals: scope missing is not declared in scopes',
-    'unread.locals: no declaration rule reads step names from keys',
-    'unread.locals: no reference rule reads step',
-    'emptyseparator.locals.path_separator must be text: the text between the steps of a path into a local',
-  ]) assert.ok(parsed.error.includes(message), message);
-});
-
-test('a config that leaves a field out is a problem, and the editor fills nothing in', () => {
-  const parsed = parseConfig(`
-version: "1"
-dsls:
-  - id: bare
-    key_sort_orders: [{ path: "$", skip_keys: [], order: sideways }]
-    layers: { overlay_folders: 1 }
-    placeholder: { pattern: '(', unscanned_paths: [1, { path: bad }] }
-    function:
-      definitions: [elsewhere]
-      call_result_reference_positions: [nowhere]
-      calls_not_allowed_at: 1
-      marker_function: { call_marker: "" }
-    scopes:
-      broken: 1
-      lonely: { regions: [bad] }
-      listed:
-        regions: ["$"]
-        later_items_of_declaring_list: false
-        named_by_parent_key: false
-        builtin_names: [mock]
-      EMPTY:
-        regions: []
-        later_items_of_declaring_list: false
-        named_by_parent_key: false
-        builtin_names: []
-      ENTRY:
-        regions: ["$"]
-        later_items_of_declaring_list: false
-        named_by_parent_key: true
-        builtin_names: []
-    declarations:
-      - 1
-      - { path: bad }
-      - path: "$.a.*"
-        skip_keys: []
-        exclude_candidates: []
-        name_source: key
-        key_token: null
-        name_spelling: as_written
-        meta_argument_name: null
-        declares_every_name: false
-        scope_name: undeclared
-      - path: "$.b.*"
-        skip_keys: []
-        exclude_candidates: []
-        name_source: meta_argument
-        key_token: null
-        name_spelling: as_written
-        meta_argument_name: null
-        declares_every_name: false
-        scope_name: listed
-    references:
-      - 1
-      - pattern: '('
-      - pattern: '^x'
-        positions: [sideways]
-        text_after_name_allowed: maybe
-        scope_name: undeclared
-        scope_group: 1
-      - pattern: '^y'
-        positions: [whole_scalar]
-        text_after_name_allowed: false
-        scope_name: ENTRY
-        scope_group: null
-        name_group: name
-      - pattern: '^z'
-        positions: [whole_scalar]
-        text_after_name_allowed: false
-        scope_name: listed
-        scope_group: group
-        name_group: name
-  - id: lists
-    file_includes: 1
-    file_excludes: 1
-    schema_search_paths: 1
-    key_sort_orders: 1
-    layers: 1
-    placeholder: 1
-    function: 1
-    scopes: 1
-    declarations: 1
-    references: 1
-  - { file_includes: ["**/*.yml"] }
-`);
-  assert.equal(parsed.ok, false);
-  const expected = [
-    'bare.file_includes is required',
-    'bare.file_excludes is required',
-    'bare.schema_search_paths is required',
-    'bare.layers.overlay_folders is required',
-    'bare.layers.common_layer_discovery is required: one of parent, ancestor',
-    'bare.layers.duplicate_check is required: a mapping with depth, key_depths and skip_keys',
-    'bare.placeholder.pattern is required',
-    'bare.placeholder.unscanned_paths[0] must be a mapping',
-    'bare.placeholder.unscanned_paths[1].path is required',
-    'bare.placeholder.unscanned_paths[1].skip_keys is required',
-    'bare.function.definitions is required: a list from terraform, schema',
-    'bare.function.call_result_reference_positions is required',
-    'bare.function.calls_not_allowed_at is required',
-    'bare.function.marker_function.call_marker is required',
-    'bare.function.marker_function.splat_operator is required',
-    'bare.function.marker_function.calls_without_name_allowed is required',
-    'bare.scopes.broken must be a mapping',
-    'bare.scopes.lonely.regions is required',
-    'bare.scopes.lonely.later_items_of_declaring_list is required',
-    'bare.scopes.listed: builtin_names and named_by_parent_key are for a logical scope',
-    'bare.scopes.EMPTY: a scope needs regions, or later_items_of_declaring_list',
-    'bare.declarations[0] must be a mapping',
-    'bare.declarations[1].path is required',
-    'bare.declarations[1].name_source is required',
-    'bare.declarations[2].key_token is required when name_source is key',
-    'bare.declarations[2]: scope undeclared is not declared in scopes',
-    'bare.declarations[3].meta_argument_name is required when name_source is meta_argument',
-    'bare.references[0] must be a mapping',
-    'bare.references[1].pattern is required',
-    'bare.references[2].positions is required',
-    'bare.references[2].text_after_name_allowed is required',
-    'bare.references[2].scope_group is required',
-    'bare.references[2].name_group is required',
-    'bare.references[2]: scope undeclared is not declared in scopes',
-    'bare.references[3].scope_group is required: ENTRY is named by a parent key',
-    'bare.references[4].scope_group must be null: listed is not named by a parent key',
-    'lists.layers must be a mapping',
-    'lists.placeholder must be a mapping',
-    'lists.function must be a mapping',
-    'lists.scopes is required',
-    'lists.declarations is required',
-    'lists.references is required',
-    'lists.key_sort_orders is required',
-    'bare.key_sort_orders[0].order is required: one of alphabetical, significance',
-    'bare.key_sort_orders[0].first_keys is required: a list, [] when empty',
-    'bare.key_sort_orders[0].last_keys is required: a list, [] when empty',
-  ];
-  for (const message of expected) assert.ok(parsed.error.includes(message), message);
-  const [bare, lists] = parsed.dsls;
-  assert.deepEqual(bare.declarations, []);
-  assert.deepEqual(bare.references, []);
-  assert.equal(bare.placeholder, null);
-  assert.equal(bare.function, null);
-  assert.deepEqual(lists.fileIncludes, []);
-});
-
-test('a config states its version, and only a version this extension reads is read', () => {
-  const versionless = parseConfig('dsls: []\n');
-  assert.equal(versionless.ok, false);
-  assert.equal(versionless.error, 'yaml-dsl.yml version is required: one of "1"');
-  assert.equal(parseConfig('version: 1\ndsls: []\n').ok, false);
-  assert.equal(parseConfig('version: "2"\ndsls: []\n').ok, false);
-  assert.deepEqual(parseConfig('version: "1"\ndsls: []\n'), { ok: true, error: null, dsls: [] });
-  assert.deepEqual(parseConfig('version: "1"\n').dsls, []);
-});
-
-test('a config that is not a mapping is rejected', () => {
-  assert.equal(parseConfig('- a\n- b\n').ok, false);
-  assert.equal(parseConfig('key: [unclosed\n').ok, false);
 });
 
 test('file_includes and file_excludes decide the files a DSL owns, and two owners claim nothing', () => {
@@ -721,88 +444,4 @@ test('a glob starting with {config_root} matches below the config folder, and ev
   assert.equal(ownsFile(relative, '/repo/mock/a.yaml'), false);
   assert.equal(configPathOf('{config_root}/../schemas/mock.schema.json', '/repo/mock'), '/repo/schemas/mock.schema.json');
   assert.equal(configPathOf('schemas/mock.schema.json', '/repo/mock'), 'schemas/mock.schema.json');
-});
-
-test('the shipped schema of the config is a draft 2020-12 schema stating the values the reader accepts', () => {
-  const shipped = require('../schemas/yaml-dsl.schema.json');
-  assert.equal(shipped.$schema, 'https://json-schema.org/draft/2020-12/schema');
-  assert.doesNotThrow(() => new Ajv2020({ strict: false, strictSchema: true }).compile(shipped));
-  const definitions = shipped.$defs;
-  assert.deepEqual(shipped.properties.version.enum, CONFIG_VERSIONS);
-  assert.deepEqual(definitions.layers.properties.common_layer_discovery.enum, COMMON_LAYER_DISCOVERIES);
-  assert.deepEqual(definitions.function.properties.definitions.items.enum, FUNCTION_DEFINITIONS);
-  assert.deepEqual(definitions.declaration.properties.name_source.enum, NAME_SOURCES);
-  assert.deepEqual(definitions.declaration.properties.key_token.enum, [...KEY_TOKENS, null]);
-  assert.deepEqual(definitions.declaration.properties.name_spelling.enum, NAME_SPELLINGS);
-  assert.deepEqual(definitions.positions.items.enum, REFERENCE_POSITIONS);
-  assert.deepEqual(definitions.key_sort_order.properties.order.enum, KEY_SORT_ORDERS);
-  assert.deepEqual(Object.keys(definitions.scopes.patternProperties), [LOGICAL_SCOPE_NAME.source]);
-});
-
-test('tag_keys pairs each tag with the key it stands for, and a DSL without reads none', () => {
-  const tagged = parseConfig(configText(dslEntry('sample', {
-    tag_keys: [{ tag: '!Ref', key: 'Ref' }, { tag: '!GetAtt', key: 'Fn::GetAtt' }],
-  })));
-  assert.equal(tagged.ok, true);
-  assert.deepEqual(tagged.dsls[0].tagKeys, [{ tag: '!Ref', key: 'Ref' }, { tag: '!GetAtt', key: 'Fn::GetAtt' }]);
-  assert.deepEqual(parseConfig(configText(dslEntry('sample'))).dsls[0].tagKeys, []);
-  const problemsOf = (tagKeys) => parseConfig(configText(dslEntry('sample', { tag_keys: tagKeys }))).error;
-  assert.equal(problemsOf('!Ref'), 'sample.tag_keys must be a list of tag and key pairs');
-  assert.equal(problemsOf(['!Ref']), 'sample.tag_keys[0] must be a mapping with tag and key');
-  assert.equal(
-    problemsOf([{ tag: 'Ref', key: 'Ref' }]),
-    'sample.tag_keys[0].tag is required: a YAML tag as written, such as !Ref',
-  );
-  assert.equal(
-    problemsOf([{ tag: '!Ref' }]),
-    'sample.tag_keys[0].key is required: the key the tagged node stands for',
-  );
-  assert.equal(
-    problemsOf([{ tag: '!Ref', key: 'Ref' }, { tag: '!Ref', key: 'Other' }]),
-    'sample.tag_keys[1].tag !Ref is listed more than once',
-  );
-  assert.equal(
-    problemsOf([{ tag: '!Ref', key: 'Ref' }, { tag: '!Other', key: 'Ref' }]),
-    'sample.tag_keys[1].key Ref is listed more than once',
-  );
-});
-
-test('overlay_includes pairs an overlay with the common layers its includes name, and reads no overlay folders', () => {
-  const includeLayers = {
-    common_layer_discovery: 'overlay_includes',
-    overlay_includes: [{
-      key_paths: ['$.Include', "$..['Mock::Include']"],
-      value_conditions: [{ key: 'Name', value: 'Mock::Snippet' }],
-      location_path: '$.Parameters.Location',
-      location_mappings: [{ local: '{config_root}/snippets/', remote: 's3://mock-bucket/snippets/' }],
-    }],
-    duplicate_check: { depth: 2, key_depths: {}, skip_keys: [] },
-  };
-  const parsed = parseConfig(configText(dslEntry('sample', { layers: includeLayers })));
-  assert.equal(parsed.ok, true, parsed.error);
-  const [include] = parsed.dsls[0].layers.overlayIncludes;
-  assert.equal(parsed.dsls[0].layers.commonLayerDiscovery, 'overlay_includes');
-  assert.deepEqual(parsed.dsls[0].layers.overlayFolders, []);
-  assert.deepEqual(include.keyPaths, [
-    [{ kind: 'name', key: 'Include' }],
-    [{ kind: 'descendant_name', key: 'Mock::Include' }],
-  ]);
-  assert.deepEqual(include.valueConditions, [{ key: 'Name', value: 'Mock::Snippet' }]);
-  assert.deepEqual(include.locationPath, [{ kind: 'name', key: 'Parameters' }, { kind: 'name', key: 'Location' }]);
-  assert.deepEqual(include.locationMappings, [
-    { local: '{config_root}/snippets/', remote: 's3://mock-bucket/snippets/' },
-  ]);
-  const problemOf = (layers) => parseConfig(configText(dslEntry('sample', { layers }))).error;
-  assert.equal(
-    problemOf({ ...includeLayers, overlay_folders: ['one'] }),
-    'sample.layers.overlay_folders is not read with common_layer_discovery overlay_includes',
-  );
-  assert.equal(
-    problemOf({ ...includeLayers, overlay_includes: [{ ...includeLayers.overlay_includes[0], location_path: '$.*' }] }),
-    'sample.layers.overlay_includes[0].location_path is required: a JSONPath of names',
-  );
-  assert.equal(
-    problemOf({ ...includeLayers, common_layer_discovery: 'parent', overlay_folders: ['one'] }),
-    'sample.layers.overlay_includes is read only with common_layer_discovery overlay_includes',
-  );
 });

@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Ajv2020 = require('ajv/dist/2020');
+const { functionTableSchema } = require('yaml-dsl-spec');
 const { analyzeDocument } = require('../lib/analyze');
 const { completionsAt } = require('../lib/completion-offers');
 const { parseAt } = require('../lib/document-path');
@@ -740,8 +741,8 @@ test('a function mapped straight to its argument list is still read, with no des
   );
 });
 
-test('the shipped schema of the table is a draft 2020-12 schema stating the argument types the editor checks', () => {
-  const shipped = require('../schemas/x-yaml-dsl-functions.schema.json');
+test('the standard\'s schema of the table is a draft 2020-12 schema stating the argument types the editor checks', () => {
+  const shipped = functionTableSchema('1');
   assert.equal(shipped.$schema, 'https://json-schema.org/draft/2020-12/schema');
   const validate = new Ajv2020({ strict: false, strictSchema: true }).compile(shipped);
   assert.deepEqual(shipped.$defs.valueType.enum, ARGUMENT_TYPES);

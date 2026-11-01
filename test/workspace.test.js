@@ -255,6 +255,31 @@ test('a modeline that fails falls through to the published schema', async () => 
   assert.equal(boom.problems('file:///repo/boom/mock.yml').some((item) => item.message === 'schema is unavailable'), false);
 });
 
+test('a yaml-dsl.yml problem is at the field it is about, and the folder keeps the DSLs it last read cleanly', async () => {
+  const files = {
+    '/repo/schema.json': JSON.stringify({ properties: { name: { description: 'the name' } } }),
+  };
+  const ws = workspace(files, async () => null);
+  const clean = configText(dslEntry('sample', { schema_search_paths: ['{config_root}/schema.json'] }));
+  const misspelt = clean.replace('file_excludes', 'file_exclude');
+  await ws.setConfigs([{ text: clean, dir: '/repo' }]);
+  await ws.setConfigs([{ text: misspelt, dir: '/repo' }]);
+  const problems = ws.problems('file:///repo/yaml-dsl.yml');
+  assert.deepEqual(problems.map((problem) => [problem.range, problem.message]), [
+    [
+      { start: { line: 2, character: 4 }, end: { line: 2, character: 6 } },
+      'field `file_excludes` is required\n\n`dsls[0]` has no field `file_excludes`',
+    ],
+    [
+      { start: { line: 5, character: 4 }, end: { line: 5, character: 16 } },
+      'field `file_exclude` is not allowed\n\n`dsls[0]` has no field `file_exclude`; did you mean `file_excludes`?',
+    ],
+  ]);
+  const text = 'name: kept\n';
+  await ws.sync('file:///repo/mock.yml', '/repo/mock.yml', text);
+  assert.equal(ws.hover('file:///repo/mock.yml', at(text, 'name')).contents.value, '`name`    `[optional]`\n\nthe name');
+});
+
 test('two DSLs, a parse error, and a DSL without layers', async () => {
   const both = configText(dslEntry('a'), dslEntry('b'), dslEntry('note', {
     file_includes: ['**/note.yml'],
@@ -324,7 +349,7 @@ test('a missing modeline walks the schema search path from the file', async () =
   const ws = workspace(files, async () => null);
   await ws.setConfigs([{
     text: configText(dslEntry('sample', {
-      schema_search_paths: ['.schema/sample.schema.json', 'one/.schema/sample.schema.json', 1],
+      schema_search_paths: ['.schema/sample.schema.json', 'one/.schema/sample.schema.json'],
     })),
     dir: '/repo',
   }]);
