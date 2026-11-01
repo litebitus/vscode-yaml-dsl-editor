@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { yamlDslSchema } = require('yaml-dsl-spec');
 const {
   CONFIG_VERSIONS,
+  DEFINITION_DSL,
+  definitionVersionOf,
   parseConfig,
   createConfigReader,
   claimFile,
@@ -352,7 +355,7 @@ test('a config is read by the YAML DSL standard, each problem a diagnostic at it
 });
 
 test('a config states its version, and only a version the standard reads is read', () => {
-  assert.deepEqual(CONFIG_VERSIONS, ['1', '1.0', '1.1']);
+  assert.deepEqual(CONFIG_VERSIONS, ['1', '1.0', '1.1', '1.2']);
   for (const version of CONFIG_VERSIONS) {
     assert.deepEqual(parseConfig(`version: "${version}"\ndsls: []\n`), { ok: true, problems: [], dsls: [] });
   }
@@ -383,6 +386,27 @@ test('a folder keeps the DSLs its config last read cleanly while the config hold
   const renamed = configText(dslEntry('renamed'));
   assert.deepEqual(readConfig('/repo/a', renamed).dsls.map((dsl) => dsl.id), ['renamed']);
   assert.deepEqual(readConfig('/repo/a', broken).dsls.map((dsl) => dsl.id), ['renamed']);
+});
+
+test('a yaml-dsl.yml is read at the version it states, else as the newest major the standard reads', () => {
+  assert.equal(definitionVersionOf('version: "1"\n'), '1');
+  assert.equal(definitionVersionOf('version: "1.0"\n'), '1.0');
+  assert.equal(definitionVersionOf('version: "1.1"\n'), '1.1');
+  for (const text of ['dsls: []\n', 'version: "9.9"\n', 'version: 1\n', '- a\n', 'key: [unclosed\n']) {
+    assert.equal(definitionVersionOf(text), '1', text);
+  }
+  assert.deepEqual(JSON.parse(DEFINITION_DSL.schemaTextOf('version: "1.0"\n')), yamlDslSchema('1.0'));
+  assert.deepEqual(JSON.parse(DEFINITION_DSL.schemaTextOf('dsls: []\n')), yamlDslSchema('1'));
+});
+
+test('every yaml-dsl.yml is a document of the definition DSL, and of no DSL a config declares', () => {
+  const everything = { id: 'everything', dir: '/repo', fileIncludes: ['**/*.yml'], fileExcludes: [] };
+  const claimed = claimFile('/repo/nested/yaml-dsl.yml', [DEFINITION_DSL, everything]);
+  assert.equal(claimed.status, 'one');
+  assert.equal(claimed.dsl, DEFINITION_DSL);
+  assert.equal(claimFile('/repo/mock.yml', [DEFINITION_DSL, everything]).dsl.id, 'everything');
+  assert.equal(ownsFile(DEFINITION_DSL, '/repo/mock.yml'), false);
+  assert.equal(ownsFile(everything, '/repo/yaml-dsl.yml'), false);
 });
 
 test('a concern common layer belongs to its DSL whatever file_includes says, and file_excludes still applies', () => {

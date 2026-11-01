@@ -1128,6 +1128,7 @@ A `yaml-dsl.yml` anywhere in the workspace is a config, and its folder is its sc
 - A DSL without layers still formats, navigates and hovers.
 - Each problem the package finds is underlined at the text it is about, and its hover shows the message, then its label and help.
 - A config holding problems gives its folder no new DSLs: the folder keeps the DSLs its config last read cleanly, until the config reads cleanly again.
+- A `yaml-dsl.yml` opens as a YAML DSL Definition, the language `yaml-dsl-definition`. It is a document of a built-in DSL whose schema is the package's `yaml-dsl.yml` schema at the version the file states, the newest major when it states none the package reads; its modeline plays no part. Hover, completion and required-field filling read that schema as they read any document's, and its problems are the package's only.
 
 ### The config index
 
@@ -1191,7 +1192,7 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 
 - A move turns list and map differences into locals, and on a tie the common layer declares a list's local as `[]` and a map's as `{}`.
 - The config states what a placeholder form does to the value it puts in, such as CloudFormation's `&{…}` dropping non-alphanumeric characters, so a name written with it is spelled as the expansion spells it.
-- `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Config". The extension offers help on authoring this file.
+- `yaml-dsl.yml` is claimed as the extension's own file type, "YAML DSL Definition". The extension offers help on authoring this file.
 - Find All References on a declaration lists every reference to it across the common layer and each overlay.
 - The formatter, as designed under Formatting.
 - The package ships the client, the server and the validation worker each bundled by esbuild, with the code cache keyed by the bundles and ajv's runtime modules bundled in, in place of `lib/` and `node_modules`.

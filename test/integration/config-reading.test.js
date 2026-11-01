@@ -6,11 +6,15 @@ const {
   shownDocument,
   positionInText,
   hoverTextBecomes,
+  hoverTextHolds,
   hoverTextOf,
   fixtureCopy,
+  typedAfter,
+  completionItemsAt,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
+const DEFINITION_LANGUAGE = 'yaml-dsl-definition';
 const FIXTURE = 'config-minor-version';
 const LABEL_HOVER = '`label`: *string*    `[optional]`\n\nLabel of the minor-version DSL';
 const KEPT_WATCH_MILLISECONDS = 1500;
@@ -41,5 +45,21 @@ suite('config reading', () => {
     const configFile = path.join(copy, 'yaml-dsl.yml');
     fs.writeFileSync(configFile, fs.readFileSync(configFile, 'utf8').replace('file_excludes', 'file_exclude'));
     await hoverStays(entry, label, LABEL_HOVER);
+  });
+
+  test('a yaml-dsl.yml opens as a YAML DSL Definition and hovers by the standard\'s schema at its version', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const config = (await shownDocument(path.join(fixtures, FIXTURE, 'yaml-dsl.yml'), DEFINITION_LANGUAGE)).document;
+    await hoverTextHolds(config, positionInText(config, 'file_includes', 1), 'Globs of the files the DSL owns.');
+    await hoverTextHolds(config, positionInText(config, 'version', 1), '*One of:* `"1"`, `"1.0"`');
+  });
+
+  test('a yaml-dsl.yml completes the fields the standard\'s schema allows', async () => {
+    const copy = fixtureCopy(FIXTURE, 'config-completion');
+    const editor = await shownDocument(path.join(copy, 'yaml-dsl.yml'), DEFINITION_LANGUAGE);
+    const typed = await typedAfter(editor, 'file_excludes', '\n    sch');
+    const labels = (await completionItemsAt(editor.document, typed))
+      .map((item) => (typeof item.label === 'string' ? item.label : item.label.label));
+    assert.ok(labels.includes('schema_search_paths'), labels.join(', '));
   });
 });

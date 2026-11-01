@@ -148,6 +148,12 @@
         },
         "editor.semanticHighlighting.enabled": true,
         "editor.wordBasedSuggestions": "off"
+      },
+      "[yaml-dsl-definition]": {
+        "editor.quickSuggestions": {
+          "strings": "on"
+        },
+        "editor.wordBasedSuggestions": "off"
       }
     },
     "semanticTokenScopes": [
@@ -188,6 +194,20 @@
         "configuration": "./language-configuration.json"
       },
       {
+        "id": "yaml-dsl-definition",
+        "aliases": [
+          "YAML DSL Definition"
+        ],
+        "filenames": [
+          "yaml-dsl.yml"
+        ],
+        "icon": {
+          "light": "./media/fileicon.svg",
+          "dark": "./media/fileicon.svg"
+        },
+        "configuration": "./language-configuration.json"
+      },
+      {
         "id": "yaml-dsl-overlay-diff",
         "aliases": [
           "YAML DSL overlay diff"
@@ -205,6 +225,11 @@
         "language": "yaml-dsl",
         "scopeName": "source.yaml.dsl",
         "path": "./syntaxes/yaml-dsl.tmLanguage.json"
+      },
+      {
+        "language": "yaml-dsl-definition",
+        "scopeName": "source.yaml.dsl.definition",
+        "path": "./syntaxes/yaml-dsl-definition.tmLanguage.json"
       },
       {
         "language": "yaml-dsl-overlay-diff",
@@ -740,6 +765,6 @@
     "vscode-languageserver": "9.0.1",
     "vscode-languageserver-textdocument": "1.0.15",
     "yaml": "2.9.1",
-    "yaml-dsl-spec": "0.1.1"
+    "yaml-dsl-spec": "0.1.2"
   }
 }

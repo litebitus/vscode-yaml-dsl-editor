@@ -8,16 +8,16 @@ const SAME_IN_COMMON_LAYER = '💡 same in common layer';
 const MOVE_TO_COMMON_LAYER = '💡 move to common layer';
 const WAIT_DEADLINE_MILLISECONDS = 4000;
 
-async function shownDocument(filePath) {
+async function shownDocument(filePath, languageId = 'yaml-dsl') {
   await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(filePath), { preview: false });
   const editor = vscode.window.activeTextEditor;
   assert.equal(editor.document.uri.fsPath, filePath);
   const doc = editor.document;
   const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
-  while (doc.languageId !== 'yaml-dsl' && Date.now() < deadline) {
+  while (doc.languageId !== languageId && Date.now() < deadline) {
     await new Promise((resolve) => { setTimeout(resolve, 50); });
   }
-  assert.equal(doc.languageId, 'yaml-dsl');
+  assert.equal(doc.languageId, languageId);
   return editor;
 }
 

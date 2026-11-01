@@ -200,6 +200,8 @@ The design is [docs/design.md](docs/design.md).
 
 `yaml-dsl.yml` declares the DSLs of the files in its folder and below, one entry under `dsls` each, and a deeper one governs its own folder, in the format `version: "1"`. The extension reads it as the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/spec.md), specifies, shows each problem at the field it is about, and applies it when it is saved. Each field is described in the standard's JSON Schema, and what the fields do together is specified by the standard.
 
+The file opens as a YAML DSL Definition: hovering a field shows its description from the standard's schema, at the version the file states, and completion offers the fields and values that schema allows.
+
 ## Settings
 
 The extension's own settings live under `yaml-dsl-editor` in the editor's settings. They set how the editor behaves for its user. What a DSL is lives in `yaml-dsl.yml`.

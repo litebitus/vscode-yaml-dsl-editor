@@ -280,6 +280,42 @@ test('a yaml-dsl.yml problem is at the field it is about, and the folder keeps t
   assert.equal(ws.hover('file:///repo/mock.yml', at(text, 'name')).contents.value, '`name`    `[optional]`\n\nthe name');
 });
 
+test('a yaml-dsl.yml hovers and completes by the standard\'s schema at the version it states', async () => {
+  const ws = workspace({}, async () => null);
+  const uri = 'file:///repo/yaml-dsl.yml';
+  const config = configText(dslEntry('sample'));
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(uri, '/repo/yaml-dsl.yml', config);
+  const fileIncludes = ws.hover(uri, at(config, 'file_includes')).contents.value;
+  assert.match(fileIncludes, /^`file_includes`: \*globs\*    `\[required\]`\n\nGlobs of the files the DSL owns\./);
+  assert.match(ws.hover(uri, at(config, 'version')).contents.value, /\*One of:\* `"1"`, `"1\.2"`$/);
+  const minor = config.replace('version: "1"', 'version: "1.0"');
+  await ws.sync(uri, '/repo/yaml-dsl.yml', minor);
+  assert.match(ws.hover(uri, at(minor, 'version')).contents.value, /\*One of:\* `"1"`, `"1\.0"`$/);
+
+  const typing = 'version: "1"\ndsls:\n  - id: sample\n    fil\n';
+  await ws.sync(uri, '/repo/yaml-dsl.yml', typing);
+  const fields = ws.completion(uri, { line: 3, character: 7 }).map((item) => item.label);
+  assert.ok(fields.includes('file_includes') && fields.includes('schema_search_paths'), fields.join(', '));
+  const choosing = 'version: "1"\ndsls:\n  - id: sample\n    layers:\n      common_layer_discovery: \n';
+  await ws.sync(uri, '/repo/yaml-dsl.yml', choosing);
+  assert.deepEqual(
+    ws.completion(uri, { line: 4, character: 30 }).map((item) => item.label),
+    ['parent', 'ancestor', 'overlay_includes'],
+  );
+});
+
+test('a yaml-dsl.yml shows the reader\'s problems only, never its schema\'s again', async () => {
+  const ws = workspace({}, async () => null);
+  const misspelt = configText(dslEntry('sample')).replace('file_excludes', 'file_exclude');
+  await ws.setConfigs([{ text: misspelt, dir: '/repo' }]);
+  await ws.sync('file:///repo/yaml-dsl.yml', '/repo/yaml-dsl.yml', misspelt);
+  assert.deepEqual(ws.problems('file:///repo/yaml-dsl.yml').map((problem) => problem.message.split('\n')[0]), [
+    'field `file_excludes` is required',
+    'field `file_exclude` is not allowed',
+  ]);
+});
+
 test('two DSLs, a parse error, and a DSL without layers', async () => {
   const both = configText(dslEntry('a'), dslEntry('b'), dslEntry('note', {
     file_includes: ['**/note.yml'],
