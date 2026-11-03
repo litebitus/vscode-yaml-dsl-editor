@@ -18,6 +18,7 @@ const {
   configText,
 } = require('./config-builders');
 const { createDeclarationsPopup } = require('../lib/declarations-popup');
+const { createWorkTracker } = require('../lib/work-tracker');
 
 const UNSET_SETTINGS = { getConfiguration: () => ({ get: () => undefined }) };
 
@@ -1291,4 +1292,42 @@ test('the shape hint answers on the line it was opened on, and closes for good o
   assert.equal(await hintOf(2, 3), 'hint at line 2');
   assert.equal(await hintOf(3, 3), null);
   assert.equal(await hintOf(2, 3), null);
+});
+
+test('settling waits for the client\'s tracked work, then asks the server to be idle', async () => {
+  const vscode = fakeVscode();
+  const client = fakeClient();
+  let clientWork = null;
+  const startClient = (...startArguments) => {
+    clientWork = startArguments[4];
+    return client;
+  };
+  const handle = await activatedFully(vscode, { subscriptions: [] }, startClient);
+  let finishJob = null;
+  clientWork.track(new Promise((resolve) => { finishJob = resolve; }));
+  const settled = handle.whenSettled();
+  await new Promise((resolve) => { setImmediate(resolve); });
+  assert.equal(client.sent.some((message) => message.method === 'yaml-dsl/idle'), false);
+  finishJob();
+  await settled;
+  assert.equal(client.sent.at(-1).method, 'yaml-dsl/idle');
+});
+
+test('a file event the language client forwards is tracked until it is sent', async () => {
+  const vscode = paintingVscode([]);
+  const clientWork = createWorkTracker();
+  const middleware = editorMiddleware(vscode, () => [], clickOpenedPopup(vscode), clientWork);
+  let sendEvent = null;
+  const forwarded = middleware.workspace.didChangeWatchedFile(
+    { uri: 'file:///repo/mock.yml' },
+    () => new Promise((resolve) => { sendEvent = resolve; }),
+  );
+  let idle = false;
+  const idleWait = clientWork.whenIdle().then(() => { idle = true; });
+  await new Promise((resolve) => { setImmediate(resolve); });
+  assert.equal(idle, false);
+  sendEvent();
+  await forwarded;
+  await idleWait;
+  assert.equal(idle, true);
 });

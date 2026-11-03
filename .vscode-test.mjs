@@ -11,41 +11,69 @@ if (!Array.isArray(versions) || versions.some((version) => !/^\d+\.\d+\.\d+$/.te
   throw new Error('package.json vscodeTestVersions must be exact x.y.z pins');
 }
 
-const fixturesFolder = fileURLToPath(new URL('./test/fixtures', import.meta.url));
-const runFolder = realpathSync(mkdtempSync(path.join(tmpdir(), 'yaml-dsl-editor-integration-')));
-const writableFolder = path.join(runFolder, 'writable');
-mkdirSync(writableFolder);
-copyFileSync(path.join(fixturesFolder, 'yaml-dsl.yml'), path.join(writableFolder, 'yaml-dsl.yml'));
-const concernFolder = path.join(runFolder, 'concerns');
-cpSync(fileURLToPath(new URL('./test/concern-fixtures', import.meta.url)), concernFolder, { recursive: true });
-const settingsFolder = path.join(runFolder, 'settings');
-cpSync(fileURLToPath(new URL('./test/settings-fixtures', import.meta.url)), settingsFolder, { recursive: true });
-const workspaceFile = path.join(runFolder, 'integration.code-workspace');
-const workspaceFolders = [
-  { path: fixturesFolder },
-  { path: writableFolder },
-  { path: concernFolder },
-  { path: settingsFolder },
-];
-writeFileSync(workspaceFile, JSON.stringify({
-  folders: workspaceFolders,
-  settings: { 'files.associations': { '/mock-stale/**/*.yaml': 'yaml-dsl', '*.mock-workspace': 'plaintext' } },
-}));
-
-const sha256Of = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
-const plantedStackFolder = path.join(writableFolder, 'planted-marks');
-const plantedLayerText = 'mocktype:\n  shared:\n    size: 1\n';
-const plantedLayerFolders = [
-  plantedStackFolder,
-  path.join(plantedStackFolder, 'one'),
-  path.join(plantedStackFolder, 'two'),
-];
-for (const layerFolder of plantedLayerFolders) {
-  mkdirSync(layerFolder, { recursive: true });
-  writeFileSync(path.join(layerFolder, 'mock.yml'), plantedLayerText);
+const editorRepoFolder = realpathSync(fileURLToPath(new URL('.', import.meta.url)));
+const workingFolder = realpathSync(process.cwd());
+if (workingFolder !== editorRepoFolder) {
+  throw new Error(`the integration tests run from the editor repo through \`make test-all\`, `
+    + `because VS Code downloads into the working directory; the working directory is `
+    + `${workingFolder}, the editor repo is ${editorRepoFolder}`);
 }
 
-function plantedMarksStoreText() {
+const fixturesFolder = fileURLToPath(new URL('./test/fixtures', import.meta.url));
+const sha256Of = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
+const plantedLayerText = 'mocktype:\n  shared:\n    size: 1\n';
+
+function integrationRunOf() {
+  const runFolder = realpathSync(mkdtempSync(path.join(tmpdir(), 'yaml-dsl-editor-integration-')));
+  const writableFolder = path.join(runFolder, 'writable');
+  mkdirSync(writableFolder);
+  copyFileSync(
+    path.join(fixturesFolder, 'yaml-dsl.yml'),
+    path.join(writableFolder, 'yaml-dsl.yml'),
+  );
+  const concernFolder = path.join(runFolder, 'concerns');
+  cpSync(
+    fileURLToPath(new URL('./test/concern-fixtures', import.meta.url)),
+    concernFolder,
+    { recursive: true },
+  );
+  const settingsFolder = path.join(runFolder, 'settings');
+  cpSync(
+    fileURLToPath(new URL('./test/settings-fixtures', import.meta.url)),
+    settingsFolder,
+    { recursive: true },
+  );
+  const workspaceFile = path.join(runFolder, 'integration.code-workspace');
+  const workspaceFolders = [
+    { path: fixturesFolder },
+    { path: writableFolder },
+    { path: concernFolder },
+    { path: settingsFolder },
+  ];
+  writeFileSync(workspaceFile, JSON.stringify({
+    folders: workspaceFolders,
+    settings: {
+      'files.associations': {
+        '/mock-stale/**/*.yaml': 'yaml-dsl',
+        '*.mock-workspace': 'plaintext',
+      },
+    },
+  }));
+
+  const plantedStackFolder = path.join(writableFolder, 'planted-marks');
+  const plantedLayerFolders = [
+    plantedStackFolder,
+    path.join(plantedStackFolder, 'one'),
+    path.join(plantedStackFolder, 'two'),
+  ];
+  for (const layerFolder of plantedLayerFolders) {
+    mkdirSync(layerFolder, { recursive: true });
+    writeFileSync(path.join(layerFolder, 'mock.yml'), plantedLayerText);
+  }
+  return { workspaceFile, plantedStackFolder };
+}
+
+function plantedMarksStoreText(plantedStackFolder) {
   const position = { line: 0, character: 8 };
   const suggestion = {
     stackId: path.join(plantedStackFolder, 'mock.yml'),
@@ -73,7 +101,7 @@ function plantedMarksStoreText() {
   });
 }
 
-function userDataWithPlantedMarks() {
+function userDataWithPlantedMarks(integrationRun) {
   const userDataFolder = mkdtempSync(path.join(tmpdir(), 'yaml-dsl-ud-'));
   mkdirSync(path.join(userDataFolder, 'User'), { recursive: true });
   writeFileSync(path.join(userDataFolder, 'User', 'settings.json'), JSON.stringify({
@@ -84,33 +112,42 @@ function userDataWithPlantedMarks() {
     },
   }));
   const extensionStorage = path.join(userDataFolder, 'User', 'globalStorage', `${pkg.publisher}.${pkg.name}`);
-  const storeFolder = path.join(extensionStorage, sha256Of(`file://${workspaceFile}`));
+  const workspaceFileHash = sha256Of(`file://${integrationRun.workspaceFile}`);
+  const storeFolder = path.join(extensionStorage, workspaceFileHash);
   mkdirSync(storeFolder, { recursive: true });
-  writeFileSync(path.join(storeFolder, 'suggestion-marks.json'), plantedMarksStoreText());
+  writeFileSync(
+    path.join(storeFolder, 'suggestion-marks.json'),
+    plantedMarksStoreText(integrationRun.plantedStackFolder),
+  );
   return userDataFolder;
 }
 
 const base = {
   files: 'test/integration/**/*.test.js',
-  workspaceFolder: workspaceFile,
   mocha: {
     ui: 'tdd',
     timeout: 5000,
   },
 };
 
+function runConfigurationOf(integrationRun) {
+  return {
+    ...base,
+    workspaceFolder: integrationRun.workspaceFile,
+    launchArgs: [`--user-data-dir=${userDataWithPlantedMarks(integrationRun)}`],
+  };
+}
+
 const targetIde = process.env.TARGET_IDE_EXECUTABLE
   ? [{
     label: process.env.TARGET_IDE_LABEL,
     useInstallation: { fromPath: process.env.TARGET_IDE_EXECUTABLE },
-    ...base,
-    launchArgs: [`--user-data-dir=${userDataWithPlantedMarks()}`],
+    ...runConfigurationOf(integrationRunOf()),
   }]
   : null;
 
 export default defineConfig(targetIde || versions.map((version) => ({
   label: version,
   version,
-  ...base,
-  launchArgs: [`--user-data-dir=${userDataWithPlantedMarks()}`],
+  ...runConfigurationOf(integrationRunOf()),
 })));

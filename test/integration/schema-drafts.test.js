@@ -5,6 +5,7 @@ const {
   shownDocument,
   positionInText,
   hoverTextBecomes,
+  paintedProblemMessagesOf,
   WAIT_DEADLINE_MILLISECONDS,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
@@ -97,6 +98,16 @@ suite('JSON Schema drafts', () => {
 
   test('a schema declaring a draft the editor does not read gives no field hover', async () => {
     const doc = await draftDocument('draft-unknown');
-    assert.equal(await hoverTextAt(doc, 'old'), '');
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    const unreadDraftPainted = async () => (await paintedProblemMessagesOf(doc))
+      .some((message) => message.startsWith('schema declares'));
+    while (Date.now() < deadline && !(await unreadDraftPainted())) {
+      await new Promise((resolve) => { setTimeout(resolve, 50); });
+    }
+    assert.ok(await unreadDraftPainted());
+    const oldPosition = positionOf(doc, 'old');
+    const hovers = await vscode.commands
+      .executeCommand('vscode.executeHoverProvider', doc.uri, oldPosition);
+    assert.equal(hoverTextOf(hovers), '');
   });
 });

@@ -233,6 +233,7 @@ What the extension holds is a copy of what the files say: a resident stack's ana
 | a layer file is edited in an editor | on the edit | the stack is analyzed again in place, its suggestions once the quiet period ends, and the file's painted marks are cleared until the next report | foreground, then background |
 | a layer file of a resident stack changes on disk while no editor has it open | on the change | the file is read again | background |
 | a layer file is deleted from disk | on the deletion | the file leaves the stack, even while an editor holds it with no unsaved edits, and comes back when it returns to disk | background |
+| a folder at an overlay's place appears or goes, an overlay file is created or deleted, or a file changes below the overlay directories of a stack with no overlay file | on the change | the stack is built again, each overlay holding no documents found again | background |
 | the file an include's location maps to is written to or removed from disk | on the change | the include is followed or left, and the stack of the overlay holding it is built again | background |
 | a layer file's tab opens again on a document the IDE kept after its last tab closed | on the open | the editor's copy is analyzed again, as on an open | foreground |
 | a layer file's editor closes: its document closes, or its last tab closes with no unsaved edits while the IDE keeps the document | on the close | the file is read from disk again, so discarded edits, or a file gone from disk, leave the stack with what the disk holds | background |
@@ -272,9 +273,19 @@ A startup step that fails is logged and skipped, so the language server always s
 - The extension process is the client. The analysis is a plain module with no editor API in it, tested on its own with `node --test`. Editor features stay in the language server.
 - Line coverage and branch coverage of the extension's own code are each at least 90%. The `node --test` run measures both and fails if either is under that; test files are not part of the measured set.
 
+An integration test that proves something does not happen waits on the extension's own signals that its work has finished, never on a fixed time:
+
+| Signal | Answers |
+|---|---|
+| the server's `yaml-dsl/idle` request | `null` once every request and notification the server received before it has been handled and no suggestion pass is in its quiet period or queued; an error once that work outlasts its bound. It only waits: every pass keeps its quiet period, its superseding by an edit and its order. |
+| `whenSettled()`, which `activate()` returns beside the client | resolves once the work the client tracks has finished and the server has answered `yaml-dsl/idle`; rejects once that work outlasts its bound |
+
 ## Common layer and overlays
 
 Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/spec.md), under Common layer and overlays.
+
+- An overlay holding no documents is an overlay of its stack wherever the editor reads the stack's folds: its fold is the common layer alone, read against the schema found from its place, and it is named as any other overlay is.
+- A common layer with no overlay file in any overlay directory is a document with no overlays, read as if no overlay directory existed: a stack of its own.
 
 ### Folded documents
 
@@ -655,7 +666,8 @@ Each document is validated against its schema:
 | File | Validated |
 |---|---|
 | an overlay | its fold, the common layer merged with it, against the overlay's schema |
-| the common layer | through each overlay's fold |
+| the common layer | through each overlay's fold, an overlay holding no documents included |
+| a document with no overlays | alone, against its own schema |
 | a file outside layers | alone, against its own schema |
 
 - An error is marked on the key of the value it is about, in the file that wrote that value. In the common layer, its message names the overlays whose folds it fails in.
@@ -879,6 +891,8 @@ What the click writes into an overlay draws the line:
 | one | a potential move, with a link | also writes into an overlay to keep its fold, so the user decides |
 | more than one | not offered | |
 
+- A unit is offered when more than half the overlays holding a document, and at least two, hold it.
+
 An overlay's fold is kept by what is written for it:
 
 | The overlay lacks | Written for it |
@@ -887,13 +901,18 @@ An overlay's fold is kept by what is written for it:
 | a map | `{}` |
 | a scalar | the `default` its schema node states; with no stated default, the unit is not offered |
 
+An overlay holding no documents lacks every unit:
+
+- A unit every other overlay holds alike is a potential move, with a link.
+- The click creates the overlay's document at its place, named as the stack's other overlays' files are, holding what is written for it. The overlay then holds a document.
+
 A potential move is information: its gutter mark is the info mark, its hint starts with `ⓘ`, and it colors neither its file's name nor any folder above it.
 
 ### Schema checks
 
 A block the walk finds passes two schema checks before it is offered:
 
-1. Every overlay with a file, holding the block or not, reads the node at the block's path in its own schema, and those nodes must be the same. Nodes of one schema are the same when they are one node. Nodes of different schemas are compared by a hash of each with its references resolved, its annotations (`description`, `title`, `examples`, `$comment`) set aside and its requirement marker kept, worked out when first compared and cached per schema node.
+1. Every overlay, holding the block or not, reads the node at the block's path in its own schema, an overlay holding no documents in the schema found from its place, and those nodes must be the same. Nodes of one schema are the same when they are one node. Nodes of different schemas are compared by a hash of each with its references resolved, its annotations (`description`, `title`, `examples`, `$comment`) set aside and its requirement marker kept, worked out when first compared and cached per schema node.
 2. Each opt-out passes the node at its own path in the schema of the overlay that takes it: `{}`, `[]` or the default, with requiredness read from the requirement markers. A node's `if` is read against the opt-out, and only the branch it selects is checked.
 
 A block that fails either check is a potential move with no link:
@@ -922,7 +941,7 @@ One click on a map unit:
 1. Writes the unit into the common layer, copied from the first overlay in `layers.overlay_folders` order that holds every difference, comments, key order and the blank lines around it included, the difference replaced by a reference to its local.
 2. Declares the difference's local, below.
 3. Deletes the unit from each overlay that holds it, and a parent map left empty by that, merging the blank lines around it into one, and taking the blank lines after it when it sits right under its parent's key.
-4. Writes `{}` at the unit's path into each overlay with a file that does not hold it.
+4. Writes `{}` at the unit's path into each overlay that does not hold it.
 5. Saves every file it changed.
 
 The difference's local:
@@ -944,7 +963,7 @@ A list or map in block style is declared on the lines below the local's name.
 A scalar, a list or a map in flow style is a unit by value:
 
 - An overlay's value at its path is what its fold holds there: its own value, else the common layer's.
-- When more than half the overlays that have a file, and at least two, hold one value the common layer does not, the editor suggests moving it into the common layer. The common layer's own value casts no vote.
+- When more than half the overlays holding a document, and at least two, hold one value the common layer does not, the editor suggests moving it into the common layer. The common layer's own value casts no vote.
 - Every overlay holding another value, keeping the common layer's former value, or lacking it, is the unit's one difference.
 
 One click:

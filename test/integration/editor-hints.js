@@ -128,6 +128,43 @@ async function definitionLineAt(doc, position) {
   return null;
 }
 
+const EXTENSION_ID = 'lite2073.yaml-dsl-editor';
+
+async function extensionClient() {
+  return (await vscode.extensions.getExtension(EXTENSION_ID).activate()).client;
+}
+
+async function extensionSettled() {
+  await (await vscode.extensions.getExtension(EXTENSION_ID).activate()).whenSettled();
+}
+
+function fileEventSeen(filePath, eventKind) {
+  const pattern = new vscode.RelativePattern(path.dirname(filePath), path.basename(filePath));
+  const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+  const subscribeTo = {
+    change: (listener) => watcher.onDidChange(listener),
+    create: (listener) => watcher.onDidCreate(listener),
+    delete: (listener) => watcher.onDidDelete(listener),
+  }[eventKind];
+  let deadlineTimer = null;
+  const seen = new Promise((resolve, reject) => {
+    subscribeTo(() => resolve());
+    deadlineTimer = setTimeout(() => {
+      reject(new Error(`no ${eventKind} event for ${filePath}`));
+    }, WAIT_DEADLINE_MILLISECONDS);
+  });
+  return seen.finally(() => {
+    clearTimeout(deadlineTimer);
+    watcher.dispose();
+  });
+}
+
+async function paintedProblemMessagesOf(doc) {
+  const answer = await (await extensionClient())
+    .sendRequest('yaml-dsl/decorations', { uri: doc.uri.toString() });
+  return answer.problems.map((problem) => problem.message);
+}
+
 async function undoInEditorOf(document) {
   await vscode.window.showTextDocument(document);
   await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
@@ -152,4 +189,8 @@ module.exports = {
   completionItemsAt,
   definitionLineAt,
   undoInEditorOf,
+  extensionClient,
+  extensionSettled,
+  fileEventSeen,
+  paintedProblemMessagesOf,
 };

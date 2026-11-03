@@ -1,0 +1,5 @@
+mock_version: "1"
+
+mockdefaults:
+  shared:
+    window: mock-window

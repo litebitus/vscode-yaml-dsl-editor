@@ -1,0 +1,9 @@
+mock_version: "1"
+
+mocksource:
+  mock_network:
+    type: mock-network
+    label: mock-network-1
+  mock_shared:
+    type: mock-kind
+    key_id: mock-alias

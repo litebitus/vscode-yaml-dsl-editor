@@ -11,6 +11,7 @@ const {
   hintTooltipOf,
   applyArgumentIn,
   undoInEditorOf,
+  extensionSettled,
 } = require('./editor-hints');
 const { APPLY_COMMAND } = require('../../lib/suggestion-marks');
 const { isolateEachTest } = require('./test-isolation');
@@ -88,7 +89,7 @@ suite('concern common layers', () => {
       assert.equal(overlay.getText(), overlayText);
       await fileTextBecomes(overlayPath, overlayText);
       await fileTextBecomes(concernFile, null);
-      await new Promise((resolve) => { setTimeout(resolve, 500); });
+      await extensionSettled();
     } finally {
       saveWatch.dispose();
     }

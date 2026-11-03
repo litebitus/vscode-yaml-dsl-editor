@@ -9,11 +9,12 @@ const {
   hintLabelsOf,
   hintLabelsBecome,
   undoInEditorOf,
+  extensionSettled,
+  fileEventSeen,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
 const SHARED_BLOCK = 'mocktype:\n  shared:\n    size: 1\n';
-const SAVED_FILE_SETTLE_MILLISECONDS = 1000;
 
 function writtenStack(name) {
   const root = path.join(vscode.workspace.workspaceFolders[1].uri.fsPath, name);
@@ -45,8 +46,10 @@ suite('layer files changing on disk', () => {
     await hintLabelsBecome(overlay, [SAME_IN_COMMON_LAYER]);
     const commonEditor = await shownDocument(commonPath);
     await commonEditor.edit((builder) => builder.insert(new vscode.Position(0, 0), '# mock unsaved edit\n'));
+    const removal = fileEventSeen(commonPath, 'delete');
     fs.renameSync(commonPath, `${commonPath}.away`);
-    await new Promise((resolve) => { setTimeout(resolve, 2000); });
+    await removal;
+    await extensionSettled();
     assert.deepEqual(await hintLabelsOf(overlay), [SAME_IN_COMMON_LAYER]);
     await undoInEditorOf(commonEditor.document);
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
@@ -60,8 +63,10 @@ suite('layer files changing on disk', () => {
     await hintLabelsBecome(overlay, [SAME_IN_COMMON_LAYER]);
     await overlayEditor.edit((builder) => builder.insert(new vscode.Position(3, 0), '# mock comment\n'));
     await hintLabelsBecome(overlay, [SAME_IN_COMMON_LAYER]);
+    const savedChange = fileEventSeen(overlayPath, 'change');
     await overlay.save();
-    await new Promise((resolve) => { setTimeout(resolve, SAVED_FILE_SETTLE_MILLISECONDS); });
+    await savedChange;
+    await extensionSettled();
     assert.deepEqual(await hintLabelsOf(overlay), [SAME_IN_COMMON_LAYER]);
   });
 });

@@ -677,3 +677,35 @@ test('the server answers a layer file\'s overlays and the diff of a selection ac
   ]);
   assert.equal(await connection.handlers['yaml-dsl/overlayDiff']({ uri, range }), null);
 });
+
+test('the idle request answers null once the work of the events received before it is done',
+async () => {
+  let finishRead = null;
+  const heldRead = new Promise((resolve) => { finishRead = resolve; });
+  const connection = fakeConnection();
+  const documents = fakeDocuments();
+  bind(connection, documents, {
+    readFile: async (filePath) => (filePath === '/repo/app/dev/mock.yml' ? heldRead : null),
+    fetchText: async () => null,
+  });
+  const layeredConfig = configText(dslEntry('sample', {
+    layers: {
+      overlay_folders: ['dev', 'staging'],
+      common_layer_discovery: 'parent',
+      duplicate_check: { depth: 1, key_depths: {}, skip_keys: [] },
+    },
+  }));
+  const configEntries = [{ text: layeredConfig, dir: '/repo' }];
+  await connection.handlers['yaml-dsl/config']({ entries: configEntries });
+  const commonUri = 'file:///repo/app/mock.yml';
+  documents.handlers.open({ document: { uri: commonUri, getText: () => 'shared: 1\n' } });
+  let answered = false;
+  const idleAnswer = connection.handlers['yaml-dsl/idle']().then((answer) => {
+    answered = true;
+    return answer;
+  });
+  await new Promise((resolve) => { setImmediate(resolve); });
+  assert.equal(answered, false);
+  finishRead('mock: 1\n');
+  assert.equal(await idleAnswer, null);
+});

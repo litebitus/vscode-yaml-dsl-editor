@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://github.com/litebitus/yaml-dsl-spec/releases/latest/download/yaml-dsl-v1.schema.json
+version: "1"
+dsls:
+  - id: ancestor-two-documents
+    file_includes: ["{config_root}/**/mock-dsl.yml"]
+    file_excludes: []
+    schema_search_paths: [".schema/mock-dsl.schema.json"]
+    layers:
+      overlay_folders: [overlay-1, overlay-2, overlay-3, overlay-4]
+      common_layer_discovery: ancestor
+      common_layer_files:
+        mock-dsl.yml: ["{concern}.mock-dsl.yml", mock-dsl.yml]
+      duplicate_check:
+        depth: 2
+        key_depths: {}
+        skip_keys: [mock_version]
+    key_sort_orders:
+      - path: "$"
+        skip_keys: []
+        order: alphabetical
+        first_keys: []
+        last_keys: []
+      - path: "$..*"
+        skip_keys: []
+        order: alphabetical
+        first_keys: []
+        last_keys: []
+    scopes: {}
+    declarations: []
+    references: []

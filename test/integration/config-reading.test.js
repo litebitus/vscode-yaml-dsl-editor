@@ -11,21 +11,22 @@ const {
   fixtureCopy,
   typedAfter,
   completionItemsAt,
+  paintedProblemMessagesOf,
+  WAIT_DEADLINE_MILLISECONDS,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
 const DEFINITION_LANGUAGE = 'yaml-dsl-definition';
 const FIXTURE = 'config-minor-version';
 const LABEL_HOVER = '`label`: *string*    `[optional]`\n\nLabel of the minor-version DSL';
-const KEPT_WATCH_MILLISECONDS = 1500;
 
-async function hoverStays(doc, position, expected) {
-  const deadline = Date.now() + KEPT_WATCH_MILLISECONDS;
-  while (Date.now() < deadline) {
-    const text = await hoverTextOf(doc, position);
-    assert.ok(text.includes(expected), text);
+async function configProblemsPainted(configFile) {
+  const config = { uri: vscode.Uri.file(configFile) };
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+  while (Date.now() < deadline && (await paintedProblemMessagesOf(config)).length === 0) {
     await new Promise((resolve) => { setTimeout(resolve, 50); });
   }
+  assert.notDeepEqual(await paintedProblemMessagesOf(config), []);
 }
 
 suite('config reading', () => {
@@ -44,7 +45,9 @@ suite('config reading', () => {
     await hoverTextBecomes(entry, label, LABEL_HOVER);
     const configFile = path.join(copy, 'yaml-dsl.yml');
     fs.writeFileSync(configFile, fs.readFileSync(configFile, 'utf8').replace('file_excludes', 'file_exclude'));
-    await hoverStays(entry, label, LABEL_HOVER);
+    await configProblemsPainted(configFile);
+    assert.equal(entry.languageId, 'yaml-dsl');
+    assert.ok((await hoverTextOf(entry, label)).includes(LABEL_HOVER));
   });
 
   test('a yaml-dsl.yml opens as a YAML DSL Definition and hovers by the standard\'s schema at its version', async () => {

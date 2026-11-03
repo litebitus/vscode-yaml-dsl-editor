@@ -315,9 +315,12 @@ test('a layer file that changes on disk is read again, and a closed one that is 
   const production = `${root}/production/mock.yml`;
   await ws.sync(`file://${dev}`, dev, files[dev]);
   assert.deepEqual(ws.layerWatchTargets().map((target) => `${target.base}/${target.pattern}`).sort(), [
+    `${root}/dev`,
     `${root}/dev/mock.yml`,
     `${root}/mock.yml`,
+    `${root}/production`,
     `${root}/production/mock.yml`,
+    `${root}/staging`,
     `${root}/staging/mock.yml`,
   ]);
   files[staging] = 'other: 1\n';

@@ -3,7 +3,7 @@ const { LanguageClient, TransportKind } = require('vscode-languageclient/node');
 const { activateWith, editorMiddleware } = require('./lib/client');
 const { DEFINITION_LANGUAGE } = require('./lib/config');
 
-function startClient(context, configEntries, outputChannel, declarationsPopup) {
+function startClient(context, configEntries, outputChannel, declarationsPopup, clientWork) {
   const serverModule = context.asAbsolutePath('server.js');
   const client = new LanguageClient(
     'yaml-dsl',
@@ -15,7 +15,7 @@ function startClient(context, configEntries, outputChannel, declarationsPopup) {
     {
       documentSelector: [{ language: 'yaml-dsl' }, { language: DEFINITION_LANGUAGE }],
       initializationOptions: { storageFolder: context.globalStorageUri ? context.globalStorageUri.fsPath : null },
-      middleware: editorMiddleware(vscode, configEntries, declarationsPopup),
+      middleware: editorMiddleware(vscode, configEntries, declarationsPopup, clientWork),
       outputChannel,
     },
   );

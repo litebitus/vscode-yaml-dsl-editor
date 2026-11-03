@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Layers
+  - An overlay holding no documents folds as the common layer alone, validated against the schema found from its place, and a document with no overlays is validated alone.
+- Suggestions
+  - An overlay holding no documents lacks every unit, so a unit the other overlays hold alike is a potential move whose click creates that overlay's document holding the opt-out.
+
 ## 0.10.1 - 2026-11-01
 
 - Schemas
