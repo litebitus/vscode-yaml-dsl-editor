@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.2 - 2026-11-04
 
 - Layers
   - An overlay holding no documents folds as the common layer alone, validated against the schema found from its place, and a document with no overlays is validated alone.
