@@ -252,6 +252,35 @@ test('a field a branch restates without a description keeps the description its 
   assert.equal(parser.fieldDescription(['mockthing', 'Tags']), 'The bucket tags.');
 });
 
+test('a field a branch restates keeps what its base states that the branch does not, such as its items', () => {
+  const schema = {
+    $schema: DRAFT_2020_12_URI,
+    $defs: { mock_query: { properties: { query: { type: 'string', description: 'The mock query.' } } } },
+    properties: {
+      panel: {
+        properties: {
+          kind: { enum: ['mock_text', 'mock_chart'] },
+          queries: { type: 'array', description: 'The mock queries.', items: { $ref: '#/$defs/mock_query' } },
+        },
+        allOf: [
+          {
+            if: { properties: { kind: { const: 'mock_text' } } },
+            else: { required: ['queries'], properties: { queries: { minItems: 1 } } },
+          },
+        ],
+      },
+    },
+  };
+  for (const document of [{ panel: { kind: 'mock_chart', queries: [{ query: 'mock' }] } }, undefined]) {
+    const parser = schemaParserForDocument(schema, document);
+    assert.equal(parser.fieldDescription(['panel', 'queries']), 'The mock queries.');
+    assert.equal(parser.fieldDescription(['panel', 'queries', 0, 'query']), 'The mock query.');
+    assert.deepEqual(Object.keys(parser.fieldsAt(['panel', 'queries', 0])), ['query']);
+  }
+  const chart = schemaParserForDocument(schema, { panel: { kind: 'mock_chart' } });
+  assert.equal(chart.nodeAt(['panel', 'queries']).minItems, 1);
+});
+
 test('a value form under a branch is one form when the document selects it and an alternative of each branch without', () => {
   const schema = {
     $schema: DRAFT_2020_12_URI,

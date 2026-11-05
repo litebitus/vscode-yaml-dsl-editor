@@ -560,7 +560,7 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 - Hover walks the YAML path through `properties`, then `patternProperties`, then what the schema's draft reads for a key `properties` does not list.
 - On an object that carries both a `$ref` and a `description`, it keeps that `description`, then follows the `$ref` only to keep walking.
-- A field an `allOf` part or an `if` branch restates without a `description` keeps the `description` the object states for it.
+- A field an `allOf` part or an `if` branch restates keeps what the object states for it that the restatement does not, such as its `description` and its `items`; where both state a keyword, the restatement's applies.
 - The tooltip documents the field, as a javadoc documents a method:
 
 | Part | Shows |

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Schemas
+  - A field an `if` branch or an `allOf` part restates keeps what its base states that the restatement does not, so the fields under a restated list or object keep their hover and completion.
+
 ## 0.10.2 - 2026-11-04
 
 - Layers
