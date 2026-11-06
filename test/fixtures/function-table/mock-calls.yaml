@@ -4,3 +4,7 @@ mock-legacy:
   fn.legacy: mock-value
 mock-named:
   value fn.ssm: /mock/key
+mock-list:
+  - mock-item
+  - fn.ssm: /mock/key
+  - 3

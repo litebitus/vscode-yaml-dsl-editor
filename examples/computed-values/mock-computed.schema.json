@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "locals": { "type": "object", "description": "[optional] Values the document references by name." },
+    "service": {
+      "type": "object",
+      "description": "[optional] The services, by name.",
+      "additionalProperties": { "$ref": "#/$defs/service" }
+    }
+  },
+  "$defs": {
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": { "type": "array", "items": { "type": "string" }, "description": "[optional] What the service runs." },
+        "replicas": { "type": "integer", "description": "[optional] How many copies run." },
+        "max_replicas": { "type": "integer", "description": "[optional] The most copies that may run." },
+        "ports": { "type": "array", "items": { "type": "integer" }, "description": "[optional] The ports the service answers on." },
+        "peer": {
+          "type": "object",
+          "description": "[optional] The service this one calls.",
+          "properties": {
+            "command": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  },
+  "x-yaml-dsl-functions": {
+    "format": {
+      "description": "Fills the layout's placeholders with the operands, in order.",
+      "arguments": [
+        { "name": "layout", "type": "text", "required": true, "repeated": false, "description": "The text holding the placeholders." },
+        { "name": "operands", "type": "any", "required": false, "repeated": true, "description": "The values put in the placeholders, in order." }
+      ],
+      "return": { "type": "text", "description": "The layout with each placeholder filled." }
+    },
+    "join": {
+      "description": "Joins the items into one text, the separator between each two.",
+      "arguments": [
+        { "name": "separator", "type": "text", "required": true, "repeated": false, "description": "The text between each two items." },
+        { "name": "items", "type": "list", "required": true, "repeated": false, "description": "The texts to join." }
+      ],
+      "return": { "type": "text", "description": "The items joined." }
+    }
+  }
+}

@@ -70,6 +70,32 @@ test('a field a call key of the marker function supplies is not reported missing
   assert.equal(withoutCalls.reports(missing(['mocktype', 'doors'], 'value')), true);
 });
 
+test('a value a call without a name or a reference computes is not checked against its type', () => {
+  const written = {
+    mocktype: {
+      primary: {
+        command: [
+          '/mock-app',
+          { 'fn.format*': ['--mock-list=%s', { 'fn.join*': [',', ['mock-a', 'mock-b']] }] },
+          { mock: 'mock-value' },
+        ],
+        ports: 'ref mocktype.other.ports',
+        size: 'mock-size',
+      },
+    },
+  };
+  const primary = ['mocktype', 'primary'];
+  const document = validationDocumentOf(written, {
+    ...dsl,
+    references: [{ pattern: '^ref (?<type>[a-z]+)\\.(?<name>[a-z]+)', positions: ['whole_scalar'] }],
+  });
+  assert.equal(document.reports({ keyword: 'type', path: [...primary, 'command', 1] }), false);
+  assert.equal(document.reports({ keyword: 'type', path: [...primary, 'command', 1, 'fn.format*', 0] }), false);
+  assert.equal(document.reports({ keyword: 'type', path: [...primary, 'command', 2] }), true);
+  assert.equal(document.reports({ keyword: 'type', path: [...primary, 'ports'] }), false);
+  assert.equal(document.reports({ keyword: 'type', path: [...primary, 'size'] }), true);
+});
+
 test('an alternative is not reported when every field of one of its missing sets is supplied', () => {
   const written = { mocktype: { doors: { cors: { 'origins fn.formatlist*': [] } } } };
   const document = validationDocumentOf(written, dsl);

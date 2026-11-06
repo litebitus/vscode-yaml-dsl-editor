@@ -15,6 +15,7 @@ const {
   undoInEditorOf,
   extensionClient,
   paintedProblemMessagesOf,
+  paintedProblemMessagesBecome,
 } = require('./editor-hints');
 const { APPLY_COMMAND } = require('../../lib/suggestion-marks');
 const { overlayHeadingOf } = require('./overlay-schema-folders');
@@ -28,17 +29,6 @@ const STRING_LABEL_HOVER = '`label`: *string*    `[optional]`\n\nMock string lab
 
 function stackCopy(discoveryFolder, copyLabel) {
   return fixtureCopy(path.join(FIXTURE_FOLDER, discoveryFolder), `${copyLabel}-${discoveryFolder}`);
-}
-
-async function paintedProblemMessagesBecome(doc, expected) {
-  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
-  let messages = [];
-  while (Date.now() < deadline) {
-    messages = await paintedProblemMessagesOf(doc);
-    if (JSON.stringify(messages) === JSON.stringify(expected)) return;
-    await new Promise((resolve) => { setTimeout(resolve, 50); });
-  }
-  assert.deepEqual(messages, expected);
 }
 
 async function shownCommonLayer(stack, ...segments) {

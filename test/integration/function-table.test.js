@@ -1,6 +1,11 @@
 const path = require('path');
 const vscode = require('vscode');
-const { shownDocument, positionInText, hoverTextBecomes } = require('./editor-hints');
+const {
+  shownDocument,
+  positionInText,
+  hoverTextBecomes,
+  paintedProblemMessagesBecome,
+} = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
 function functionTableFixture() {
@@ -28,6 +33,15 @@ suite('function table', () => {
       positionInText(doc, 'fn.legacy', 3),
       '```yaml-dsl-signature\nlegacy(value: text): void\n```\n\n*Returns:* `void`',
     );
+  });
+
+  test('a list item a call without a name computes is not checked against the item type', async () => {
+    const doc = (await shownDocument(functionTableFixture())).document;
+    await paintedProblemMessagesBecome(doc, [
+      '`mock-list[2]` must be string',
+      '#/x-yaml-dsl-functions maps a function straight to its arguments, a deprecated form: '
+        + 'map each function to its description, arguments and return',
+    ]);
   });
 
   test('a call key naming a field documents that field by its name, and its function by its signature', async () => {

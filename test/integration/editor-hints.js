@@ -165,6 +165,17 @@ async function paintedProblemMessagesOf(doc) {
   return answer.problems.map((problem) => problem.message);
 }
 
+async function paintedProblemMessagesBecome(doc, expected) {
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+  let messages = [];
+  while (Date.now() < deadline) {
+    messages = await paintedProblemMessagesOf(doc);
+    if (JSON.stringify(messages) === JSON.stringify(expected)) return;
+    await new Promise((resolve) => { setTimeout(resolve, 50); });
+  }
+  assert.deepEqual(messages, expected);
+}
+
 async function undoInEditorOf(document) {
   await vscode.window.showTextDocument(document);
   await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
@@ -193,4 +204,5 @@ module.exports = {
   extensionSettled,
   fileEventSeen,
   paintedProblemMessagesOf,
+  paintedProblemMessagesBecome,
 };

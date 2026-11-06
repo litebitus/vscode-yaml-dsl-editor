@@ -676,6 +676,7 @@ Each document is validated against its schema:
 - A fold holding a file with a YAML error is not validated.
 - Validation reads the fold, so an opted-out key is not validated.
 - A key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode`, supplies that field, so the field is not reported missing.
+- A value an expression computes, a call without a name, a reference or a placeholder, is not checked against its field's type, as the standard states.
 - Hover reads `child_values_from_parent_key` to document the field a key sets.
 - Where `allow_quoted_values` reads a quoted value, hover and completion show the schema's types, and what the extension writes stays unquoted.
 

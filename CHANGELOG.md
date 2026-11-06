@@ -4,6 +4,8 @@
 
 - Schemas
   - A field an `if` branch or an `allOf` part restates keeps what its base states that the restatement does not, so the fields under a restated list or object keep their hover and completion.
+- Validation
+  - A value a call without a name, a reference or a placeholder computes is not checked against its field's type, a list item included.
 
 ## 0.10.2 - 2026-11-04
 

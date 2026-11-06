@@ -1,0 +1,19 @@
+locals:
+  ports: [8080, 9090]
+  replicas: 3
+
+service:
+  api:
+    command:
+      - /mock-api
+      - fn.format*:
+          - --mock-list=%s
+          - fn.join*: [",", [mock-a, mock-b]]
+    replicas: local.replicas
+    max_replicas: ${max_replicas}
+    ports: local.ports
+    peer: ref service.worker
+  worker:
+    command: [/mock-worker]
+    # deliberate error: a value written as is is checked against its field's type
+    replicas: two
