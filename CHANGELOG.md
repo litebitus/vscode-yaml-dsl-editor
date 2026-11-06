@@ -4,6 +4,8 @@
 
 - Schemas
   - A field an `if` branch or an `allOf` part restates keeps what its base states that the restatement does not, so the fields under a restated list or object keep their hover and completion.
+- Suggestions
+  - An inlay hint no longer blinks out while suggestions are redrawn: the provider registers again only for a file that answered no hints to the current registration.
 - Validation
   - A value a call without a name, a reference or a placeholder computes is not checked against its field's type, a list item included.
 

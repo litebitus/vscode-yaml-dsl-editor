@@ -100,6 +100,20 @@ test('a file answered with hints after an empty answer no longer registers again
   assert.equal(host.fires, 1);
 });
 
+test('a file that answered empty to the replaced provider does not register again', () => {
+  const host = editorHost();
+  const hintsByUri = new Map();
+  const registration = createInlayHintRegistration(host.vscode, selector, hintsFrom(hintsByUri));
+  host.live()[0].provider.provideInlayHints(mockDocument(devUri));
+  host.live()[0].provider.provideInlayHints(mockDocument(stagingUri));
+  hintsByUri.set(devUri, ['mock-hint']);
+  registration.refreshHints((uri) => hintsByUri.has(uri));
+  hintsByUri.set(stagingUri, ['mock-hint']);
+  registration.refreshHints((uri) => hintsByUri.has(uri));
+  assert.equal(host.registrations.length, 2);
+  assert.equal(host.fires, 1);
+});
+
 test('a forgotten file no longer registers again', () => {
   const host = editorHost();
   const hintsByUri = new Map();
