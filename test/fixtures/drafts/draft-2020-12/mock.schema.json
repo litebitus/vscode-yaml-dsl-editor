@@ -52,6 +52,25 @@
         "old": {
           "description": "use pair",
           "deprecated": true
+        },
+        "mappings": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "string",
+                "description": "write it as text",
+                "deprecated": true
+              }
+            ]
+          }
         }
       }
     }

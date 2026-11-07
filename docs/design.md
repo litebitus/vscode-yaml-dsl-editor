@@ -695,10 +695,15 @@ The server validates documents in a worker thread, so a schema that takes long t
 
 ### Deprecated fields
 
-In a draft that reads `deprecated`, a field whose node, or a node its references reach, holds `deprecated: true` is a warning:
+In a draft that reads `deprecated`, a deprecated key or value is a warning:
 
-- its key is struck through in the warning yellow;
-- the hover of its key and its value is the warning: `` `<key>` is deprecated: <description> ``;
+| Deprecated | When `deprecated: true` stands on | Struck through, and the warning's hover | Warning |
+|---|---|---|---|
+| key | its field's node, a node its references reach, or an `allOf` part | the key; the hover of the key and its value | `` `<key>` is deprecated: <description> ``, the field's description, or the deprecated schema's where the field states none |
+| value | a `oneOf` or `anyOf` branch the value passes | the value | `` the value of `<key>` is deprecated: <description> ``, the branch's description |
+
+- the struck key or value is in the warning yellow;
+- a field's documentation strikes the name of each deprecated `oneOf` or `anyOf` choice;
 - its file, and every folder above it, are named in the warning yellow, with a `⚠` badge on the file and its tab.
 
 A stack's report of its suggestions flags each file holding a warning, for a stack worked out in the background as for one an editor has open, and the flag is kept with the file's suggestions. A warning's color and badge show over a suggestion's.

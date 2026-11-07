@@ -1919,7 +1919,7 @@ test('a deprecated key is a warning problem, and the stack\'s report flags the f
   const warnings = ws.problems('file:///repo/warn/mock.yml').filter((problem) => problem.severity === 'warning');
   assert.deepEqual(warnings.map((problem) => problem.message), ['`old` is deprecated: use kept']);
   const [deprecated] = ws.decorations('file:///repo/warn/mock.yml').deprecatedFields;
-  assert.deepEqual(deprecated.keyRange, { start: { line: 1, character: 0 }, end: { line: 1, character: 3 } });
+  assert.deepEqual(deprecated.struckRange, { start: { line: 1, character: 0 }, end: { line: 1, character: 3 } });
   assert.deepEqual(deprecated.fieldRange, { start: { line: 1, character: 0 }, end: { line: 1, character: 6 } });
   const report = ws.suggestionMarks('/repo/warn/mock.yml');
   assert.deepEqual(report.files.map((file) => [file.uri, file.warning]), [['file:///repo/warn/mock.yml', true]]);

@@ -64,6 +64,32 @@ test('a deprecated field hovers its description, and its keys are listed with a 
   assert.deepEqual(deprecatedFields(doc, draft07), []);
 });
 
+test('a value passing a deprecated oneOf branch is struck and named as the value, with the branch\'s description', () => {
+  const text = 'mappings:\n  short: mock\n  full:\n    text: mock\n';
+  const doc = analyzeDocument(text, '/repo/a.yml', { symbols: [], references: [] });
+  const schema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      mappings: {
+        additionalProperties: {
+          oneOf: [
+            { type: 'object', properties: { text: { type: 'string' } } },
+            { type: 'string', description: 'write it as text', deprecated: true },
+          ],
+        },
+      },
+    },
+  };
+  assert.deepEqual(deprecatedFields(doc, schema, null, doc.value), [
+    {
+      range: rangeOf(text, 'mock'),
+      fieldRange: rangeOf(text, 'mock'),
+      message: 'the value of `short` is deprecated: write it as text',
+    },
+  ]);
+  assert.deepEqual(deprecatedFields(doc, schema), []);
+});
+
 const refRule = {
   pattern: '^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)',
   positions: ['whole_scalar'],

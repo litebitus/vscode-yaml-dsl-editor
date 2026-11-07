@@ -33,6 +33,19 @@ test('a tuple renders by each draft\'s own keywords, the items in order and the 
   assert.deepEqual(renderedOf(DRAFT_2020_12, { type: 'array', items: { type: 'integer' } }).tags, ['*Items:* `integer`']);
 });
 
+test('a deprecated oneOf or anyOf choice renders struck, in a draft that reads deprecated', () => {
+  const struckString = 's̶t̶r̶i̶n̶g̶';
+  const choices = { oneOf: [{ $ref: '#/$defs/mock_call_form' }, { type: 'string', deprecated: true }] };
+  const rendered = renderedOf(DRAFT_2020_12, choices);
+  assert.equal(rendered.shape, `mock_call_form | ${struckString}`);
+  assert.deepEqual(rendered.accepts, ['- `mock_call_form`: object', `- \`${struckString}\``]);
+  assert.equal(renderedOf(DRAFT_2020_12, { anyOf: choices.oneOf }).shape, `mock_call_form | ${struckString}`);
+  assert.equal(renderedOf(DRAFT_07, choices).shape, 'mock_call_form | string');
+  assert.equal(renderedOf(DRAFT_2020_12, { type: 'string', deprecated: true }).shape, 'string');
+  const values = renderedOf(DRAFT_2020_12, { type: 'object', additionalProperties: choices }).tags;
+  assert.deepEqual(values, [`*Values:* \`mock_call_form | ${struckString}\``]);
+});
+
 test('keys a key needs render from draft-07 dependencies and the later drafts\' dependentRequired', () => {
   const needs = { mode: ['size', 'kind'], label: { required: ['size'] } };
   assert.deepEqual(renderedOf(DRAFT_07, { type: 'object', dependencies: needs }).tags, [

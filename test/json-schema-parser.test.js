@@ -164,6 +164,29 @@ test('draft 2020-12 reads prefixItems with items, $dynamicRef to its $dynamicAnc
   assert.equal(draft2020.fieldDeprecated(['retired']), true);
 });
 
+test('a field is deprecated by a deprecated allOf part, and its value by a deprecated oneOf or anyOf branch it passes', () => {
+  const root = {
+    $schema: DRAFT_2020_12_URI,
+    properties: {
+      parted: { allOf: [{ type: 'string' }, { deprecated: true }] },
+      alternated: { oneOf: [{ type: 'object' }, { type: 'string', deprecated: true }] },
+      either: { anyOf: [{ type: 'integer' }, { $ref: '#/$defs/retired' }] },
+    },
+    $defs: { retired: { type: 'string', deprecated: true } },
+  };
+  const ofValueAt = (value, path) => {
+    const deprecation = schemaParserForDocument(root, value).deprecationAt(path);
+    return deprecation ? deprecation.ofValue : null;
+  };
+  assert.equal(ofValueAt({ parted: { text: 'mock' } }, ['parted']), false);
+  assert.equal(ofValueAt({ alternated: 'mock' }, ['alternated']), true);
+  assert.equal(ofValueAt({ alternated: { text: 'mock' } }, ['alternated']), null);
+  assert.equal(ofValueAt({ either: 'mock' }, ['either']), true);
+  assert.equal(ofValueAt({ either: 1 }, ['either']), null);
+  assert.equal(schemaParserForDocument(root, { alternated: 'mock' }).fieldDeprecated(['alternated']), false);
+  assert.equal(schemaParserFor(root).deprecationAt(['alternated']), null);
+});
+
 test('an opt-out is validated by the validator of the schema\'s draft', () => {
   const containsAtLeastNone = { contains: {}, minContains: 0 };
   const schemas = {

@@ -73,6 +73,17 @@ suite('JSON Schema drafts', () => {
     await hoverTextBecomes(doc, positionInText(doc, 'old: ', 'old: '.length), DEPRECATED_OLD_WARNING);
   });
 
+  test('draft 2020-12 warns on a value passing a deprecated oneOf branch, not on its key or a value passing the other', async () => {
+    const doc = await draftDocument('draft-2020-12');
+    const valueWarning = 'the value of `short` is deprecated: write it as text';
+    const struckString = 's̶t̶r̶i̶n̶g̶';
+    const fieldDocumentation = (key) => `\`${key}\`: *object | ${struckString}*    \`[optional]\`\n\n`
+      + `*Accepts:*\n- \`object\`\n- \`${struckString}\``;
+    await hoverTextBecomes(doc, positionInText(doc, 'short: mock', 'short: '.length), valueWarning);
+    await hoverTextBecomes(doc, positionInText(doc, 'short'), fieldDocumentation('short'));
+    await hoverTextBecomes(doc, positionInText(doc, 'full'), fieldDocumentation('full'));
+  });
+
   test('draft 2020-12 hovers a field with what setting it requires, from its holder\'s dependentSchemas', async () => {
     const doc = await draftDocument('draft-2020-12');
     assert.equal(

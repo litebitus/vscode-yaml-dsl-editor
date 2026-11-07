@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Schemas
+  - A field is deprecated by a deprecated `allOf` part.
+  - A value passing a deprecated `oneOf` or `anyOf` branch is struck and warned of, and a field's documentation strikes the deprecated choice.
+
 ## 0.10.3 - 2026-11-06
 
 - Schemas

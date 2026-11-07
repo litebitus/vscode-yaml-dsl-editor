@@ -837,7 +837,7 @@ test('a deprecated key is struck through in yellow and its warning is the hover 
   const oldField = rangeOf(1, 2, 8);
   const message = '`old` is deprecated';
   const deprecation = { range: oldKey, message, severity: 'warning', kind: 'deprecation' };
-  const deprecatedFields = [{ keyRange: oldKey, fieldRange: oldField, message }];
+  const deprecatedFields = [{ struckRange: oldKey, fieldRange: oldField, message }];
   const client = fakeClient({ decorations: { references: [], problems: [deprecation], deprecatedFields } });
   const doc = documentOf(text, 'deprecated.yml');
   const schemaHover = async () => ({ contents: { value: 'the field description' } });
