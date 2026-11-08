@@ -159,7 +159,7 @@ test('an opt-out is checked against the branch its condition selects, the other 
   const entry = checks.nodeCheck('mock-branches', ['entry']);
   assert.deepEqual(entry.optOutFailures({}), [messageFailure("must have required property 'queue'")]);
   assert.deepEqual(entry.optOutFailures({ kind: 'mock-bucket', bucket: 'mock' }), [
-    messageFailure('the schema cannot be compiled: Invalid regular expression: /(/u: Unterminated group'),
+    messageFailure('the schema cannot be compiled\n\n```text\nInvalid regular expression: /(/u: Unterminated group\n```'),
   ]);
   const bare = checks.nodeCheck('mock-branches', ['bare']);
   assert.deepEqual(bare.optOutFailures({}), []);
@@ -195,7 +195,10 @@ test('a failed anyOf lists its alternatives, a not failure carries the descripti
     text: null,
     alternatives: [
       [messageFailure("must have required property 'size'"), messageFailure("must have required property 'kind'")],
-      [{ ...messageFailure('matches a form that is not allowed'), schemaNote: 'A mock object carrying a call key.' }],
+      [{
+        ...messageFailure('matches a form that is not allowed'),
+        schemaNote: '[optional] A mock object carrying a call key.',
+      }],
     ],
   }]);
   assert.deepEqual(checks.nodeCheck('mock-alternatives', ['one_form']).optOutFailures(), [
@@ -258,7 +261,7 @@ function markedChecksOf() {
   return createSchemaChecks((schemaHash) => markedSchemas[schemaHash] || null);
 }
 
-test('a field\'s requirement marker decides its key over the parent\'s required array', () => {
+test('a field\'s requiredness marker decides its key over the parent\'s required array', () => {
   const checks = markedChecksOf();
   assert.deepEqual(checks.nodeCheck('marker-adds', ['entry']).optOutFailures(), [
     messageFailure("must have required property 'name'"),
@@ -354,6 +357,16 @@ test('a document\'s validation errors are worded by field, the markers deciding 
   assert.deepEqual(createSchemaChecks(() => null).documentProblems(null, {}), []);
 });
 
+test('a schema that cannot be compiled is the editor\'s sentence, then the compiler\'s text as written in a code block', () => {
+  const draft07 = 'http://json-schema.org/draft-07/schema#';
+  assert.deepEqual(problemsOfSchema({ mock_label: { type: 'string', pattern: '(_mock_' } }, {}, draft07), [
+    [[], 'the schema cannot be compiled\n\n```text\nInvalid regular expression: /(_mock_/u: Unterminated group\n```'],
+  ]);
+  assert.deepEqual(problemsOfSchema({ mock_label: { $ref: '#/$defs/mock-missing' } }, {}), [
+    [[], 'the schema cannot be compiled\n\n```text\ncan\'t resolve reference #/$defs/mock-missing from id #\n```'],
+  ]);
+});
+
 function problemsOfSchema(schemaProperties, value, schemaUri = 'https://json-schema.org/draft/2020-12/schema') {
   const schema = { $schema: schemaUri, properties: schemaProperties };
   const checks = createSchemaChecks((schemaHash) => (schemaHash === 'mock-worded' ? schema : null));
@@ -395,7 +408,11 @@ test('a value no form holds matches none of its allowed forms, the described def
   const problems = checks.documentProblems('mock-defined', { described: 'mock', borrowed: 'mock', undescribed: 'mock' })
     .map(({ path, message, schemaNote }) => (schemaNote ? [path, message, schemaNote] : [path, message]));
   assert.deepEqual(problems, [
-    [['described'], '`described` matches none of its allowed forms', 'A literal number, or a `ref` resolving to one. More words.'],
+    [
+      ['described'],
+      '`described` matches none of its allowed forms',
+      '[optional] A literal number, or a `ref` resolving to one. More words.',
+    ],
     [['borrowed'], '`borrowed` matches none of its allowed forms'],
     [['undescribed'], '`undescribed` matches none of its allowed forms'],
   ]);

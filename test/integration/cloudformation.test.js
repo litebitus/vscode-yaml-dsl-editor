@@ -10,6 +10,7 @@ const {
   completionItemsAt,
   definitionLineAt,
   typedAfter,
+  schemaTextOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -72,7 +73,7 @@ suite('CloudFormation templates', () => {
       'Join(delimiter: text, values: list): text',
       '```',
       '',
-      'Joins a list of values into one value, separated by the delimiter.',
+      schemaTextOf('Joins a list of values into one value, separated by the delimiter.'),
     ].join('\n')), documentation);
   });
 
@@ -119,7 +120,9 @@ suite('CloudFormation templates', () => {
       'macro AWS::Include(Location: text)',
       '```',
       '',
-      'Inserts the template snippet stored in Amazon S3 in its place, merged with the map holding the call.',
+      schemaTextOf(
+        'Inserts the template snippet stored in Amazon S3 in its place, merged with the map holding the call.',
+      ),
     ].join('\n')), includeDocumentation);
     const labels = (await completionItemsAt(editor.document, cursor))
       .map((item) => (typeof item.label === 'string' ? item.label : item.label.label));

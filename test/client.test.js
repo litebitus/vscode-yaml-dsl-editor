@@ -1343,6 +1343,33 @@ test('the shape hint answers on the line it was opened on, and closes for good o
   assert.equal(await hintOf(2, 3), null);
 });
 
+test('completion and shape hint documentation render HTML, so schema text shows in its theme color', async () => {
+  const vscode = { ...paintingVscode([]), SignatureHelpTriggerKind: { Invoke: 1, ContentChange: 3 } };
+  const mid = editorMiddleware(vscode, () => [], clickOpenedPopup(vscode));
+  const document = { uri: { toString: () => 'file:///repo/mock.yml' } };
+  const position = { line: 0, character: 4 };
+  const documented = () => ({ value: '<span style="color:var(--mock);">Mock.</span>' });
+  const listed = await mid.provideCompletionItem(document, position, {}, null, async () => [
+    { label: 'mock_a', documentation: documented() },
+    { label: 'mock_b', documentation: 'plain mock' },
+    { label: 'mock_c' },
+  ]);
+  assert.deepEqual(listed.map((item) => item.documentation && item.documentation.supportHtml), [true, undefined, undefined]);
+  const completionList = await mid.provideCompletionItem(document, position, {}, null, async () => ({
+    isIncomplete: false,
+    items: [{ label: 'mock_a', documentation: documented() }],
+  }));
+  assert.equal(completionList.items[0].documentation.supportHtml, true);
+  assert.equal(await mid.provideCompletionItem(document, position, {}, null, async () => null), null);
+  const help = await mid.provideSignatureHelp(document, position, { triggerKind: 1 }, null, async () => ({
+    signatures: [{ label: 'mock_mode: mock-fast', documentation: documented() }, { label: 'mock_size:' }],
+  }));
+  assert.deepEqual(help.signatures.map((signature) => signature.documentation && signature.documentation.supportHtml), [
+    true,
+    undefined,
+  ]);
+});
+
 test('settling waits for the client\'s tracked work, then asks the server to be idle', async () => {
   const vscode = fakeVscode();
   const client = fakeClient();

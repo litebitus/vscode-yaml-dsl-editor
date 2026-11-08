@@ -6,12 +6,20 @@
   - A field is deprecated by a deprecated `allOf` part.
   - A value passing a deprecated `oneOf` or `anyOf` branch is struck and warned of, and a field's documentation strikes the deprecated choice.
   - A field's `items` or `additionalProperties` that an `allOf` part or an `if` branch restates keeps what the field states that the restatement does not.
-  - A field's hover shows its description as a schema note, and a deprecation warning names the key or value alone, the description its schema note.
+  - A field's hover shows its description as written, its requiredness marker kept, in the theme's `overlayHeadingForeground`, with no label, and its declaration shows the editor's requirement only for a description carrying no marker; a deprecation warning names the key or value alone, the description its schema note.
+- Functions
+  - A function, macro or argument hover, and its completion documentation, shows the schema's text as written in the theme's `overlayHeadingForeground`, with no label, its arguments under `*Arguments:*`; a `terraform` function's descriptions show the same way.
+- Completion
+  - Completion rows, documentation and the shape hint show each description as written, its requiredness marker kept; a field's or argument's row and detail add the editor's requirement only for a description carrying no marker.
+  - The shape hint at a value shows the field's and each value's description in the theme's `overlayHeadingForeground`.
 - Config
   - A `yaml-dsl.yml` problem shows the schema note the standard's reader gives it.
+- Suggestions
+  - A potential move's hover lists a nested alternative's failures as a nested list, each failure and schema note on its own line.
 - Validation
   - A validation error is worded as the YAML DSL standard words it, every value it writes fenced.
-  - A failed `not` carries the description of the schema it rules out, and a value no `anyOf` or `oneOf` form holds the description of the definition whose forms they are, as a schema note shown after the message under a bold `[schema]` in the theme's `overlayHeadingForeground`.
+  - A schema that cannot be compiled is `the schema cannot be compiled`, then the compiler's text as written in its own code block, in a validation error and in a potential move's hover alike.
+  - A failed `not` carries the description of the schema it rules out, and a value no `anyOf` or `oneOf` form holds the description of the definition whose forms they are, as a schema note shown as written after the message under a bold `[schema]` in the theme's `overlayHeadingForeground`.
 
 ## 0.10.3 - 2026-11-06
 
@@ -203,8 +211,8 @@
 
 - Schemas: JSON Schema draft-07, draft 2019-09 and draft 2020-12 are read, each by a parser named after it; a schema declaring no draft or an older one is read as draft-07, and one declaring any other draft is an info problem.
 - Schemas: a deprecated field is a warning, in the drafts that define `deprecated`: its key is struck through in yellow, its message is the hover of its key and value, and its file and folders show in yellow with a `⚠` badge, kept across restarts and reported for stacks worked out in the background.
-- Completion: keys and values complete from the file's schema: a map's fields, each with its requirement marker and description, deprecated ones struck through, and a field's `enum`, `const` and boolean values.
-- Validation: each document is validated against its schema, an overlay as its fold, with the requirement markers deciding which fields are required, and each validation error marked on the key that wrote it.
+- Completion: keys and values complete from the file's schema: a map's fields, each with its requiredness marker and description, deprecated ones struck through, and a field's `enum`, `const` and boolean values.
+- Validation: each document is validated against its schema, an overlay as its fold, with the requiredness markers deciding which fields are required, and each validation error marked on the key that wrote it.
 - Config: a DSL's `validator` block states its `merge_base_keys` and `child_values_from_parent_key`, read only by validation.
 - Validation: a field a call key of the DSL's `marker_function` supplies is not reported missing.
 - Validation: an overlay's `{}` or `[]` opting out of a common layer key leaves that key out of the validated fold.
@@ -295,7 +303,7 @@
 - Cache: a stack with a file in an open editor is never evicted; open editors' work, suggestions included, runs before any background work.
 - Startup: a file shows at once, colored and underlined from its text, then the saved suggestions, then analysis in the background; a stack is analyzed only once a file of it is opened.
 - Suggestions: a file holding one shows its name in the light bulb's color with a 💡 badge in the Explorer and on its tab, and every folder above it takes the color.
-- Requirement markers: a field's marker decides requiredness over its parent's `required` array, and an opt-out leaving out a `[~required]` field is a potential move the user may still apply.
+- Requiredness markers: a field's marker decides requiredness over its parent's `required` array, and an opt-out leaving out a `[~required]` field is a potential move the user may still apply.
 - Key sort orders: `key_sort_orders` sets where a suggestion places a new key, `alphabetical` or `significance`, per map.
 - Suggestions: a new key takes the blank lines around it in the first overlay holding it.
 - Key sort orders: an entry states `first_keys` and `last_keys`, the keys a `significance` map keeps at its top and bottom.

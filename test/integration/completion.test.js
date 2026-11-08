@@ -8,6 +8,7 @@ const {
   fixtureCopy,
   completionItemsAt,
   undoInEditorOf,
+  schemaTextOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -63,6 +64,10 @@ suite('schema completion', () => {
     assert.deepEqual(offeredFields, ['label', 'legacy', 'mode', 'settings']);
     assert.ok(items.legacy.tags.includes(vscode.CompletionItemTag.Deprecated));
     assert.equal(items.mode.label.detail, ' [optional] The mock mode.');
+    assert.deepEqual(
+      [items.mode.documentation.value, items.mode.documentation.supportHtml],
+      ['[optional] The mock mode.', true],
+    );
     const insertedText = (item) => (typeof item.insertText === 'string' ? item.insertText : item.insertText.value);
     assert.equal(insertedText(items.settings), 'settings:\n    ');
     assert.equal(insertedText(items.mode), 'mode: ');
@@ -222,7 +227,7 @@ suite('open key completion', () => {
     const { editor, cursor } = await openKeyEditor('mock_choices:');
     const items = await completionItemsAt(editor.document, cursor);
     const entry = items.find((item) => labelOf(item) === '<key>: low | high');
-    assert.equal(entry.documentation.value, 'The mock choices.');
+    assert.equal(entry.documentation.value, '[optional] The mock choices.');
   });
 
   test('accepting an open key writes the key placeholder selected, then Tab selects the value', async () => {
@@ -305,7 +310,8 @@ suite('shape hint', () => {
       editor.selection.active,
     );
     assert.equal(help.signatures[0].label, 'mock-x: low | high');
-    assert.match(help.signatures[0].documentation.value, /- `low`: The mock low\./);
+    assert.ok(help.signatures[0].documentation.value.includes(`- \`low\`: ${schemaTextOf('The mock low.')}`));
+    assert.equal(help.signatures[0].documentation.supportHtml, true);
   });
 
   test('a value typed after a key holding brackets is hinted and completed like any other', async () => {

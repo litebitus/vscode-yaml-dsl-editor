@@ -8,7 +8,7 @@ const {
   positionInText,
   hoverTextBecomes,
   hintLabelsBecome,
-  schemaNoteOf,
+  schemaTextOf,
   WAIT_DEADLINE_MILLISECONDS,
 } = require('./editor-hints');
 const { writeOverlays, overlayHeadingOf } = require('./overlay-schema-folders');
@@ -62,7 +62,7 @@ suite('themes', () => {
     const label = positionInText(common, 'label: mock', 1);
     const hoverIn = (theme) => ['one', 'two']
       .map((overlayName) => `${overlayHeadingOf(overlayName, theme)}\n\n\`label\`: *string*    \`[optional]\`\n\n`
-        + `${schemaNoteOf(`Label of ${overlayName}`, theme)}`)
+        + `${schemaTextOf(`Label of ${overlayName}`, theme)}`)
       .join('\n\n');
     await editorThemeBecomes(false);
     await hoverTextBecomes(common, label, hoverIn('dark'));

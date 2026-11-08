@@ -8,6 +8,7 @@ const {
   typedAfter,
   completionItemsAt,
   definitionLineAt,
+  schemaTextOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -26,8 +27,13 @@ suite('loop macros', () => {
     const doc = (await shownDocument(loopFixture('mock.yaml'))).document;
     await hoverTextBecomes(doc, positionInText(doc, 'fn.loop:', 3), [
       '```yaml-dsl-signature\nmacro loop(in: any, body: any, for?: list = ["it"])\n```',
-      'Repeats the mock body once per item.',
-      '- `in`: The mock collection.\n- `body`: The mock body.\n- `for`: The mock names.',
+      schemaTextOf('Repeats the mock body once per item.'),
+      [
+        '*Arguments:*',
+        `- \`in\`: ${schemaTextOf('The mock collection.')}`,
+        `- \`body\`: ${schemaTextOf('The mock body.')}`,
+        `- \`for\`: ${schemaTextOf('The mock names.')}`,
+      ].join('\n'),
       '*Expands to:* `body` once per item of `in`, `for` bound to the item.',
     ].join('\n\n'));
   });
@@ -37,7 +43,7 @@ suite('loop macros', () => {
     await hoverTextBecomes(
       doc,
       positionInText(doc, 'for: ["name"]', 1),
-      '```yaml-dsl-signature\nfor?: list = ["it"]\n```\n\nThe mock names.',
+      `\`\`\`yaml-dsl-signature\nfor?: list = ["it"]\n\`\`\`\n\n${schemaTextOf('The mock names.')}`,
     );
   });
 

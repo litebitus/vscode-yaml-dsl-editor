@@ -5,7 +5,20 @@ const {
   markdownWithoutHtml,
   schemaNoteMarkdown,
   schemaNoteText,
+  schemaTextMarkdown,
 } = require('../lib/hover-heading');
+
+test('schema text is each paragraph in the color it is given, with no label, as written and its HTML escaped', () => {
+  assert.equal(
+    schemaTextMarkdown('[~required] Mock: no `<color>` here, <b>.', 'var(--vscode-mock-color)'),
+    '<span style="color:var(--vscode-mock-color);">[~required] Mock: no `<color>` here, &lt;b>.</span>',
+  );
+  assert.equal(
+    schemaTextMarkdown('First paragraph.\n\nSecond paragraph.', 'var(--vscode-mock-color)'),
+    '<span style="color:var(--vscode-mock-color);">First paragraph.</span>\n\n'
+      + '<span style="color:var(--vscode-mock-color);">Second paragraph.</span>',
+  );
+});
 
 test('a schema note is wholly in the color it is given, led by a bold [schema], its markdown kept and its HTML escaped', () => {
   assert.equal(

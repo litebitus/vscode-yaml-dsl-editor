@@ -172,7 +172,7 @@ test('document events analyze and custom requests answer', async () => {
   const noteColor = 'var(--vscode-yamlDslEditor-dark-overlayHeadingForeground)';
   assert.equal(
     hover.contents.value,
-    `\`name\`    \`[optional]\`\n\n<span style="color:${noteColor};"><strong>[schema]</strong> the name</span>`,
+    `\`name\`    \`[optional]\`\n\n<span style="color:${noteColor};">the name</span>`,
   );
   const missing = await connection.handlers.definition({ textDocument: { uri: 'file:///repo/app/mock.yml' }, position: { line: 1, character: 0 } });
   assert.equal(missing, null);
@@ -403,7 +403,7 @@ test('a schema field completes as an editor item that inserts its key and strike
   });
   const byLabel = Object.fromEntries(items.map((item) => [item.label, item]));
   assert.deepEqual(byLabel.mode.textEdit.newText, 'mode: ');
-  assert.deepEqual([byLabel.mode.kind, byLabel.mode.detail], [10, '[required]']);
+  assert.deepEqual([byLabel.mode.kind, byLabel.mode.detail], [10, '']);
   assert.deepEqual(byLabel.mode.labelDetails, { detail: ' [required] The mock mode.' });
   assert.deepEqual(byLabel.mode.command, { title: 'Suggest values', command: 'editor.action.triggerSuggest' });
   assert.deepEqual([byLabel.legacy.tags, byLabel.legacy.command], [[1], undefined]);
@@ -437,7 +437,7 @@ test('the shape hint answers signature help, one signature per row sharing the d
     position: { line, character },
   });
   assert.deepEqual(await hintAt(2, 2), {
-    signatures: [{ label: '<key>: low | high', documentation: { kind: 'markdown', value: 'The mock map.' } }],
+    signatures: [{ label: '<key>: low | high', documentation: { kind: 'markdown', value: '[optional] The mock map.' } }],
     activeSignature: 0,
   });
   assert.equal(await hintAt(1, 9), null);

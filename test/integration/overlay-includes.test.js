@@ -6,7 +6,7 @@ const {
   shownDocument,
   positionInText,
   hoverTextBecomes,
-  schemaNoteOf,
+  schemaTextOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -54,19 +54,20 @@ suite('overlay includes', () => {
     await hoverTextBecomes(
       template,
       positionInText(template, 'AWS::Include', 2),
-      '```yaml-dsl-signature\nmacro AWS::Include(Location: text)\n```\n\nInserts the mock snippet in its place.\n\n'
-        + '- `Location`: The mock snippet\'s location.\n\n'
+      '```yaml-dsl-signature\nmacro AWS::Include(Location: text)\n```\n\n'
+        + `${schemaTextOf('Inserts the mock snippet in its place.')}\n\n`
+        + `*Arguments:*\n- \`Location\`: ${schemaTextOf('The mock snippet\'s location.')}\n\n`
         + '*Expands to:* the map holding the call, joined with the content at `Location`.',
     );
   });
 
-  test('a fragment is documented from the schema node its modeline names, its requirement marker struck', async () => {
+  test('a fragment is documented from the schema node its modeline names, its requiredness marker struck', async () => {
     const fragment = (await shownDocument(includesFixture('snippets', 'mock-alone.yaml'))).document;
     const struckRequired = [...'[required]'].map((character) => `${character}̶`).join('');
     await hoverTextBecomes(
       fragment,
       positionInText(fragment, 'Type', 1),
-      `\`Type\`: *string*    \`${struckRequired}\`\n\n${schemaNoteOf('The resource type.')}`,
+      `\`Type\`: *string*    \`${struckRequired}\`\n\n${schemaTextOf('The resource type.')}`,
     );
   });
 
@@ -76,7 +77,7 @@ suite('overlay includes', () => {
     await hoverTextBecomes(
       snippet,
       positionInText(snippet, 'Type', 1),
-      `\`Type\`: *string*    \`[required]\`\n\n${schemaNoteOf('The resource type.')}`,
+      `\`Type\`: *string*    \`[required]\`\n\n${schemaTextOf('The resource type.')}`,
     );
   });
 });

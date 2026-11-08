@@ -1,6 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { schemaRendererFor } = require('../lib/json-schema');
+const { fencedCodeBlock } = require('../lib/json-schema/render');
+
+test('a code block\'s fence is longer than any backtick run its text holds', () => {
+  assert.equal(fencedCodeBlock('mock _text_', 'text'), '```text\nmock _text_\n```');
+  assert.equal(fencedCodeBlock('mock ```` fence', 'text'), '`````text\nmock ```` fence\n`````');
+});
 
 const DRAFT_07 = 'http://json-schema.org/draft-07/schema#';
 const DRAFT_2019_09 = 'https://json-schema.org/draft/2019-09/schema';

@@ -30,11 +30,19 @@ function completionsAfter(text) {
 
 const byLabel = (items) => Object.fromEntries(items.map((item) => [item.label, item]));
 
+function schemaTextOf(text, theme = 'dark') {
+  return `<span style="color:var(--vscode-yamlDslEditor-${theme}-overlayHeadingForeground);">${text}</span>`;
+}
+
 test('a key position offers the schema\'s fields, each with its marker, description and insertion', () => {
   const items = byLabel(completionsAfter('mocktype:\n  label: mock\n  se'));
   assert.deepEqual(Object.keys(items).sort(), ['enabled', 'label', 'legacy', 'mode', 'settings', 'size', 'tags']);
   assert.deepEqual(items.settings.range, { start: { line: 2, character: 2 }, end: { line: 2, character: 4 } });
-  assert.deepEqual([items.settings.detail, items.settings.documentation], ['[~required]', 'The mock settings.']);
+  assert.deepEqual(
+    [items.settings.detail, items.settings.documentation],
+    ['', '[~required] The mock settings.'],
+  );
+  assert.equal(items.label.documentation, 'The mock label.');
   assert.equal(items.settings.labelDescription, '[~required] The mock settings.');
   assert.equal(items.size.labelDescription, '[optional]');
   assert.equal(items.settings.insertText, 'settings:\n    ');
@@ -71,7 +79,7 @@ test('a scalar field with a default inserts the default selected, opening no val
 
 test('a field a parent requires is marked required', () => {
   const items = byLabel(completionsAfter('mocktype:\n  '));
-  assert.deepEqual([items.label.detail, items.mode.detail], ['[required]', '[optional]']);
+  assert.deepEqual([items.label.detail, items.mode.detail], ['[required]', '']);
 });
 
 test('a value position offers the field\'s enum values and booleans, replacing what is typed', () => {
@@ -136,7 +144,7 @@ const offered = (items) => items.map((item) => [item.label, item.insertText]);
 test('an open key whose values are consts or booleans offers the key placeholder and a choice of the values', () => {
   const consts = openMapCompletions({ type: 'object', additionalProperties: { oneOf: [{ const: 'low' }, { const: 'high' }] } });
   assert.deepEqual(offered(consts), [['<key>: low | high', '${1:<key>}: ${2|low,high|}']]);
-  assert.deepEqual([consts[0].documentation, consts[0].labelDescription, consts[0].insertsSnippet], ['The mock map.', '', true]);
+  assert.deepEqual([consts[0].documentation, consts[0].labelDescription, consts[0].insertsSnippet], ['[optional] The mock map.', '', true]);
   const booleans = openMapCompletions({ type: 'object', additionalProperties: { type: 'boolean' } });
   assert.deepEqual(offered(booleans), [['<key>: true | false', '${1:<key>}: ${2|true,false|}']]);
 });
@@ -200,6 +208,11 @@ test('a value position documents each const value with its own description', () 
     additionalProperties: { description: 'The mock value.', enum: ['low', 'high'] },
   }, '  mock-x: ');
   assert.deepEqual(described.map((item) => [item.label, item.documentation]), [['low', ''], ['high', '']]);
+  const marked = openMapCompletions({
+    type: 'object',
+    additionalProperties: { oneOf: [{ const: 'low', description: '[optional] The mock low.' }] },
+  }, '  mock-x: ');
+  assert.deepEqual(marked.map((item) => [item.label, item.documentation]), [['low', '[optional] The mock low.']]);
 });
 
 function hintAfter(mockMap, typedLine) {
@@ -211,6 +224,39 @@ function hintAfter(mockMap, typedLine) {
   return schemaHintAt(text, { line: 1, character: typedLine.length }, hintSchema);
 }
 
+test('a field\'s marker decides its requirement over the required array, and its description keeps the marker', () => {
+  const markedSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    required: ['mock_listed', 'mock_plain'],
+    properties: {
+      mock_listed: { type: 'string', description: '[optional] Listed, marked optional.' },
+      mock_unlisted: { type: 'string', description: '[required] Unlisted, marked required.' },
+      mock_plain: { type: 'string', description: 'Listed, unmarked.' },
+      mock_spaced: { type: 'string', description: '[~required]   Spaced  as\twritten. ' },
+      mock_bare: { type: 'string' },
+    },
+  };
+  const fields = byLabel(schemaCompletionsAt('mock_', { line: 0, character: 5 }, markedSchema));
+  const shown = (item) => [item.detail, item.labelDescription, item.documentation];
+  assert.deepEqual(shown(fields.mock_listed), [
+    '',
+    '[optional] Listed, marked optional.',
+    '[optional] Listed, marked optional.',
+  ]);
+  assert.deepEqual(shown(fields.mock_unlisted), [
+    '',
+    '[required] Unlisted, marked required.',
+    '[required] Unlisted, marked required.',
+  ]);
+  assert.deepEqual(shown(fields.mock_plain), ['[required]', '[required] Listed, unmarked.', 'Listed, unmarked.']);
+  assert.deepEqual(shown(fields.mock_spaced), [
+    '',
+    '[~required]   Spaced  as\twritten. ',
+    '[~required]   Spaced  as\twritten. ',
+  ]);
+  assert.deepEqual(shown(fields.mock_bare), ['[optional]', '[optional]', '']);
+});
+
 test('the hint at a key shows the shape of each field and open key, with the description of the map holding it', () => {
   const hint = hintAfter({
     type: 'object',
@@ -219,7 +265,7 @@ test('the hint at a key shows the shape of each field and open key, with the des
   }, '  ');
   assert.deepEqual(hint, {
     rows: ['mock_fixed: <string>', 'mock_mode: fast | slow', '<key>: low | high'],
-    documentation: 'The mock map.',
+    documentation: '[optional] The mock map.',
   });
 });
 
@@ -230,8 +276,48 @@ test('the hint at a value lists each value with its own description under the de
   }, '  mock-x: ');
   assert.deepEqual(hint, {
     rows: ['mock-x: low | high'],
-    documentation: 'The mock map.\n\n- `low`: The mock low.\n- `high`',
+    documentation: `${schemaTextOf('[optional] The mock map.')}\n\n- \`low\`: ${schemaTextOf('The mock low.')}\n- \`high\``,
   });
+});
+
+test('the hint at a value shows its schema text as written in the theme\'s color, a value\'s colons and HTML kept as text', () => {
+  const hintSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      mock_mode: {
+        description: 'How the mock runs: <fast> or slow.',
+        oneOf: [{ const: 'mock-fast', description: 'Runs fast: mock.' }, { const: 'mock-slow' }],
+      },
+    },
+  };
+  const hint = schemaHintAt('mock_mode: ', { line: 0, character: 11 }, hintSchema, { theme: 'light' });
+  assert.deepEqual(hint, {
+    rows: ['mock_mode: mock-fast | mock-slow'],
+    documentation: `${schemaTextOf('How the mock runs: &lt;fast> or slow.', 'light')}\n\n`
+      + `- \`mock-fast\`: ${schemaTextOf('Runs fast: mock.', 'light')}\n- \`mock-slow\``,
+  });
+});
+
+test('completion documentation and the key hint show a description\'s HTML as text', () => {
+  const htmlSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      mock_tags: {
+        type: 'object',
+        description: 'The mock <tags>.',
+        additionalProperties: { oneOf: [{ const: 'mock-a', description: 'The <a> mock.' }] },
+      },
+      mock_note: { type: 'string', description: '[~required] The <mock> note.' },
+    },
+  };
+  const fields = byLabel(schemaCompletionsAt('mock_', { line: 0, character: 5 }, htmlSchema));
+  assert.equal(fields.mock_note.documentation, '[~required] The &lt;mock> note.');
+  const openKeys = schemaCompletionsAt('mock_tags:\n  ', { line: 1, character: 2 }, htmlSchema);
+  assert.equal(openKeys[0].documentation, 'The mock &lt;tags>.');
+  const values = schemaCompletionsAt('mock_tags:\n  mock-x: ', { line: 1, character: 10 }, htmlSchema);
+  assert.equal(values[0].documentation, 'The &lt;a> mock.');
+  const keyHint = schemaHintAt('mock_tags:\n  ', { line: 1, character: 2 }, htmlSchema);
+  assert.equal(keyHint.documentation, 'The mock &lt;tags>.');
 });
 
 test('the hint at a new list item shows the item\'s fields or its values', () => {
@@ -246,7 +332,7 @@ test('the hint at a new list item shows the item\'s fields or its values', () =>
 
 test('a value of no stated shape is hinted by its description alone, and nothing stated gives no hint', () => {
   const described = hintAfter({ type: 'object', additionalProperties: true }, '  mock-x: ');
-  assert.deepEqual(described, { rows: ['mock-x:'], documentation: 'The mock map.' });
+  assert.deepEqual(described, { rows: ['mock-x:'], documentation: schemaTextOf('[optional] The mock map.') });
   assert.equal(hintAfter({ type: 'object' }, '  '), null);
   const undescribed = schemaHintAt('mock_map:\n  mock-x: ', { line: 1, character: 10 }, {
     $schema: 'https://json-schema.org/draft/2020-12/schema',

@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { analyzeDocument, completionAt } = require('../lib/analyze');
 const { markerFunction, dslEntry, parsedDsl } = require('./config-builders');
+const { argumentCompletionsAt } = require('../lib/completion-offers');
+const { completionSiteAt } = require('../lib/schema-completion');
 
 const dsl = parsedDsl(dslEntry('called', {
   function: markerFunction({
@@ -70,4 +72,24 @@ test('a tag the config declares is offered where a value starts with `!`, docume
   assert.equal(merge.detail, 'merge(...contents: map): map');
   assert.match(merge.documentation, /Merges the mock contents\./);
   assert.deepEqual([mock.detail, mock.documentation], ['mock', '']);
+});
+
+test('an argument\'s row shows the editor\'s requirement only when its description carries no marker', () => {
+  const loopTable = {
+    each: {
+      description: 'Repeats the mock body.',
+      arguments: [
+        { name: 'items', type: 'list', required: true, repeated: false, description: 'The mock items.' },
+        { name: 'body', type: 'map', required: true, repeated: false, description: '[~required] The mock body.' },
+        { name: 'names', type: 'list', required: false, repeated: false, description: '[optional] The mock names.' },
+      ],
+      return: null,
+      macro: { kind: 'loop', nameSuffixPattern: null, unmarkedKeyPaths: [], roles: { body: 'body' } },
+    },
+  };
+  const text = 'mocktype:\n  fn.each:\n    \n';
+  const site = completionSiteAt(text, { line: 2, character: 4 });
+  const stack = { dsl, vocabulary: { table: loopTable } };
+  const rows = argumentCompletionsAt(site, stack).map((item) => [item.label, item.labelDescription]);
+  assert.deepEqual(rows, [['items', '[required] list'], ['body', 'map'], ['names', 'list']]);
 });

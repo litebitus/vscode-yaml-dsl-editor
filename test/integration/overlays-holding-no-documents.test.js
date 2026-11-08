@@ -16,7 +16,7 @@ const {
   extensionClient,
   paintedProblemMessagesOf,
   paintedProblemMessagesBecome,
-  schemaNoteOf,
+  schemaTextOf,
 } = require('./editor-hints');
 const { APPLY_COMMAND } = require('../../lib/suggestion-marks');
 const { overlayHeadingOf } = require('./overlay-schema-folders');
@@ -26,7 +26,7 @@ const FIXTURE_FOLDER = 'overlays-holding-no-documents';
 const LABEL_INTEGER_PROBLEM = '`label` must be `integer`';
 const OVERLAY_3_PROBLEM = `${LABEL_INTEGER_PROBLEM} (overlay-3)`;
 const OVERLAY_LABEL_TEXT = 'mocktype:\n  shared:\n    label: 3\n';
-const STRING_LABEL_HOVER = `\`label\`: *string*    \`[optional]\`\n\n${schemaNoteOf('Mock string label.')}`;
+const STRING_LABEL_HOVER = `\`label\`: *string*    \`[optional]\`\n\n${schemaTextOf('Mock string label.')}`;
 
 function stackCopy(discoveryFolder, copyLabel) {
   return fixtureCopy(path.join(FIXTURE_FOLDER, discoveryFolder), `${copyLabel}-${discoveryFolder}`);

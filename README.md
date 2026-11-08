@@ -125,7 +125,7 @@ A schema URL is read without credentials. A private one opts in to the machine's
 
 ### Fragments
 
-A modeline marks a file as a fragment by the fragment of its schema's URI. A fragment is validated from its own root with no key required, and its hover shows the requirement markers struck.
+A modeline marks a file as a fragment by the fragment of its schema's URI. A fragment is validated from its own root with no key required, and its hover shows the requiredness markers struck.
 
 A fragment shaped as the whole document:
 

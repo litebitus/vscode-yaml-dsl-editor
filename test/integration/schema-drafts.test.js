@@ -8,6 +8,7 @@ const {
   paintedProblemMessagesOf,
   extensionClient,
   schemaNoteOf,
+  schemaTextOf,
   WAIT_DEADLINE_MILLISECONDS,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
@@ -42,10 +43,10 @@ async function draftDocument(draftFolder) {
   return (await shownDocument(path.join(fixtures, 'drafts', draftFolder, 'mock.yml'))).document;
 }
 
-const FIRST_OF_PAIR = `\`pair[0]\`\n\n${schemaNoteOf('the first of the pair')}`;
-const LATER_ITEM = `\`pair[1]\`\n\n${schemaNoteOf('every later item')}`;
-const NAMED_LABEL = `\`label\`    \`[optional]\`\n\n${schemaNoteOf('the named label')}`;
-const OLD_USE_PAIR = `\`old\`    \`[optional]\`\n\n${schemaNoteOf('use pair')}`;
+const FIRST_OF_PAIR = `\`pair[0]\`\n\n${schemaTextOf('the first of the pair')}`;
+const LATER_ITEM = `\`pair[1]\`\n\n${schemaTextOf('every later item')}`;
+const NAMED_LABEL = `\`label\`    \`[optional]\`\n\n${schemaTextOf('the named label')}`;
+const OLD_USE_PAIR = `\`old\`    \`[optional]\`\n\n${schemaTextOf('use pair')}`;
 
 suite('JSON Schema drafts', () => {
   isolateEachTest();
@@ -106,7 +107,7 @@ suite('JSON Schema drafts', () => {
     const doc = await draftDocument('draft-2020-12');
     assert.equal(
       await hoverTextAt(doc, 'queue'),
-      `\`queue\`: *string*    \`[optional]\`\n\n${schemaNoteOf('the mock queue')}\n\n*When set:* \`role\` required, or a \`node\`.`,
+      `\`queue\`: *string*    \`[optional]\`\n\n${schemaTextOf('the mock queue')}\n\n*When set:* \`role\` required, or a \`node\`.`,
     );
   });
 
@@ -114,8 +115,8 @@ suite('JSON Schema drafts', () => {
     const doc = await draftDocument('draft-2020-12');
     assert.equal(
       await hoverTextAt(doc, 'id mock-entry'),
-      `\`id mock-entry\`    \`[optional]\`\n\n${schemaNoteOf('a mock entry')}\n\n*Sets* \`id\` *to* \`mock-entry\`:\n\n`
-        + `\`id\`: *string*    \`[optional]\`\n\n${schemaNoteOf('the entry\'s identity')}`,
+      `\`id mock-entry\`    \`[optional]\`\n\n${schemaTextOf('a mock entry')}\n\n*Sets* \`id\` *to* \`mock-entry\`:\n\n`
+        + `\`id\`: *string*    \`[optional]\`\n\n${schemaTextOf('the entry\'s identity')}`,
     );
   });
 

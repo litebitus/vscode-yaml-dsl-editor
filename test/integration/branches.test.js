@@ -7,7 +7,7 @@ const {
   fixtureCopy,
   positionInText,
   hoverTextBecomes,
-  schemaNoteOf,
+  schemaTextOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -35,7 +35,7 @@ suite('branches the document selects', () => {
     await hoverTextBecomes(
       doc,
       positionInText(doc, 'BucketName', 1),
-      `\`BucketName\`: *string*    \`[optional]\`\n\n${schemaNoteOf('The bucket name.')}`,
+      `\`BucketName\`: *string*    \`[optional]\`\n\n${schemaTextOf('The bucket name.')}`,
     );
   });
 

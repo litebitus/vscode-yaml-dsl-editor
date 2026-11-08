@@ -377,7 +377,7 @@ test('a modeline\'s fragment marks a fragment, validated at the node it names wi
   assert.equal(
     typeHover,
     `\`Type\`: *string*    \`${struck('[required]')}\`\n\n`
-      + `<span style="color:${noteColor};"><strong>[schema]</strong> The resource type.</span>`,
+      + `<span style="color:${noteColor};">The resource type.</span>`,
   );
   const propertiesHover = ws.hover(`file://${alonePath}`, at(aloneText, 'Properties', 1)).contents.value;
   assert.match(propertiesHover, new RegExp(struck('[optional]').replace(/[[\]]/g, '\\$&')));

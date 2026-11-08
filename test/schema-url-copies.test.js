@@ -157,7 +157,7 @@ test('a modeline URL is read through its kept copy, and an editor parameter it m
   const noteColor = 'var(--vscode-yamlDslEditor-dark-overlayHeadingForeground)';
   assert.equal(
     hover.contents.value,
-    `\`size\`: *integer*    \`[optional]\`\n\n<span style="color:${noteColor};"><strong>[schema]</strong> Mock size.</span>`,
+    `\`size\`: *integer*\n\n<span style="color:${noteColor};">[optional] Mock size.</span>`,
   );
   const misspelled = `${modelineOf('?yaml_dsl_max_age=7')}size: 1\n`;
   await ws.sync(`file://${filePath}`, filePath, misspelled);

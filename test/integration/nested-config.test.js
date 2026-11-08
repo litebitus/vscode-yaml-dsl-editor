@@ -5,7 +5,7 @@ const {
   shownDocument,
   positionInText,
   hoverTextBecomes,
-  schemaNoteOf,
+  schemaTextOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -33,7 +33,7 @@ suite('nested config', () => {
     await hoverTextBecomes(
       entry,
       positionInText(entry, 'label', 1),
-      `\`label\`: *string*    \`[optional]\`\n\n${schemaNoteOf('Label of the nested DSL')}`,
+      `\`label\`: *string*    \`[optional]\`\n\n${schemaTextOf('Label of the nested DSL')}`,
     );
   });
 

@@ -66,6 +66,11 @@ function schemaNoteOf(text, theme = 'dark') {
   return `<span style="color:${color};"><strong>[schema]</strong> ${text}</span>`;
 }
 
+function schemaTextOf(text, theme = 'dark') {
+  const color = `var(--vscode-yamlDslEditor-${theme}-overlayHeadingForeground)`;
+  return `<span style="color:${color};">${text}</span>`;
+}
+
 function positionInText(doc, needle, offset = 0) {
   return doc.positionAt(doc.getText().indexOf(needle) + offset);
 }
@@ -211,4 +216,5 @@ module.exports = {
   paintedProblemMessagesOf,
   paintedProblemMessagesBecome,
   schemaNoteOf,
+  schemaTextOf,
 };

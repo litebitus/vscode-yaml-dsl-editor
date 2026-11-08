@@ -19,9 +19,9 @@ function rangeOf(text, needle) {
   return { start: at(index), end: at(index + needle.length) };
 }
 
-function schemaNoteOf(text, theme = 'dark') {
+function schemaTextOf(text, theme = 'dark') {
   const color = `var(--vscode-yamlDslEditor-${theme}-overlayHeadingForeground)`;
-  return `<span style="color:${color};"><strong>[schema]</strong> ${text}</span>`;
+  return `<span style="color:${color};">${text}</span>`;
 }
 
 test('paths convert to file uris and back', () => {
@@ -42,11 +42,24 @@ test('hover and definition outside a reference or a field are empty', () => {
   const described = hoverAt(doc, { line: 0, character: 0 }, stack, {
     properties: { name: { description: 'the name' } },
   });
-  assert.equal(described.contents.value, `\`name\`    \`[optional]\`\n\n${schemaNoteOf('the name')}`);
+  assert.equal(described.contents.value, `\`name\`    \`[optional]\`\n\n${schemaTextOf('the name')}`);
   const lightDescribed = hoverAt(doc, { line: 0, character: 0 }, stack, {
     properties: { name: { description: 'the <name>' } },
   }, [], 'light');
-  assert.equal(lightDescribed.contents.value, `\`name\`    \`[optional]\`\n\n${schemaNoteOf('the &lt;name>', 'light')}`);
+  assert.equal(lightDescribed.contents.value, `\`name\`    \`[optional]\`\n\n${schemaTextOf('the &lt;name>', 'light')}`);
+  const hoverOfName = (schema) => hoverAt(doc, { line: 0, character: 0 }, stack, schema).contents.value;
+  assert.equal(
+    hoverOfName({ required: ['name'], properties: { name: { description: '[optional] the name' } } }),
+    `\`name\`\n\n${schemaTextOf('[optional] the name')}`,
+  );
+  assert.equal(
+    hoverOfName({ properties: { name: { description: '[required] the name' } } }),
+    `\`name\`\n\n${schemaTextOf('[required] the name')}`,
+  );
+  assert.equal(
+    hoverOfName({ required: ['name'], properties: { name: { description: 'the name' } } }),
+    `\`name\`    \`[required]\`\n\n${schemaTextOf('the name')}`,
+  );
 });
 
 test('a deprecated field hovers its description, and its keys are listed with a warning naming them, the description its note', () => {
@@ -61,8 +74,8 @@ test('a deprecated field hovers its description, and its keys are listed with a 
   const schemaOf = (draftUri) => ({ $schema: draftUri, properties: { mocktype: { properties: fields } } });
   const draft2020 = schemaOf('https://json-schema.org/draft/2020-12/schema');
   const hoverValue = (line, schema) => hoverAt(doc, { line, character: 2 }, stack, schema).contents.value;
-  assert.equal(hoverValue(1, draft2020), `\`old\`    \`[optional]\`\n\n${schemaNoteOf('use plain')}\n\n*Deprecated*`);
-  assert.equal(hoverValue(2, draft2020), `\`plain\`    \`[optional]\`\n\n${schemaNoteOf('the plain field')}`);
+  assert.equal(hoverValue(1, draft2020), `\`old\`    \`[optional]\`\n\n${schemaTextOf('use plain')}\n\n*Deprecated*`);
+  assert.equal(hoverValue(2, draft2020), `\`plain\`    \`[optional]\`\n\n${schemaTextOf('the plain field')}`);
   assert.equal(hoverValue(3, draft2020), '`bare`    `[optional]`\n\n*Deprecated*');
   assert.deepEqual(deprecatedFields(doc, draft2020), [
     {
@@ -74,7 +87,7 @@ test('a deprecated field hovers its description, and its keys are listed with a 
     { range: rangeOf(text, 'bare'), fieldRange: rangeOf(text, 'bare: 3'), message: '`bare` is deprecated' },
   ]);
   const draft07 = schemaOf('http://json-schema.org/draft-07/schema#');
-  assert.equal(hoverValue(1, draft07), `\`old\`    \`[optional]\`\n\n${schemaNoteOf('use plain')}`);
+  assert.equal(hoverValue(1, draft07), `\`old\`    \`[optional]\`\n\n${schemaTextOf('use plain')}`);
   assert.deepEqual(deprecatedFields(doc, draft07), []);
 });
 
@@ -251,8 +264,8 @@ test('a field hover documents it: a signature with its shape and requirement, it
   assert.deepEqual(documentationAt('mode'), {
     kind: 'markdown',
     value: [
-      '`mode`: *string*    `[optional]`',
-      schemaNoteOf('The `mode`, *one* per line.\nSecond line.'),
+      '`mode`: *string*',
+      schemaTextOf('[optional] The `mode`, *one* per line.\nSecond line.'),
       '*One of:* `"fast"`, `"slow"`  \n*Default:* `"fast"`',
     ].join('\n\n'),
   });

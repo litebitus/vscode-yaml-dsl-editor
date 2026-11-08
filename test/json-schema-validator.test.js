@@ -194,7 +194,7 @@ test('a schema that cannot be compiled is one failure at the document, and an un
   const broken = { $schema: DRAFT_URIS[2], properties: { label: { $ref: '#/$defs/missing' } } };
   const [failure] = schemaValidatorFor(broken).documentFailures({ label: 'mock' });
   assert.deepEqual([failure.path, failure.keyword], [[], SCHEMA_COMPILE_KEYWORD]);
-  assert.match(failure.message, /^the schema cannot be compiled: /);
+  assert.equal(failure.message, 'can\'t resolve reference #/$defs/missing from id #');
   assert.equal(schemaValidatorFor({ $schema: 'https://example.com/mock-draft' }), null);
   assert.equal(schemaValidatorFor(null), null);
 });
@@ -279,7 +279,7 @@ test('a fragment whose node cannot be compiled reads as a node the schema does n
   };
   const failures = schemaValidatorFor(schema).documentFailures({}, { fragmentPointer: '/properties/entry' });
   assert.deepEqual(failures.map((failure) => failure.message), [
-    'the schema cannot be compiled: can\'t resolve reference #/$defs/mock_missing from id #',
+    'can\'t resolve reference #/$defs/mock_missing from id #',
   ]);
   const compilable = {
     $schema: 'https://json-schema.org/draft/2020-12/schema',

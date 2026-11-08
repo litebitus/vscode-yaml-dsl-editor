@@ -9,6 +9,7 @@ const {
   positionInText,
   hoverTextBecomes,
   schemaNoteOf,
+  schemaTextOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -82,7 +83,7 @@ suite('feature settings', () => {
     const value = positionInText(doc, 'old: ', 'old: '.length);
     const warning = `\`old\` is deprecated\n\n${schemaNoteOf('use pair')}`;
     await hoverTextBecomes(doc, value, warning);
-    const documentation = `\`old\`    \`[optional]\`\n\n${schemaNoteOf('use pair')}\n\n*Deprecated*`;
+    const documentation = `\`old\`    \`[optional]\`\n\n${schemaTextOf('use pair')}\n\n*Deprecated*`;
     await withSetting('warning.deprecation.enabled', false, async () => {
       await hoverTextBecomes(doc, key, documentation);
       await hoverTextBecomes(doc, value, documentation);

@@ -43,7 +43,26 @@ A problem has a severity, drawn in the color the DevOps tools print it in:
 | warning | its own mark, such as a struck-through key | a triangle | the warning yellow |
 | info | a wavy underline, the text unchanged | the info mark | the info blue |
 
-- A problem shows its message on hover, then its schema note, if it has one: `[schema]` in bold, then the note as written, all in the theme's `overlayHeadingForeground`.
+- A problem shows its message on hover, then its schema note, if it has one.
+
+The editor is faithful to the user's schema:
+
+- It follows the schema as written, and never fixes it.
+- Requiredness markers and the function table are the YAML DSL standard's own constructs, read by the standard's rules. Reading them is following the standard.
+- A marker states the author's intent where the schema's own keywords do not, and keeps that intent readable in any viewer that shows only the description; the editor honors both the marker and the keywords, the marker deciding over the `required` array.
+- Schema text is shown as the schema wrote it, never stripped, trimmed, reworded, rejoined or merged onto one line; a description keeps its marker.
+- Style is the only thing the editor applies to schema text: its color, its place in the panel, and escaping for display, so each character shows as written.
+- Where the editor would add what the schema already states, such as its requiredness marker beside a description carrying one, it drops its own copy, never the schema's.
+
+Schema text is told apart from the editor's own text:
+
+| Where | Schema text shows |
+|---|---|
+| a problem, an error or a warning | as its schema note, under the editor's message: `[schema]` in bold, then the note as written, all in the theme's `overlayHeadingForeground` |
+| documentation sharing a panel with the editor's text: the field hover, function, macro and argument hovers, their completion documentation and the shape hint at a value | in the theme's `overlayHeadingForeground`, with no label, since documentation is the schema's |
+| a panel holding the schema's text alone | uncolored, with no label |
+
+- A description's HTML is shown as text.
 - An empty range covers its whole line.
 - The gutter marks share one size.
 - An info problem is a schema the file names that cannot be loaded.
@@ -454,7 +473,7 @@ The list holds what the file's fold sees and what is visible from the cursor:
 | a key typed `<call_marker>` with no name, beside other keys of its map | the macros, whose call stands as a whole key |
 | a key typed `<call_marker>` with no name, the only key of its map, `calls_without_name_allowed` true | every function and macro |
 | a key with no `<call_marker>` typed, or at a path `calls_not_allowed_at` lists | no function |
-| a key in a map binding a call's arguments by name | the arguments not yet written, each with its signature and description; a `map` or `list` argument writes its key and an indented line, one with a `default` writes `key: <default>` with the default selected, any other `key: ` |
+| a key in a map binding a call's arguments by name | the arguments not yet written, each with its signature and description, its row `[required]` for a required argument whose description carries no marker; a `map` or `list` argument writes its key and an indented line, one with a `default` writes `key: <default>` with the default selected, any other `key: ` |
 | a value starting with `!`, a call's tag | each tag `tag_keys` declares, with the signature of the function its key calls |
 | at a `function_call` macro's callee typed `function` or `macro` | the vocabulary's entries of that kind, without the call marker, each with its signature |
 
@@ -493,7 +512,8 @@ An open key's entry is built from the map's schema, and its full text is the des
 - A placeholder key is selected on insert, and Tab moves to the value.
 - Keys `patternProperties` admits are validated, never offered.
 
-- A field's row shows its requirement marker and description, cut to the row's width, and the full text shows beside the list; a field the parent's `required` array lists is `[required]`.
+- A field's row shows its requirement and description, cut to the row's width: the description as written when it carries a marker, the editor's marker before it when it does not, `[required]` for a field the parent's `required` array lists. The description as written shows beside the list, under the editor's marker only when the description carries none.
+- Completion documentation renders HTML, so schema text shows as the table under Analysis states.
 - A deprecated field is struck through in a draft that reads `deprecated`.
 - A key in a common layer local that a merge reads completes the fields every overlay's schema states the same at every map the local lands in.
 - Word completion is off in DSL files, so the list holds only what the schema and the references offer; a user's own `editor.wordBasedSuggestions` for the language still wins.
@@ -507,7 +527,7 @@ An open key's entry is built from the map's schema, and its full text is the des
 
 Enter after a key whose map is still empty fills the map's required fields:
 
-- A field is required when its requirement marker is `[required]`, or when it has no marker and the parent's `required` array lists it; a `[~required]` field is not filled.
+- A field is required when its requiredness marker is `[required]`, or when it has no marker and the parent's `required` array lists it; a `[~required]` field is not filled.
 - A field the common layer already gives the map in the stack's fold is not filled.
 - A field the key sets, by the `validator`'s `child_values_from_parent_key`, is not filled.
 - The fields are ordered by `formatter.key_sort_orders` for the map, and in the schema's written order where it does not decide.
@@ -526,8 +546,9 @@ The shape hint is the editor's parameter hints widget, showing what the schema e
 |---|---|
 | a key in a map | a row per field not yet written and per open key, each `key: <value>` as completion writes it, under the description of the field holding the map |
 | a new list item | the item's fields, or its values as `- a \| b` |
-| a value after a key | `key: <value>`, under the field's description and each value with its own description |
+| a value after a key | `key: <value>`, under the field's description and a bullet per value, `` `value`: `` then its own description |
 
+- Its documentation renders HTML, so schema text shows as the table under Analysis states.
 - It opens after Enter writes a value line, and by the editor's parameter hints command anywhere.
 - It stays open while the cursor is on that line, and closes once the cursor leaves it.
 
@@ -565,8 +586,8 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 | Part | Shows |
 |---|---|
-| signature | the field's name and its requirement as code, and its effective forms in italics after following `$ref`, `allOf`, each `anyOf`/`oneOf` alternative and the field's own `if` branch the value selects, each named by the definition the field refers to or by its type; a definition whose own `if` branch the value selects is named by that branch's definition, and a form adding its own type or properties to a definition is named by its type |
-| description | the description kept at the field, as a schema note, rendered as markdown; the composite's description is the value shape and is not shown |
+| signature | the field's name and, when its description carries no marker, its requirement as code, and its effective forms in italics after following `$ref`, `allOf`, each `anyOf`/`oneOf` alternative and the field's own `if` branch the value selects, each named by the definition the field refers to or by its type; a definition whose own `if` branch the value selects is named by that branch's definition, and a form adding its own type or properties to a definition is named by its type |
+| description | the description kept at the field, as written, rendered as markdown, shown as the table under Analysis states; the composite's description is the value shape and is not shown |
 | accepts | one line per form, with its constraints, when the field has more than one form |
 | tags | one line per constraint, when it has one form: values, default, pattern, bounds, lengths, items, dependencies, deprecated |
 | conditions | each `if`/`then`/`else` on the object, as when and otherwise; and on a field, what its parent's dependencies require when it is set, and its parent's conditions that name it, cut to what they say about the field |
@@ -581,12 +602,13 @@ A schema for this kind of value is built this way. This extension reads the sche
 - A section's heading is its overlays' names in bold, in the theme's `overlayHeadingForeground`.
 - A description's HTML is shown as text, so a tag written in prose reads as written.
 
-### Requirement markers
+### Requiredness markers
 
-Specified by the YAML DSL standard's [package design](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/package-design.md), under Requirement markers.
+Specified by the YAML DSL standard's [package design](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/package-design.md), under Requiredness markers.
 
-- Every schema check the extension runs reads requiredness this way.
-- A fragment requires no key, so its hover shows each field's marker struck.
+- Every schema check the extension runs reads requiredness this way: validation, completion, required-field filling and hover.
+- A description keeps its marker, and the editor shows no marker of its own beside it, as the faithfulness rules under Analysis state.
+- A fragment requires no key, so its hover shows the marker the editor adds struck.
 
 ### Finding the schema
 
@@ -674,6 +696,7 @@ Each document is validated against its schema:
 - A missing required field is marked on its map's key, and an unknown field on its own key.
 - A dependency a key does not meet is marked on that key, its message naming what the key needs.
 - A fold holding a file with a YAML error is not validated.
+- A schema that cannot be compiled is one error at the document: `the schema cannot be compiled`, then the compiler's text as written in its own `text` code block.
 - Validation reads the fold, so an opted-out key is not validated.
 - A key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode`, supplies that field, so the field is not reported missing.
 - A value an expression computes, a call without a name, a reference or a placeholder, is not checked against its field's type, as the standard states.
@@ -918,14 +941,15 @@ A potential move is information: its gutter mark is the info mark, its hint star
 
 A block the walk finds passes two schema checks before it is offered:
 
-1. Every overlay, holding the block or not, reads the node at the block's path in its own schema, an overlay holding no documents in the schema found from its place, and those nodes must be the same. Nodes of one schema are the same when they are one node. Nodes of different schemas are compared by a hash of each with its references resolved, its annotations (`description`, `title`, `examples`, `$comment`) set aside and its requirement marker kept, worked out when first compared and cached per schema node.
-2. Each opt-out passes the node at its own path in the schema of the overlay that takes it: `{}`, `[]` or the default, with requiredness read from the requirement markers. A node's `if` is read against the opt-out, and only the branch it selects is checked.
+1. Every overlay, holding the block or not, reads the node at the block's path in its own schema, an overlay holding no documents in the schema found from its place, and those nodes must be the same. Nodes of one schema are the same when they are one node. Nodes of different schemas are compared by a hash of each with its references resolved, its annotations (`description`, `title`, `examples`, `$comment`) set aside and its requiredness marker kept, worked out when first compared and cached per schema node.
+2. Each opt-out passes the node at its own path in the schema of the overlay that takes it: `{}`, `[]` or the default, with requiredness read from the requiredness markers. A node's `if` is read against the opt-out, and only the branch it selects is checked.
 
 A block that fails either check is a potential move with no link:
 
 - Its hint names the check that failed.
 - Its hover lists the overlays and the schema's own messages, so the user decides the fix.
-- A failed `anyOf` or `oneOf` is listed as its alternatives, each with its own failures, and a failed `not` matches a form that is not allowed, the description of the schema it sits in its schema note, a `[schema]` line under it, so the user reads the schema's intent without opening it.
+- A failed `anyOf` or `oneOf` is listed as its alternatives, each with its own failures, an alternative failing in turn a nested list under `one of:`, and a failed `not` matches a form that is not allowed, the description of the schema it sits in its schema note, a `[schema]` line under it, so the user reads the schema's intent without opening it.
+- Each failure and each schema note stands on its own line; a schema that cannot be compiled is worded as its validation error is.
 - Once the schemas agree, or the overlays hold the block, the suggestions worked out next offer the move.
 
 A field directly under the node marked `[~required]` is one the `{}` opt-out leaves out, and the extension does not read the condition. A block whose opt-out leaves one out is a potential move that keeps its link:
@@ -1080,7 +1104,9 @@ Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus
 
 Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/spec.md), under Functions.
 
-- Hover on a function shows its signature, colored by the extension's own signature language, `yaml-dsl-signature`, with the return type, then its description, each argument's description and the return's description, or its type where it has none, read as markdown. A function with no `return` returns `void`.
+- Hover on a function shows its signature, colored by the extension's own signature language, `yaml-dsl-signature`, with the argument and return types, then its description, `*Arguments:*` and a bullet per described argument, `` `name`: `` then its description, and `*Returns:*` then the return's description, or its type where it has none. Each description is read as markdown, as written, markers included, and shown as the table under Analysis states. A function with no `return` returns `void`.
+- A function's completion documentation is its hover.
+- The `terraform` source's descriptions are schema text too, shown the same way.
 - The language server runs `terraform metadata functions -json` for the `terraform` source.
 
 ## The function table
@@ -1102,7 +1128,7 @@ Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus
 
 ### Hover
 
-Hover on a macro shows its signature after `macro`, with no return type, then its description and each argument's description, and last what it expands to: its kind's expansion, worded with the entry's argument names.
+Hover on a macro shows its signature after `macro`, with no return type, then its description and its arguments, as a function's hover does, and last what it expands to: its kind's expansion, worded with the entry's argument names.
 
 ```
 macro ForEach(identifier: text, collection: list, fragment: map)
@@ -1110,6 +1136,7 @@ macro ForEach(identifier: text, collection: list, fragment: map)
 
 > Repeats a fragment for each item of a collection.
 >
+> *Arguments:*
 > - `identifier`: The identifier replaced by each item.
 > - `collection`: The collection to iterate over.
 > - `fragment`: The output key and value repeated for each item.
@@ -1118,7 +1145,7 @@ macro ForEach(identifier: text, collection: list, fragment: map)
 
 An argument with a `default` shows it after its type: `names?: list = ["it"]`.
 
-Hover on an argument's key, in a map that binds a call's arguments by name, shows the argument's signature, `names?: list = ["it"]`, then its description.
+Hover on an argument's key, in a map that binds a call's arguments by name, shows the argument's signature, `names?: list = ["it"]`, then its description as written; its completion documentation is the same.
 
 ### Phases
 
@@ -1181,7 +1208,7 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 | `warningForeground` | a warning's underline, strike-through and gutter mark; the name of a file holding one and its folders |
 | `infoForeground` | an info problem's underline and gutter mark, a potential move's border; the name of a file holding one and its folders |
 | `suggestionForeground` | a suggestion's gutter mark, border and badge; the name of a file holding one and its folders |
-| `overlayHeadingForeground` | the heading naming a common layer hover section's overlays; a schema note |
+| `overlayHeadingForeground` | the heading naming a common layer hover section's overlays; schema text beside the editor's own |
 | `validationErrorsHeadingForeground` | the heading of a key's validation errors |
 | `overlayDiff.difference<n>` | the background of the overlay diff's n-th difference color |
 | `declaration.keyForeground` | a key in the declaration a reference hover shows |

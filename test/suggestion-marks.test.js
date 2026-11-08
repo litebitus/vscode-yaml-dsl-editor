@@ -307,9 +307,11 @@ test('a potential move\'s hover lists the overlays and the schema\'s messages, w
     '- uat',
     '  - `queue.events`: must be object',
     '  - `queue.events` matches none of these alternatives:',
-    "    1. must have required property 'size'\\",
-    "       must have required property 'kind'",
-    '    2. one of: (1) a mock call form (2) must be string',
+    "    - must have required property 'size'\\",
+    "      must have required property 'kind'",
+    '    - one of:',
+    '      - a mock call form',
+    '      - must be string',
   ].join('\n'));
   assert.doesNotMatch(hoverMarkdownText(schemasDiffer) + hoverMarkdownText(optOutFails), /command:/);
 });
@@ -334,9 +336,55 @@ test('an opt-out failure\'s schema note is its own [schema] line under the failu
     '  - `queue.events`: matches a form that is not allowed\\',
     '    [schema] Mock: no `color` here.',
     '  - `queue.events` matches none of these alternatives:',
-    '    1. matches a form that is not allowed\\',
-    '       [schema] a mock call form',
-    '    2. must be string',
+    '    - matches a form that is not allowed\\',
+    '      [schema] a mock call form',
+    '    - must be string',
+  ].join('\n'));
+});
+
+test('a nested alternative\'s schema notes and a multi-line failure each stand on their own lines', () => {
+  const notedFailure = (text) => ({ ...messageFailure('matches a form that is not allowed'), schemaNote: text });
+  const compileFailure = messageFailure('the schema cannot be compiled\n\n```text\nInvalid mock_pattern_\n```');
+  const nestedOptOut = {
+    ...optOutFails,
+    optOutFailures: [{
+      overlay: 'uat',
+      valueText: '{}',
+      failures: [
+        compileFailure,
+        {
+          kind: 'alternatives',
+          text: null,
+          alternatives: [
+            [{
+              kind: 'alternatives',
+              text: null,
+              alternatives: [[notedFailure('[optional] A <mock> form.')], [notedFailure('Another mock form.')]],
+            }, messageFailure('must be string')],
+            [messageFailure('must be object')],
+          ],
+        },
+      ],
+    }],
+  };
+  assert.equal(hoverMarkdownText(nestedOptOut), [
+    '`queue.events` is common to 3 of 4 overlays, but the `{}` opt-out would fail the schema in:',
+    '',
+    '- uat',
+    '  - `queue.events`: the schema cannot be compiled',
+    '',
+    '    ```text',
+    '    Invalid mock_pattern_',
+    '    ```',
+    '  - `queue.events` matches none of these alternatives:',
+    '    - one of:',
+    '      - matches a form that is not allowed\\',
+    '        [schema] [optional] A &lt;mock> form.',
+    '      - matches a form that is not allowed\\',
+    '        [schema] Another mock form.',
+    '',
+    '      must be string',
+    '    - must be object',
   ].join('\n'));
 });
 

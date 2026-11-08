@@ -6,7 +6,7 @@ const {
   shownDocument,
   positionInText,
   hoverTextBecomes,
-  schemaNoteOf,
+  schemaTextOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -41,7 +41,7 @@ suite('tag keys', () => {
     await hoverTextBecomes(
       doc,
       positionInText(doc, '!Ref MockBucket', 1),
-      `\`Ref\`: *string*    \`[optional]\`\n\n${schemaNoteOf('The logical ID a reference reads.')}`,
+      `\`Ref\`: *string*    \`[optional]\`\n\n${schemaTextOf('The logical ID a reference reads.')}`,
     );
   });
 });

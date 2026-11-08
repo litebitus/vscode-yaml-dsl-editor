@@ -33,6 +33,10 @@ const functionConfig = {
   markerFunction,
 };
 
+function schemaTextOf(text, theme = 'dark') {
+  return `<span style="color:var(--vscode-yamlDslEditor-${theme}-overlayHeadingForeground);">${text}</span>`;
+}
+
 function mockArgument(name, type, required, repeated) {
   return { name, type, required, repeated, description: `The mock ${name}.` };
 }
@@ -542,10 +546,15 @@ test('a macro is a table entry with a macro object, taking no return, its argume
 test('a macro is documented by its signature after macro, its arguments and what it expands to', () => {
   const signature = 'macro ForEach(identifier: text, collection: list, fragment: map)';
   assert.equal(signatureText('ForEach', loopMacro), signature);
-  assert.equal(functionDocumentationOf('ForEach', loopMacro), [
+  assert.equal(functionDocumentationOf('ForEach', loopMacro, 'dark'), [
     `\`\`\`yaml-dsl-signature\n${signature}\n\`\`\``,
-    'Mock ForEach function.',
-    '- `identifier`: The mock identifier.\n- `collection`: The mock collection.\n- `fragment`: The mock fragment.',
+    schemaTextOf('Mock ForEach function.'),
+    [
+      '*Arguments:*',
+      `- \`identifier\`: ${schemaTextOf('The mock identifier.')}`,
+      `- \`collection\`: ${schemaTextOf('The mock collection.')}`,
+      `- \`fragment\`: ${schemaTextOf('The mock fragment.')}`,
+    ].join('\n'),
     '*Expands to:* `fragment` once per item of `collection`, `identifier` bound to the item.',
   ].join('\n\n'));
   const rolesOf = (kind, names) => ({
@@ -784,22 +793,51 @@ test('a signature names each argument, its type, whether it is optional or repea
 });
 
 test('a function is documented by its signature, its description, each described argument and its return', () => {
-  assert.equal(functionDocumentationOf('format', table.format), [
+  assert.equal(functionDocumentationOf('format', table.format, 'dark'), [
     '```yaml-dsl-signature\nformat(layout: text, ...operands?: any): text\n```',
-    'Mock format function.',
-    '- `layout`: The mock layout.\n- `operands`: The mock operands.',
-    '*Returns:* The mock formatted text.',
+    schemaTextOf('Mock format function.'),
+    `*Arguments:*\n- \`layout\`: ${schemaTextOf('The mock layout.')}\n- \`operands\`: ${schemaTextOf('The mock operands.')}`,
+    `*Returns:* ${schemaTextOf('The mock formatted text.')}`,
   ].join('\n\n'));
   const undescribed = { description: null, arguments: [{ ...table.ssm.arguments[0], description: null }], return: null };
   assert.equal(
-    functionDocumentationOf('ssm', undescribed),
+    functionDocumentationOf('ssm', undescribed, 'dark'),
     '```yaml-dsl-signature\nssm(parameter: text): void\n```\n\n*Returns:* `void`',
   );
   const typedOnly = { ...undescribed, return: { type: 'text', description: null } };
   assert.equal(
-    functionDocumentationOf('ssm', typedOnly),
+    functionDocumentationOf('ssm', typedOnly, 'dark'),
     '```yaml-dsl-signature\nssm(parameter: text): text\n```\n\n*Returns:* `text`',
   );
+});
+
+test('a function\'s schema text is shown as written, its markers kept and its HTML escaped, in the theme\'s color', () => {
+  const marked = {
+    description: 'Picks one <mock> item.',
+    arguments: [
+      { ...mockArgument('items', 'list', true, false), description: '[required] The mock items to pick from.' },
+      { ...mockArgument('position', 'number', false, false), description: '[optional] The mock position.' },
+      { ...mockArgument('fallback', 'text', false, false), description: '[~required] The mock fallback.' },
+      { ...mockArgument('mode', 'text', false, false), description: null },
+    ],
+    return: { type: 'text', description: 'The picked mock item.' },
+  };
+  assert.equal(functionDocumentationOf('mock_pick', marked, 'light'), [
+    '```yaml-dsl-signature\nmock_pick(items: list, position?: number, fallback?: text, mode?: text): text\n```',
+    schemaTextOf('Picks one &lt;mock> item.', 'light'),
+    [
+      '*Arguments:*',
+      `- \`items\`: ${schemaTextOf('[required] The mock items to pick from.', 'light')}`,
+      `- \`position\`: ${schemaTextOf('[optional] The mock position.', 'light')}`,
+      `- \`fallback\`: ${schemaTextOf('[~required] The mock fallback.', 'light')}`,
+    ].join('\n'),
+    `*Returns:* ${schemaTextOf('The picked mock item.', 'light')}`,
+  ].join('\n\n'));
+  assert.equal(
+    argumentDocumentationOf(marked.arguments[2], 'dark'),
+    `\`\`\`yaml-dsl-signature\nfallback?: text\n\`\`\`\n\n${schemaTextOf('[~required] The mock fallback.')}`,
+  );
+  assert.equal(argumentDocumentationOf(marked.arguments[3], 'dark'), '```yaml-dsl-signature\nmode?: text\n```');
 });
 
 const namedLoopMacro = {
@@ -817,8 +855,8 @@ test('an optional argument may state a default, shown in its signature and its d
   assert.equal(signatureText('loop', entry), 'macro loop(in: any, body: any, for?: list = ["it"])');
   assert.equal(argumentSignatureText(entry.arguments[2]), 'for?: list = ["it"]');
   assert.equal(
-    argumentDocumentationOf(entry.arguments[2]),
-    '```yaml-dsl-signature\nfor?: list = ["it"]\n```\n\nThe mock for.',
+    argumentDocumentationOf(entry.arguments[2], 'dark'),
+    `\`\`\`yaml-dsl-signature\nfor?: list = ["it"]\n\`\`\`\n\n${schemaTextOf('The mock for.')}`,
   );
   const [collection, ...rest] = namedLoopMacro.arguments;
   const requiredDefault = { ...namedLoopMacro, arguments: [{ ...collection, default: [] }, ...rest] };

@@ -9,6 +9,7 @@ const {
   typedAfter,
   completionItemsAt,
   definitionLineAt,
+  schemaTextOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -22,8 +23,8 @@ suite('merge macros', () => {
   test('a merge call among its map\'s keys, with or without the splat, is documented as the macro', async () => {
     const doc = (await shownDocument(mergeFixture('one', 'mock.yaml'))).document;
     const documentation = '```yaml-dsl-signature\nmacro merge(...contents: map)\n```\n\n'
-      + 'Merges the mock contents under the map holding the call.\n\n'
-      + '- `contents`: The mock contents.\n\n'
+      + `${schemaTextOf('Merges the mock contents under the map holding the call.')}\n\n`
+      + `*Arguments:*\n- \`contents\`: ${schemaTextOf('The mock contents.')}\n\n`
       + '*Expands to:* the map holding the call, merged over `contents` in order.';
     await hoverTextBecomes(doc, positionInText(doc, 'merge: local.mock_wrong'), documentation);
     await hoverTextBecomes(doc, positionInText(doc, 'merge*:'), documentation);
