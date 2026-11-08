@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 - 2026-11-07
 
 - Schemas
   - A field is deprecated by a deprecated `allOf` part.
