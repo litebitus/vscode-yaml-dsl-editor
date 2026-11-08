@@ -11,7 +11,7 @@
   - A `yaml-dsl.yml` problem shows the schema note the standard's reader gives it.
 - Validation
   - A validation error is worded as the YAML DSL standard words it, every value it writes fenced.
-  - A failed `not`, or a value no `anyOf` or `oneOf` form holds, carries the schema's description as a schema note, shown after the message under a bold `[schema]` in the theme's `overlayHeadingForeground`.
+  - A failed `not` carries the description of the schema it rules out, and a value no `anyOf` or `oneOf` form holds the description of the definition whose forms they are, as a schema note shown after the message under a bold `[schema]` in the theme's `overlayHeadingForeground`.
 
 ## 0.10.3 - 2026-11-06
 
