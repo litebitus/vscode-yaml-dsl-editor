@@ -12,13 +12,14 @@ const {
   typedAfter,
   completionItemsAt,
   paintedProblemMessagesOf,
+  schemaNoteOf,
   WAIT_DEADLINE_MILLISECONDS,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
 const DEFINITION_LANGUAGE = 'yaml-dsl-definition';
 const FIXTURE = 'config-minor-version';
-const LABEL_HOVER = '`label`: *string*    `[optional]`\n\nLabel of the minor-version DSL';
+const LABEL_HOVER = `\`label\`: *string*    \`[optional]\`\n\n${schemaNoteOf('Label of the minor-version DSL')}`;
 
 async function configProblemsPainted(configFile) {
   const config = { uri: vscode.Uri.file(configFile) };

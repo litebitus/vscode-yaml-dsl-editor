@@ -1,7 +1,12 @@
 const assert = require('assert');
 const path = require('path');
 const vscode = require('vscode');
-const { shownDocument, positionInText, hoverTextBecomes } = require('./editor-hints');
+const {
+  shownDocument,
+  positionInText,
+  hoverTextBecomes,
+  schemaNoteOf,
+} = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
 const UNCLAIMED_WATCH_MILLISECONDS = 1000;
@@ -28,7 +33,7 @@ suite('nested config', () => {
     await hoverTextBecomes(
       entry,
       positionInText(entry, 'label', 1),
-      '`label`: *string*    `[optional]`\n\nLabel of the nested DSL',
+      `\`label\`: *string*    \`[optional]\`\n\n${schemaNoteOf('Label of the nested DSL')}`,
     );
   });
 

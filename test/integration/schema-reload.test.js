@@ -1,6 +1,12 @@
 const fs = require('fs');
 const path = require('path');
-const { shownDocument, fixtureCopy, positionInText, hoverTextBecomes } = require('./editor-hints');
+const {
+  shownDocument,
+  fixtureCopy,
+  positionInText,
+  hoverTextBecomes,
+  schemaNoteOf,
+} = require('./editor-hints');
 const {
   SCHEMA_FOLDER,
   SCHEMA_FILE,
@@ -26,7 +32,7 @@ suite('schema reload', () => {
     await shownDocument(path.join(stack, 'mock.yml'));
     const overlay = (await shownDocument(path.join(stack, 'two', 'mock.yml'))).document;
     const label = positionInText(overlay, 'label: mock', 1);
-    const documentationOf = (description) => `\`label\`: *string*    \`[optional]\`\n\n${description}`;
+    const documentationOf = (description) => `\`label\`: *string*    \`[optional]\`\n\n${schemaNoteOf(description)}`;
     await hoverTextBecomes(overlay, label, documentationOf('Label of two first'));
     replaceSchemaFolder(path.join(stack, 'two'), 'Label of two second');
     await hoverTextBecomes(overlay, label, documentationOf('Label of two second'));
@@ -38,7 +44,7 @@ suite('schema reload', () => {
     fs.writeFileSync(path.join(stack, 'mock.yml'), 'mocktype:\n  shared:\n    label: mock\n');
     const common = (await shownDocument(path.join(stack, 'mock.yml'))).document;
     const sectionOf = (overlayName, description) => (
-      `${overlayHeadingOf(overlayName)}\n\n\`label\`: *string*    \`[optional]\`\n\n${description}`
+      `${overlayHeadingOf(overlayName)}\n\n\`label\`: *string*    \`[optional]\`\n\n${schemaNoteOf(description)}`
     );
     const label = positionInText(common, 'label: mock', 1);
     await hoverTextBecomes(
@@ -47,7 +53,7 @@ suite('schema reload', () => {
       [sectionOf('one', 'Label of one first'), sectionOf('two', 'Label of two first')].join('\n\n'),
     );
     replaceSchemaFolder(path.join(stack, 'two'), 'Label of one first');
-    await hoverTextBecomes(common, label, '`label`: *string*    `[optional]`\n\nLabel of one first');
+    await hoverTextBecomes(common, label, `\`label\`: *string*    \`[optional]\`\n\n${schemaNoteOf('Label of one first')}`);
   });
 
   test('a common layer field hover names the overlays whose schema has no such field', async () => {
@@ -65,7 +71,7 @@ suite('schema reload', () => {
       common,
       positionInText(common, 'label: mock', 1),
       [
-        `${overlayHeadingOf('one')}\n\n\`label\`: *string*    \`[optional]\`\n\nLabel of one`,
+        `${overlayHeadingOf('one')}\n\n\`label\`: *string*    \`[optional]\`\n\n${schemaNoteOf('Label of one')}`,
         `${overlayHeadingOf('two')}\n\nnot a field`,
       ].join('\n\n'),
     );

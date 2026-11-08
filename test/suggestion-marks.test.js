@@ -314,6 +314,32 @@ test('a potential move\'s hover lists the overlays and the schema\'s messages, w
   assert.doesNotMatch(hoverMarkdownText(schemasDiffer) + hoverMarkdownText(optOutFails), /command:/);
 });
 
+test('an opt-out failure\'s schema note is its own [schema] line under the failure', () => {
+  const notedFailure = (text) => ({ ...messageFailure('matches a form that is not allowed'), schemaNote: text });
+  const notedOptOut = {
+    ...optOutFails,
+    optOutFailures: [{
+      overlay: 'uat',
+      valueText: '{}',
+      failures: [
+        notedFailure('Mock: no `color` here.'),
+        { kind: 'alternatives', text: null, alternatives: [[notedFailure('a mock call form')], [messageFailure('must be string')]] },
+      ],
+    }],
+  };
+  assert.equal(hoverMarkdownText(notedOptOut), [
+    '`queue.events` is common to 3 of 4 overlays, but the `{}` opt-out would fail the schema in:',
+    '',
+    '- uat',
+    '  - `queue.events`: matches a form that is not allowed\\',
+    '    [schema] Mock: no `color` here.',
+    '  - `queue.events` matches none of these alternatives:',
+    '    1. matches a form that is not allowed\\',
+    '       [schema] a mock call form',
+    '    2. must be string',
+  ].join('\n'));
+});
+
 test('a move whose opt-out leaves out a conditionally required field warns and keeps its link', () => {
   const conditional = {
     ...moveSuggestion,

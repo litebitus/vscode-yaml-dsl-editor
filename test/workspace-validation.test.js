@@ -57,7 +57,7 @@ test('with validation in the worker, a file\'s schema problems arrive when answe
     assert.deepEqual(messagesOf(ws.problems(uri)), []);
     await ws.whenValidated();
     assert.ok(ws.takeReanalyzedUris().includes(uri));
-    assert.deepEqual(messagesOf(ws.problems(uri)), ['`name` must be string']);
+    assert.deepEqual(messagesOf(ws.problems(uri)), ['`name` must be `string`']);
   }
   assert.equal(answers, 2);
   assert.equal(fs.existsSync(compiledSchemaFileOf(storageFolder, '/repo', 'mock-kept')), true);
@@ -76,7 +76,7 @@ test('without a storage folder no compiled schema is kept', async () => {
     performance: { compiled_schema_cache: true },
   })));
   await ws.sync('file:///repo/mock.yml', '/repo/mock.yml', 'name: 1\n');
-  assert.deepEqual(messagesOf(ws.problems('file:///repo/mock.yml')), ['`name` must be string']);
+  assert.deepEqual(messagesOf(ws.problems('file:///repo/mock.yml')), ['`name` must be `string`']);
   assert.equal(requests.at(-1).compiledSchemaFile, null);
   ws.dispose();
 });
@@ -102,11 +102,11 @@ test('a DSL\'s validator states the types a quoted value is validated as', async
     }),
   ));
   await quotedWorkspace.sync('file:///repo/quoted/mock.yml', '/repo/quoted/mock.yml', quotedFileText);
-  assert.deepEqual(messagesOf(quotedWorkspace.problems('file:///repo/quoted/mock.yml')), ['`enabled` must be boolean']);
+  assert.deepEqual(messagesOf(quotedWorkspace.problems('file:///repo/quoted/mock.yml')), ['`enabled` must be `boolean`']);
   await quotedWorkspace.sync('file:///repo/native/mock.yml', '/repo/native/mock.yml', quotedFileText);
   assert.deepEqual(
     messagesOf(quotedWorkspace.problems('file:///repo/native/mock.yml')),
-    ['`count` must be integer', '`enabled` must be boolean'],
+    ['`count` must be `integer`', '`enabled` must be `boolean`'],
   );
   quotedWorkspace.dispose();
 });
@@ -137,7 +137,7 @@ test('a file whose stack leaves the cache stops being validated, and a schema th
     const filePath = `/repo/${folder}/mock.yml`;
     await ws.setActive(filePath);
     await ws.sync(`file://${filePath}`, filePath, fileTextOf(folder));
-    assert.deepEqual(messagesOf(ws.problems(`file://${filePath}`)), ['`name` must be string']);
+    assert.deepEqual(messagesOf(ws.problems(`file://${filePath}`)), ['`name` must be `string`']);
     ws.close(`file://${filePath}`);
     await ws.setActive(null);
   }

@@ -1,7 +1,13 @@
 const assert = require('assert');
 const path = require('path');
 const vscode = require('vscode');
-const { WAIT_DEADLINE_MILLISECONDS, shownDocument, positionInText, hoverTextBecomes } = require('./editor-hints');
+const {
+  WAIT_DEADLINE_MILLISECONDS,
+  shownDocument,
+  positionInText,
+  hoverTextBecomes,
+  schemaNoteOf,
+} = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
 function taggedFixture() {
@@ -35,7 +41,7 @@ suite('tag keys', () => {
     await hoverTextBecomes(
       doc,
       positionInText(doc, '!Ref MockBucket', 1),
-      '`Ref`: *string*    `[optional]`\n\nThe logical ID a reference reads.',
+      `\`Ref\`: *string*    \`[optional]\`\n\n${schemaNoteOf('The logical ID a reference reads.')}`,
     );
   });
 });

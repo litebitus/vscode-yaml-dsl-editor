@@ -5,6 +5,13 @@
 - Schemas
   - A field is deprecated by a deprecated `allOf` part.
   - A value passing a deprecated `oneOf` or `anyOf` branch is struck and warned of, and a field's documentation strikes the deprecated choice.
+  - A field's `items` or `additionalProperties` that an `allOf` part or an `if` branch restates keeps what the field states that the restatement does not.
+  - A field's hover shows its description as a schema note, and a deprecation warning names the key or value alone, the description its schema note.
+- Config
+  - A `yaml-dsl.yml` problem shows the schema note the standard's reader gives it.
+- Validation
+  - A validation error is worded as the YAML DSL standard words it, every value it writes fenced.
+  - A failed `not`, or a value no `anyOf` or `oneOf` form holds, carries the schema's description as a schema note, shown after the message under a bold `[schema]` in the theme's `overlayHeadingForeground`.
 
 ## 0.10.3 - 2026-11-06
 

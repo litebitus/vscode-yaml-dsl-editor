@@ -187,6 +187,26 @@ test('a field is deprecated by a deprecated allOf part, and its value by a depre
   assert.equal(schemaParserFor(root).deprecationAt(['alternated']), null);
 });
 
+test('a field a branch restates holds both the base\'s and the branch\'s schema for its unlisted keys and items', () => {
+  const root = {
+    $schema: DRAFT_2020_12_URI,
+    properties: {
+      mappings: { additionalProperties: { oneOf: [{ type: 'object' }, { type: 'string', deprecated: true }] } },
+      list: { items: { description: 'a mock item' } },
+    },
+    if: { required: ['gate'] },
+    then: {
+      properties: {
+        mappings: { additionalProperties: { not: { required: ['color'] } } },
+        list: { items: { required: ['name'] } },
+      },
+    },
+  };
+  const gated = schemaParserForDocument(root, { gate: true, mappings: { short: 'mock' }, list: [{}] });
+  assert.equal(gated.deprecationAt(['mappings', 'short']).ofValue, true);
+  assert.equal(gated.fieldDescription(['list', 0]), 'a mock item');
+});
+
 test('an opt-out is validated by the validator of the schema\'s draft', () => {
   const containsAtLeastNone = { contains: {}, minContains: 0 };
   const schemas = {

@@ -370,10 +370,15 @@ test('a modeline\'s fragment marks a fragment, validated at the node it names wi
   for (const [filePath, text] of [[alonePath, aloneText], [rootPath, rootText], [fullPath, fullText]]) {
     await ws.sync(`file://${filePath}`, filePath, text);
   }
-  assert.deepEqual(ws.problems(`file://${alonePath}`).map((problem) => problem.message), ['`Type` must be string']);
+  assert.deepEqual(ws.problems(`file://${alonePath}`).map((problem) => problem.message), ['`Type` must be `string`']);
   const struck = (text) => [...text].map((character) => `${character}̶`).join('');
   const typeHover = ws.hover(`file://${alonePath}`, at(aloneText, 'Type', 1)).contents.value;
-  assert.equal(typeHover, `\`Type\`: *string*    \`${struck('[required]')}\`\n\nThe resource type.`);
+  const noteColor = 'var(--vscode-yamlDslEditor-dark-overlayHeadingForeground)';
+  assert.equal(
+    typeHover,
+    `\`Type\`: *string*    \`${struck('[required]')}\`\n\n`
+      + `<span style="color:${noteColor};"><strong>[schema]</strong> The resource type.</span>`,
+  );
   const propertiesHover = ws.hover(`file://${alonePath}`, at(aloneText, 'Properties', 1)).contents.value;
   assert.match(propertiesHover, new RegExp(struck('[optional]').replace(/[[\]]/g, '\\$&')));
   const fullHover = ws.hover(`file://${fullPath}`, at(fullText, 'Properties', 1)).contents.value;

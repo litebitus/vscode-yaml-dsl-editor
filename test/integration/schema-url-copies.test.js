@@ -2,11 +2,16 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
-const { shownDocument, positionInText, hoverTextBecomes } = require('./editor-hints');
+const {
+  shownDocument,
+  positionInText,
+  hoverTextBecomes,
+  schemaNoteOf,
+} = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 const { mockSchemaServer } = require('../mock-schema-server');
 
-const SIZE_DOCUMENTATION = '`size`: *integer*    `[optional]`\n\nMock size from a URL.';
+const SIZE_DOCUMENTATION = `\`size\`: *integer*    \`[optional]\`\n\n${schemaNoteOf('Mock size from a URL.')}`;
 
 function stackFileWithModeline(folderLabel, schemaUrl) {
   const folder = path.join(vscode.workspace.workspaceFolders[1].uri.fsPath, `${folderLabel}-${vscode.version}`);

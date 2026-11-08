@@ -169,7 +169,11 @@ test('document events analyze and custom requests answer', async () => {
   documents.handlers.change({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
   await workspace.whenIdle();
   const hover = await connection.handlers.hover({ textDocument: { uri: 'file:///repo/app/mock.yml' }, position: { line: 1, character: 0 } });
-  assert.equal(hover.contents.value, '`name`    `[optional]`\n\nthe name');
+  const noteColor = 'var(--vscode-yamlDslEditor-dark-overlayHeadingForeground)';
+  assert.equal(
+    hover.contents.value,
+    `\`name\`    \`[optional]\`\n\n<span style="color:${noteColor};"><strong>[schema]</strong> the name</span>`,
+  );
   const missing = await connection.handlers.definition({ textDocument: { uri: 'file:///repo/app/mock.yml' }, position: { line: 1, character: 0 } });
   assert.equal(missing, null);
   await connection.handlers['yaml-dsl/config']({
@@ -240,13 +244,13 @@ test('the server validates in its worker, tells the editor to reread a file once
     { method: 'yaml-dsl/reanalyzed', params: { uris: [uri] } },
   ]);
   const answered = await connection.handlers['yaml-dsl/decorations']({ uri });
-  assert.deepEqual(answered.problems.map((problem) => problem.message), ['`name` must be string']);
+  assert.deepEqual(answered.problems.map((problem) => problem.message), ['`name` must be `string`']);
   assert.equal(fs.readdirSync(path.join(storageFolder, 'compiled-schemas')).length, 1);
   connection.handlers.shutdown();
   documents.handlers.change({ document: { uri, getText: () => 'name: 2\n' } });
   await workspace.whenIdle();
   const afterShutdown = await connection.handlers['yaml-dsl/decorations']({ uri });
-  assert.deepEqual(afterShutdown.problems.map((problem) => problem.message), ['`name` must be string']);
+  assert.deepEqual(afterShutdown.problems.map((problem) => problem.message), ['`name` must be `string`']);
 });
 
 test('the server watches each schema path it reads and reloads a schema that changes', async () => {

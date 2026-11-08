@@ -1,6 +1,24 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { hoverHeading, markdownWithoutHtml } = require('../lib/hover-heading');
+const {
+  hoverHeading,
+  markdownWithoutHtml,
+  schemaNoteMarkdown,
+  schemaNoteText,
+} = require('../lib/hover-heading');
+
+test('a schema note is wholly in the color it is given, led by a bold [schema], its markdown kept and its HTML escaped', () => {
+  assert.equal(
+    schemaNoteMarkdown('Mock: no `<color>` here, <b>.', 'var(--vscode-mock-color)'),
+    '<span style="color:var(--vscode-mock-color);"><strong>[schema]</strong> Mock: no `<color>` here, &lt;b>.</span>',
+  );
+  assert.equal(
+    schemaNoteMarkdown('First paragraph.\n\nSecond paragraph.', 'var(--vscode-mock-color)'),
+    '<span style="color:var(--vscode-mock-color);"><strong>[schema]</strong> First paragraph.</span>\n\n'
+      + '<span style="color:var(--vscode-mock-color);">Second paragraph.</span>',
+  );
+  assert.equal(schemaNoteText('Mock: no `color` here.'), '[schema] Mock: no `color` here.');
+});
 
 test('a heading is its text in bold, in the color it is given, its HTML escaped', () => {
   assert.equal(

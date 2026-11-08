@@ -134,7 +134,7 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.match(localHover.contents.value, /db:/);
   assert.equal(ws.definition('file://' + common, at(files[common], 'local.db')).path, common);
   const field = ws.hover('file://' + common, at(files[common], 'label'));
-  const labelDocumentation = '`label`: *string\\_or\\_ref*    `[optional]`\n\nMock label.';
+  const labelDocumentation = `\`label\`: *string\\_or\\_ref*    \`[optional]\`\n\n${schemaNoteOf('Mock label.')}`;
   assert.deepEqual(field.contents, { kind: 'markdown', value: labelDocumentation });
 
   const within = ws.hover(oneUri, at(files[one], 'local.db'));
@@ -217,7 +217,7 @@ test('a schema search path starting with {config_root} is read from the config f
   const uri = 'file:///repo/examples/mock-dsl/deep/nested/mock.yml';
   await ws.sync(uri, '/repo/examples/mock-dsl/deep/nested/mock.yml', text);
   assert.equal(ws.problems(uri).some((item) => item.message === SCHEMA_UNAVAILABLE), false);
-  assert.equal(ws.hover(uri, at(text, 'name')).contents.value, '`name`    `[optional]`\n\nthe name');
+  assert.equal(ws.hover(uri, at(text, 'name')).contents.value, `\`name\`    \`[optional]\`\n\n${schemaNoteOf('the name')}`);
 });
 
 test('a modeline that fails falls through to the published schema', async () => {
@@ -248,7 +248,7 @@ test('a modeline that fails falls through to the published schema', async () => 
   const edited = '# yaml-language-server: $schema=schema.json\nname: edited\n';
   await ws.sync('file:///repo/disk/mock.yml', '/repo/disk/mock.yml', edited);
   const field = ws.hover('file:///repo/disk/mock.yml', at(edited, 'name'));
-  assert.equal(field.contents.value, '`name`    `[optional]`\n\nthe name');
+  assert.equal(field.contents.value, `\`name\`    \`[optional]\`\n\n${schemaNoteOf('the name')}`);
   const boom = workspace({}, async () => schema, async () => { throw new Error('boom'); });
   await boom.setConfigs([{ text: config, dir: '/repo' }]);
   await boom.sync('file:///repo/boom/mock.yml', '/repo/boom/mock.yml', '# yaml-language-server: $schema=missing.json\nname: plain\n');
@@ -277,7 +277,10 @@ test('a yaml-dsl.yml problem is at the field it is about, and the folder keeps t
   ]);
   const text = 'name: kept\n';
   await ws.sync('file:///repo/mock.yml', '/repo/mock.yml', text);
-  assert.equal(ws.hover('file:///repo/mock.yml', at(text, 'name')).contents.value, '`name`    `[optional]`\n\nthe name');
+  assert.equal(
+    ws.hover('file:///repo/mock.yml', at(text, 'name')).contents.value,
+    `\`name\`    \`[optional]\`\n\n${schemaNoteOf('the name')}`,
+  );
 });
 
 test('a yaml-dsl.yml hovers and completes by the standard\'s schema at the version it states', async () => {
@@ -287,7 +290,9 @@ test('a yaml-dsl.yml hovers and completes by the standard\'s schema at the versi
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   await ws.sync(uri, '/repo/yaml-dsl.yml', config);
   const fileIncludes = ws.hover(uri, at(config, 'file_includes')).contents.value;
-  assert.match(fileIncludes, /^`file_includes`: \*globs\*    `\[required\]`\n\nGlobs of the files the DSL owns\./);
+  const fileIncludesNote = '<span style="color:var(--vscode-yamlDslEditor-dark-overlayHeadingForeground);">'
+    + '<strong>[schema]</strong> Globs of the files the DSL owns.';
+  assert.ok(fileIncludes.startsWith(`\`file_includes\`: *globs*    \`[required]\`\n\n${fileIncludesNote}`), fileIncludes);
   assert.match(ws.hover(uri, at(config, 'version')).contents.value, /\*One of:\* `"1"`, `"1\.2"`$/);
   const minor = config.replace('version: "1"', 'version: "1.0"');
   await ws.sync(uri, '/repo/yaml-dsl.yml', minor);
@@ -394,7 +399,7 @@ test('a missing modeline walks the schema search path from the file', async () =
   await ws.sync('file://' + common, common, text);
   assert.ok(ws.reads.includes('/repo/mock-app/.schema/sample.schema.json'));
   assert.ok(ws.reads.includes(found));
-  const fromSideStack = '`name`    `[optional]`\n\nfrom the side stack';
+  const fromSideStack = `\`name\`    \`[optional]\`\n\n${schemaNoteOf('from the side stack')}`;
   assert.equal(ws.hover('file://' + common, at(text, 'name')).contents.value, fromSideStack);
   const overlayPath = '/repo/mock-app/one/mock.yml';
   await ws.sync('file://' + overlayPath, overlayPath, text);
@@ -498,7 +503,7 @@ test('each overlay\'s fold is validated, each error placed in the file that wrot
   for (const filePath of [common, one, two]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   await visitStack(ws, one);
   assert.deepEqual(validationMessages(ws, one), [
-    [3, '`size` must be integer'],
+    [3, '`size` must be `integer`'],
     [4, '`name` is required'],
   ]);
   assert.deepEqual(validationMessages(ws, two), []);
@@ -574,8 +579,8 @@ test('hover on a key that sets a field of its entry documents the entry, then th
   await ws.setConfigs([{ text: configText(sampleEntry({ validator: validatorRules })), dir: '/repo' }]);
   for (const filePath of [common, one]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   const hoverOf = (needle) => ws.hover(`file://${one}`, at(files[one], needle)).contents.value;
-  const entryOf = (key) => `\`${key}\`: *object*    \`[optional]\`\n\nA mock entry.`;
-  const idDocumentation = '`id`: *string*    `[required]`\n\nMock identity.\n\n*Pattern:* `^[a-z-]+$`';
+  const entryOf = (key) => `\`${key}\`: *object*    \`[optional]\`\n\n${schemaNoteOf('A mock entry.')}`;
+  const idDocumentation = `\`id\`: *string*    \`[required]\`\n\n${schemaNoteOf('Mock identity.')}\n\n*Pattern:* \`^[a-z-]+$\``;
   assert.equal(
     hoverOf('id mock-one'),
     `${entryOf('id mock-one')}\n\n*Sets* \`id\` *to* \`mock-one\`:\n\n${idDocumentation}`,
@@ -605,7 +610,7 @@ test('hover on a call key naming a field documents that field, as a key writing 
   for (const filePath of [common, one]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   assert.equal(
     ws.hover(`file://${one}`, at(files[one], 'origins fn')).contents.value,
-    '`origins`: *array*    `[required]`\n\nMock origins.',
+    `\`origins\`: *array*    \`[required]\`\n\n${schemaNoteOf('Mock origins.')}`,
   );
 });
 
@@ -629,7 +634,7 @@ test('a schema that changes on disk revalidates every file reading it, the commo
   await ws.schemasChanged([schemaPath]);
   await visitStack(ws, one);
   assert.deepEqual(validationMessages(ws, common), []);
-  assert.deepEqual(validationMessages(ws, one), [[4, '`size` must be string']]);
+  assert.deepEqual(validationMessages(ws, one), [[4, '`size` must be `string`']]);
 });
 
 test('an overlay schema that changes drops that overlay from the common layer\'s error, the other overlay\'s schema kept', async () => {
@@ -680,8 +685,8 @@ test('a common layer field hover shows each overlay schema\'s documentation, the
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   for (const filePath of [common, one, two, three]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
-    `${overlayHeadingOf('one, three')}\n\n\`size\`: *integer*    \`[optional]\`\n\nMock size.`,
-    `${overlayHeadingOf('two')}\n\n\`size\`: *integer*    \`[required]\`\n\nMock size, now required.`,
+    `${overlayHeadingOf('one, three')}\n\n\`size\`: *integer*    \`[optional]\`\n\n${schemaNoteOf('Mock size.')}`,
+    `${overlayHeadingOf('two')}\n\n\`size\`: *integer*    \`[required]\`\n\n${schemaNoteOf('Mock size, now required.')}`,
   ].join('\n\n'));
   assert.equal(ws.hover(`file://${one}`, at(files[one], 'mocktype')).contents.value, '`mocktype`    `[optional]`');
   const twoSchemaPath = `${root}/two/.schema/sample.schema.json`;
@@ -689,7 +694,7 @@ test('a common layer field hover shows each overlay schema\'s documentation, the
   await ws.schemasChanged([twoSchemaPath]);
   assert.equal(
     ws.hover(`file://${common}`, at(files[common], 'size')).contents.value,
-    '`size`: *integer*    `[optional]`\n\nMock size.',
+    `\`size\`: *integer*    \`[optional]\`\n\n${schemaNoteOf('Mock size.')}`,
   );
 });
 
@@ -714,24 +719,29 @@ test('a common layer field hover names the overlays whose schema has no such fie
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   for (const filePath of [common, one, two, three]) await ws.sync(`file://${filePath}`, filePath, files[filePath]);
   assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
-    `${overlayHeadingOf('one')}\n\n\`size\`: *integer*    \`[optional]\`\n\nMock size.`,
+    `${overlayHeadingOf('one')}\n\n\`size\`: *integer*    \`[optional]\`\n\n${schemaNoteOf('Mock size.')}`,
     `${overlayHeadingOf('two, three')}\n\nnot a field`,
   ].join('\n\n'));
   files[twoSchemaPath] = sized;
   await ws.schemasChanged([twoSchemaPath]);
   assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
-    `${overlayHeadingOf('one, two')}\n\n\`size\`: *integer*    \`[optional]\`\n\nMock size.`,
+    `${overlayHeadingOf('one, two')}\n\n\`size\`: *integer*    \`[optional]\`\n\n${schemaNoteOf('Mock size.')}`,
     `${overlayHeadingOf('three')}\n\nnot a field`,
   ].join('\n\n'));
   ws.setTheme('light');
   assert.equal(ws.hover(`file://${common}`, at(files[common], 'size')).contents.value, [
-    `${overlayHeadingOf('one, two', 'light')}\n\n\`size\`: *integer*    \`[optional]\`\n\nMock size.`,
+    `${overlayHeadingOf('one, two', 'light')}\n\n\`size\`: *integer*    \`[optional]\`\n\n${schemaNoteOf('Mock size.', 'light')}`,
     `${overlayHeadingOf('three', 'light')}\n\nnot a field`,
   ].join('\n\n'));
 });
 
 function overlayHeadingOf(labels, theme = 'dark') {
   return `<span style="color:var(--vscode-yamlDslEditor-${theme}-overlayHeadingForeground);"><strong>${labels}</strong></span>`;
+}
+
+function schemaNoteOf(text, theme = 'dark') {
+  const color = `var(--vscode-yamlDslEditor-${theme}-overlayHeadingForeground)`;
+  return `<span style="color:${color};"><strong>[schema]</strong> ${text}</span>`;
 }
 
 test('the modeline\'s schema path links to the schema it names, a path from the file\'s folder or a URL as written', async () => {
@@ -804,7 +814,10 @@ test('a schema written after the file opened replaces the missing one, and a new
   await ws.schemasChanged([schemaPath]);
   assert.equal(unavailable(onePath), false);
   assert.equal(unavailable(commonPath), false);
-  assert.equal(ws.hover(`file://${onePath}`, at(files[onePath], 'name')).contents.value, '`name`    `[optional]`\n\nversion one');
+  assert.equal(
+    ws.hover(`file://${onePath}`, at(files[onePath], 'name')).contents.value,
+    `\`name\`    \`[optional]\`\n\n${schemaNoteOf('version one')}`,
+  );
   assert.equal(ws.cache.schemaCount(), 1);
 
   const reads = ws.reads.length;
@@ -814,7 +827,7 @@ test('a schema written after the file opened replaces the missing one, and a new
 
   files[schemaPath] = JSON.stringify({ properties: { name: { description: 'version two' } } });
   await ws.schemasChanged([schemaPath]);
-  const versionTwo = '`name`    `[optional]`\n\nversion two';
+  const versionTwo = `\`name\`    \`[optional]\`\n\n${schemaNoteOf('version two')}`;
   assert.equal(ws.hover(`file://${onePath}`, at(files[onePath], 'name')).contents.value, versionTwo);
   assert.equal(ws.hover(`file://${commonPath}`, at(files[commonPath], 'name')).contents.value, versionTwo);
   assert.equal(ws.cache.schemaCount(), 2);
@@ -1508,7 +1521,7 @@ test('a loop declares its loop variable in its body and each item\'s names where
   ]);
   const messages = validationMessages(ws, common);
   assert.deepEqual(messages.map(([line]) => line), [7, 8]);
-  assert.equal(messages[0][1], '`Size` must be integer');
+  assert.equal(messages[0][1], '`Size` must be `integer`');
   assert.match(messages[1][1], / \(for `mock-b`\)$/);
   assert.equal(
     ws.hover(`file://${common}`, { line: 7, character: 17 }).contents.value,
@@ -1905,7 +1918,8 @@ test('a name renamed everywhere is the name a later hand edit is measured from',
   assert.deepEqual(hints.map((mark) => [mark.suggestion.rename.oldName, mark.suggestion.rename.newName]), [['store', 'db']]);
 });
 
-test('a deprecated key is a warning problem, and the stack\'s report flags the files holding one', async () => {
+test('a deprecated key is a warning problem carrying its description as its schema note, '
+  + 'and the stack\'s report flags the files holding one', async () => {
   const files = {
     '/repo/warn/schema.json': JSON.stringify({
       $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -1917,8 +1931,9 @@ test('a deprecated key is a warning problem, and the stack\'s report flags the f
   await ws.setConfigs([{ text: configText(dslEntry('plain')), dir: '/repo' }]);
   await ws.sync('file:///repo/warn/mock.yml', '/repo/warn/mock.yml', files['/repo/warn/mock.yml']);
   const warnings = ws.problems('file:///repo/warn/mock.yml').filter((problem) => problem.severity === 'warning');
-  assert.deepEqual(warnings.map((problem) => problem.message), ['`old` is deprecated: use kept']);
+  assert.deepEqual(warnings.map(({ message, schemaNote }) => [message, schemaNote]), [['`old` is deprecated', 'use kept']]);
   const [deprecated] = ws.decorations('file:///repo/warn/mock.yml').deprecatedFields;
+  assert.deepEqual([deprecated.message, deprecated.schemaNote], ['`old` is deprecated', 'use kept']);
   assert.deepEqual(deprecated.struckRange, { start: { line: 1, character: 0 }, end: { line: 1, character: 3 } });
   assert.deepEqual(deprecated.fieldRange, { start: { line: 1, character: 0 }, end: { line: 1, character: 6 } });
   const report = ws.suggestionMarks('/repo/warn/mock.yml');

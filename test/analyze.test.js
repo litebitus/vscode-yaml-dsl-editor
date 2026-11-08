@@ -19,6 +19,11 @@ function rangeOf(text, needle) {
   return { start: at(index), end: at(index + needle.length) };
 }
 
+function schemaNoteOf(text, theme = 'dark') {
+  const color = `var(--vscode-yamlDslEditor-${theme}-overlayHeadingForeground)`;
+  return `<span style="color:${color};"><strong>[schema]</strong> ${text}</span>`;
+}
+
 test('paths convert to file uris and back', () => {
   assert.equal(pathToUri('/repo/a.yml'), 'file:///repo/a.yml');
   assert.equal(pathToUri('repo/a.yml'), 'file:///repo/a.yml');
@@ -37,10 +42,14 @@ test('hover and definition outside a reference or a field are empty', () => {
   const described = hoverAt(doc, { line: 0, character: 0 }, stack, {
     properties: { name: { description: 'the name' } },
   });
-  assert.equal(described.contents.value, '`name`    `[optional]`\n\nthe name');
+  assert.equal(described.contents.value, `\`name\`    \`[optional]\`\n\n${schemaNoteOf('the name')}`);
+  const lightDescribed = hoverAt(doc, { line: 0, character: 0 }, stack, {
+    properties: { name: { description: 'the <name>' } },
+  }, [], 'light');
+  assert.equal(lightDescribed.contents.value, `\`name\`    \`[optional]\`\n\n${schemaNoteOf('the &lt;name>', 'light')}`);
 });
 
-test('a deprecated field hovers its description, and its keys are listed with a warning message naming them', () => {
+test('a deprecated field hovers its description, and its keys are listed with a warning naming them, the description its note', () => {
   const text = 'mocktype:\n  old: 1\n  plain: 2\n  bare: 3\n';
   const doc = analyzeDocument(text, '/repo/a.yml', { symbols: [], references: [] });
   const stack = { symbols: [], common: '/repo/a.yml' };
@@ -52,19 +61,24 @@ test('a deprecated field hovers its description, and its keys are listed with a 
   const schemaOf = (draftUri) => ({ $schema: draftUri, properties: { mocktype: { properties: fields } } });
   const draft2020 = schemaOf('https://json-schema.org/draft/2020-12/schema');
   const hoverValue = (line, schema) => hoverAt(doc, { line, character: 2 }, stack, schema).contents.value;
-  assert.equal(hoverValue(1, draft2020), '`old`    `[optional]`\n\nuse plain\n\n*Deprecated*');
-  assert.equal(hoverValue(2, draft2020), '`plain`    `[optional]`\n\nthe plain field');
+  assert.equal(hoverValue(1, draft2020), `\`old\`    \`[optional]\`\n\n${schemaNoteOf('use plain')}\n\n*Deprecated*`);
+  assert.equal(hoverValue(2, draft2020), `\`plain\`    \`[optional]\`\n\n${schemaNoteOf('the plain field')}`);
   assert.equal(hoverValue(3, draft2020), '`bare`    `[optional]`\n\n*Deprecated*');
   assert.deepEqual(deprecatedFields(doc, draft2020), [
-    { range: rangeOf(text, 'old'), fieldRange: rangeOf(text, 'old: 1'), message: '`old` is deprecated: use plain' },
+    {
+      range: rangeOf(text, 'old'),
+      fieldRange: rangeOf(text, 'old: 1'),
+      message: '`old` is deprecated',
+      schemaNote: 'use plain',
+    },
     { range: rangeOf(text, 'bare'), fieldRange: rangeOf(text, 'bare: 3'), message: '`bare` is deprecated' },
   ]);
   const draft07 = schemaOf('http://json-schema.org/draft-07/schema#');
-  assert.equal(hoverValue(1, draft07), '`old`    `[optional]`\n\nuse plain');
+  assert.equal(hoverValue(1, draft07), `\`old\`    \`[optional]\`\n\n${schemaNoteOf('use plain')}`);
   assert.deepEqual(deprecatedFields(doc, draft07), []);
 });
 
-test('a value passing a deprecated oneOf branch is struck and named as the value, with the branch\'s description', () => {
+test('a value passing a deprecated oneOf branch is struck and named as the value, the branch\'s description its note', () => {
   const text = 'mappings:\n  short: mock\n  full:\n    text: mock\n';
   const doc = analyzeDocument(text, '/repo/a.yml', { symbols: [], references: [] });
   const schema = {
@@ -84,7 +98,8 @@ test('a value passing a deprecated oneOf branch is struck and named as the value
     {
       range: rangeOf(text, 'mock'),
       fieldRange: rangeOf(text, 'mock'),
-      message: 'the value of `short` is deprecated: write it as text',
+      message: 'the value of `short` is deprecated',
+      schemaNote: 'write it as text',
     },
   ]);
   assert.deepEqual(deprecatedFields(doc, schema), []);
@@ -237,7 +252,7 @@ test('a field hover documents it: a signature with its shape and requirement, it
     kind: 'markdown',
     value: [
       '`mode`: *string*    `[optional]`',
-      'The `mode`, *one* per line.\nSecond line.',
+      schemaNoteOf('The `mode`, *one* per line.\nSecond line.'),
       '*One of:* `"fast"`, `"slow"`  \n*Default:* `"fast"`',
     ].join('\n\n'),
   });

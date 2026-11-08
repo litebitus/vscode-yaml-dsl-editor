@@ -50,3 +50,15 @@ test('a problem shows its message, then its label and help, and a problem with n
   assert.deepEqual(spanOf(unplaced), [0, 0, 0, 0]);
   assert.deepEqual(spanOf(configProblemOf('x: 1\r\n', at(1, 1, 'mock'))), [0, 0, 0, 1]);
 });
+
+test('a problem whose notes hold a schema note carries it beside its message, placed or not', () => {
+  const schemaNotes = { label: null, rule: null, schema: 'Mock: a `version` the standard reads.', help: null };
+  const placed = { message: '`version` matches none of its allowed forms', position: { line: 1, column: 1 }, notes: schemaNotes };
+  assert.deepEqual(
+    [configProblemOf('version: mock\n', placed).message, configProblemOf('version: mock\n', placed).schemaNote],
+    ['`version` matches none of its allowed forms', 'Mock: a `version` the standard reads.'],
+  );
+  const unplaced = { message: 'mock problem', position: null, notes: schemaNotes };
+  assert.equal(configProblemOf('x: 1\n', unplaced).schemaNote, 'Mock: a `version` the standard reads.');
+  assert.equal(Object.hasOwn(configProblemOf('x: 1\n', at(1, 1, 'mock')), 'schemaNote'), false);
+});

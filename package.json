@@ -448,7 +448,7 @@
       },
       {
         "id": "yamlDslEditor.dark.overlayHeadingForeground",
-        "description": "Heading naming the overlays a section of a common layer hover is about, in the dark theme.",
+        "description": "Heading naming the overlays a section of a common layer hover is about, and a schema note, in the dark theme.",
         "defaults": {
           "dark": "#A6ABF2",
           "light": "#A6ABF2",
@@ -618,7 +618,7 @@
       },
       {
         "id": "yamlDslEditor.light.overlayHeadingForeground",
-        "description": "Heading naming the overlays a section of a common layer hover is about, in the light theme.",
+        "description": "Heading naming the overlays a section of a common layer hover is about, and a schema note, in the light theme.",
         "defaults": {
           "dark": "#6C71C4",
           "light": "#6C71C4",
@@ -765,6 +765,6 @@
     "vscode-languageserver": "9.0.1",
     "vscode-languageserver-textdocument": "1.0.15",
     "yaml": "2.9.1",
-    "yaml-dsl-spec": "0.1.4"
+    "yaml-dsl-spec": "0.1.5-snapshot.20261108020000"
   }
 }

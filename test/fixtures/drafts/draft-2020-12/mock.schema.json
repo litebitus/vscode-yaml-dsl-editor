@@ -2,6 +2,26 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "mocktype": {
+      "if": {
+        "required": [
+          "old"
+        ]
+      },
+      "then": {
+        "properties": {
+          "mappings": {
+            "additionalProperties": {
+              "not": {
+                "description": "Mock: no `color` here.",
+                "type": "object",
+                "required": [
+                  "color"
+                ]
+              }
+            }
+          }
+        }
+      },
       "dependentSchemas": {
         "queue": {
           "anyOf": [

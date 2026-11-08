@@ -117,6 +117,11 @@ function headingOf(text) {
   return `<span style="color:${color};"><strong>${joined}</strong></span>`;
 }
 
+function schemaNoteOf(text) {
+  const color = 'var(--vscode-yamlDslEditor-dark-overlayHeadingForeground)';
+  return `<span style="color:${color};"><strong>[schema]</strong> ${text}</span>`;
+}
+
 async function mergingWorkspace(entry = mergingEntry, terraformFunctions = async () => null) {
   const ws = createWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
@@ -149,9 +154,10 @@ test('a key in a local the common layer merges is documented by every schema it 
   const ws = await mergingWorkspace();
   const hover = ws.hover(`file://${common}`, positionAt(files[common], 'size', 1));
   assert.equal(hover.contents.value, [
-    `${headingOf('one:mocktype.{first,second}')}\n\n\`size\`: *integer*    \`[required]\`\n\nMock size.`,
-    `${headingOf('one:topictype.alerts')}\n\n\`size\`: *string*    \`[optional]\`\n\nMock topic size.`,
-    `${headingOf('two:mocktype.{first,second}')}\n\n\`size\`: *integer*    \`[required]\`\n\nMock size, in two.`,
+    `${headingOf('one:mocktype.{first,second}')}\n\n\`size\`: *integer*    \`[required]\`\n\n${schemaNoteOf('Mock size.')}`,
+    `${headingOf('one:topictype.alerts')}\n\n\`size\`: *string*    \`[optional]\`\n\n${schemaNoteOf('Mock topic size.')}`,
+    `${headingOf('two:mocktype.{first,second}')}\n\n\`size\`: *integer*    \`[required]\`\n\n`
+      + `${schemaNoteOf('Mock size, in two.')}`,
   ].join('\n\n'));
   const typed = files[common].replace('    label: mock-label\n', '    label: mock-label\n    \n');
   await ws.sync(`file://${common}`, common, typed);
@@ -190,13 +196,13 @@ test('a key in a local a stack with no overlay files merges by lone calls, Terra
   await ws.vocabularyLoaded;
   await ws.whenAnalyzed(`file://${lone}`);
   const hover = ws.hover(`file://${lone}`, positionAt(loneText, 'size', 1));
-  assert.equal(hover.contents.value, '`size`: *integer*    `[required]`\n\nMock size.');
+  assert.equal(hover.contents.value, `\`size\`: *integer*    \`[required]\`\n\n${schemaNoteOf('Mock size.')}`);
 });
 
 test('a key in a local an overlay merges reads that overlay\'s one schema', async () => {
   const ws = await mergingWorkspace();
   const hover = ws.hover(`file://${two}`, positionAt(files[two], 'size', 1));
-  assert.equal(hover.contents.value, '`size`: *integer*    `[required]`\n\nMock size, in two.');
+  assert.equal(hover.contents.value, `\`size\`: *integer*    \`[required]\`\n\n${schemaNoteOf('Mock size, in two.')}`);
   const typed = files[two].replace('    size: 3\n', '    size: 3\n    \n');
   await ws.sync(`file://${two}`, two, typed);
   const offered = ws.completion(`file://${two}`, positionAt(typed, '    \nmocktype', 4)).map((item) => item.label);
@@ -212,7 +218,7 @@ test('a merge macro beside a Terraform function of its name still documents the 
   await ws.vocabularyLoaded;
   await ws.whenAnalyzed(`file://${two}`);
   const hover = ws.hover(`file://${two}`, positionAt(files[two], 'size', 1));
-  assert.equal(hover.contents.value, '`size`: *integer*    `[required]`\n\nMock size, in two.');
+  assert.equal(hover.contents.value, `\`size\`: *integer*    \`[required]\`\n\n${schemaNoteOf('Mock size, in two.')}`);
 });
 
 test('a common layer with no schema of its own checks its calls against each overlay\'s function table', async () => {

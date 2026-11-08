@@ -836,8 +836,11 @@ test('a deprecated key is struck through in yellow and its warning is the hover 
   const oldKey = rangeOf(1, 2, 5);
   const oldField = rangeOf(1, 2, 8);
   const message = '`old` is deprecated';
-  const deprecation = { range: oldKey, message, severity: 'warning', kind: 'deprecation' };
-  const deprecatedFields = [{ struckRange: oldKey, fieldRange: oldField, message }];
+  const schemaNote = 'use `kept`';
+  const notedMessage = `${message}\n\n<span style="color:var(--vscode-yamlDslEditor-dark-overlayHeadingForeground);">`
+    + '<strong>[schema]</strong> use `kept`</span>';
+  const deprecation = { range: oldKey, message, schemaNote, severity: 'warning', kind: 'deprecation' };
+  const deprecatedFields = [{ struckRange: oldKey, fieldRange: oldField, message, schemaNote }];
   const client = fakeClient({ decorations: { references: [], problems: [deprecation], deprecatedFields } });
   const doc = documentOf(text, 'deprecated.yml');
   const schemaHover = async () => ({ contents: { value: 'the field description' } });
@@ -849,8 +852,11 @@ test('a deprecated key is struck through in yellow and its warning is the hover 
   await paintUnderlines(shown, client, referenceMarks(), []);
   assert.deepEqual(lastPaint(painted, 'deprecated').ranges.map((range) => doc.getText(range)), ['old']);
   assert.deepEqual(lastPaint(painted, 'warning').ranges.map((mark) => mark.hoverMessage), [undefined]);
-  assert.equal(hoverText(await hoverAt(shown, 3)), message);
-  assert.equal(hoverText(await hoverAt(shown, 7)), message);
+  assert.equal(hoverText(await hoverAt(shown, 3)), notedMessage);
+  assert.equal(hoverText(await hoverAt(shown, 7)), notedMessage);
+  const shownHover = await hoverAt(shown, 3);
+  const shownContents = shownHover.contents.value === undefined ? shownHover.contents[0] : shownHover.contents;
+  assert.equal(shownContents.supportHtml, true);
   const hiddenPainted = [];
   const hidden = paintingVscode([recordingEditor(doc, hiddenPainted)], { 'warning.deprecation.enabled': false });
   await paintUnderlines(hidden, client, referenceMarks(), []);
@@ -1093,6 +1099,49 @@ test('the validation errors on one key share one hover, under its heading with e
   assert.ok(lightMark.hoverMessage.value.startsWith(
     '<span style="color:var(--vscode-yamlDslEditor-light-validationErrorsHeadingForeground);">',
   ));
+});
+
+test('a validation error\'s schema note is drawn in color under its bullet, and another problem\'s under its message', async () => {
+  const painted = [];
+  const doc = documentOf('mocktype:\n  colored:\n    color: red\n');
+  doc.lineCount = 4;
+  const vscode = paintingVscode([recordingEditor(doc, painted)]);
+  const client = fakeClient({
+    decorations: {
+      references: null,
+      problems: [
+        {
+          range: rangeOf(1, 2, 9),
+          message: '`colored` matches a form that is not allowed',
+          schemaNote: 'Mock: no `<color>` here.\n\nMock second paragraph.',
+          severity: 'error',
+          kind: 'validationError',
+        },
+        { range: rangeOf(1, 2, 9), message: '`colored` matches none of its allowed forms', severity: 'error', kind: 'validationError' },
+        { range: rangeOf(0, 0, 8), message: '`version` is a <mock>', schemaNote: 'Mock config note.', severity: 'error' },
+      ],
+    },
+  });
+  await paintUnderlines(vscode, client, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
+  const noteStart = '<span style="color:var(--vscode-yamlDslEditor-dark-overlayHeadingForeground);">';
+  const heading = '<span style="color:var(--vscode-yamlDslEditor-dark-validationErrorsHeadingForeground);">'
+    + '<strong>validation errors</strong></span>';
+  const [validationMark, configMark] = lastPaint(painted, 'error').ranges;
+  assert.equal(validationMark.hoverMessage.value, [
+    heading,
+    '',
+    '- `colored` matches a form that is not allowed',
+    '',
+    `  ${noteStart}<strong>[schema]</strong> Mock: no \`<color>\` here.</span>`,
+    '',
+    `  ${noteStart}Mock second paragraph.</span>`,
+    '- `colored` matches none of its allowed forms',
+  ].join('\n'));
+  assert.equal(
+    configMark.hoverMessage.value,
+    `\`version\` is a &lt;mock>\n\n${noteStart}<strong>[schema]</strong> Mock config note.</span>`,
+  );
+  assert.equal(configMark.hoverMessage.supportHtml, true);
 });
 
 test('a hover from the server renders its HTML, so a field hover\'s headings show in their color', async () => {

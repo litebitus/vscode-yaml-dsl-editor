@@ -188,21 +188,21 @@ const alternativeSchemas = {
   },
 };
 
-test('a failed anyOf lists its alternatives, a not failure reads as the description it guards', () => {
+test('a failed anyOf lists its alternatives, a not failure carries the description it guards as its schema note', () => {
   const checks = createSchemaChecks((schemaHash) => alternativeSchemas[schemaHash] || null);
   assert.deepEqual(checks.nodeCheck('mock-alternatives', ['any_form']).optOutFailures(), [{
     kind: FAILURE_KINDS.alternatives,
     text: null,
     alternatives: [
       [messageFailure("must have required property 'size'"), messageFailure("must have required property 'kind'")],
-      [messageFailure('A mock object carrying a call key.')],
+      [{ ...messageFailure('matches a form that is not allowed'), schemaNote: 'A mock object carrying a call key.' }],
     ],
   }]);
   assert.deepEqual(checks.nodeCheck('mock-alternatives', ['one_form']).optOutFailures(), [
     messageFailure('must match exactly one alternative, matches 2'),
   ]);
   assert.deepEqual(checks.nodeCheck('mock-alternatives', ['undescribed']).optOutFailures(), [
-    messageFailure('must NOT be valid'),
+    messageFailure('matches a form that is not allowed'),
   ]);
   assert.deepEqual(checks.nodeCheck('mock-alternatives', ['forbidden']).optOutFailures(), [
     messageFailure('the schema does not allow it'),
@@ -345,13 +345,122 @@ test('a document\'s validation errors are worded by field, the markers deciding 
     [['other'], '`other` is not a field of the document'],
     [['mocktype', 'primary', 'mock_field'], '`mock_field` is not a field of `primary`'],
     [['mocktype', 'primary', 'mode'], '`mode` must be one of `"fast"`, `"slow"`'],
-    [['mocktype', 'primary', 'size'], '`size` must be a literal number, or a `ref` resolving to one'],
+    [['mocktype', 'primary', 'size'], '`size` matches none of its allowed forms'],
     [['mocktype', 'primary', 'count'], '`count` matches none of its allowed forms'],
-    [['mocktype', 'primary', 'enabled'], '`enabled` must be boolean'],
-    [['mocktype', 'primary', 'tags', 1], '`tags[1]` must be string'],
-    [['mocktype', 'primary', 'ratio'], '`ratio` must be >= 1'],
+    [['mocktype', 'primary', 'enabled'], '`enabled` must be `boolean`'],
+    [['mocktype', 'primary', 'tags', 1], '`tags[1]` must be `string`'],
+    [['mocktype', 'primary', 'ratio'], '`ratio` must be >= `1`'],
   ]);
   assert.deepEqual(createSchemaChecks(() => null).documentProblems(null, {}), []);
+});
+
+function problemsOfSchema(schemaProperties, value, schemaUri = 'https://json-schema.org/draft/2020-12/schema') {
+  const schema = { $schema: schemaUri, properties: schemaProperties };
+  const checks = createSchemaChecks((schemaHash) => (schemaHash === 'mock-worded' ? schema : null));
+  return checks.documentProblems('mock-worded', value)
+    .map(({ path, message, schemaNote }) => (schemaNote ? [path, message, schemaNote] : [path, message]));
+}
+
+test('a value failing a not matches a form that is not allowed, the description of the schema it rules out its note', () => {
+  const problems = problemsOfSchema({
+    described: { not: { description: 'Mock: no `color` here.', required: ['color'] } },
+    undescribed: { not: { required: ['color'] } },
+  }, { described: { color: 'red' }, undescribed: { color: 'red' } });
+  assert.deepEqual(problems, [
+    [['described'], '`described` matches a form that is not allowed', 'Mock: no `color` here.'],
+    [['undescribed'], '`undescribed` matches a form that is not allowed'],
+  ]);
+});
+
+test('a value no form holds matches none of its allowed forms, the described definition its note as written', () => {
+  const definedSchema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    $defs: {
+      mock_forms: {
+        description: '[optional] A literal number, or a `ref` resolving to one. More words.',
+        anyOf: [{ type: 'number' }, { type: 'string', pattern: '^ref ' }],
+      },
+    },
+    properties: {
+      described: { $ref: '#/$defs/mock_forms' },
+      borrowed: { $ref: '#/properties/mock_field' },
+      mock_field: {
+        description: 'The mock field.',
+        anyOf: [{ type: 'number' }, { type: 'boolean' }],
+      },
+      undescribed: { oneOf: [{ type: 'number' }, { type: 'boolean' }] },
+    },
+  };
+  const checks = createSchemaChecks((schemaHash) => (schemaHash === 'mock-defined' ? definedSchema : null));
+  const problems = checks.documentProblems('mock-defined', { described: 'mock', borrowed: 'mock', undescribed: 'mock' })
+    .map(({ path, message, schemaNote }) => (schemaNote ? [path, message, schemaNote] : [path, message]));
+  assert.deepEqual(problems, [
+    [['described'], '`described` matches none of its allowed forms', 'A literal number, or a `ref` resolving to one. More words.'],
+    [['borrowed'], '`borrowed` matches none of its allowed forms'],
+    [['undescribed'], '`undescribed` matches none of its allowed forms'],
+  ]);
+});
+
+test('every value a validation error writes is fenced, worded from the failed keyword', () => {
+  const problems = problemsOfSchema({
+    constant: { const: 'mock' },
+    exclusive: { exclusiveMaximum: 2 },
+    multiple: { multipleOf: 5 },
+    short: { minLength: 3 },
+    long: { maxLength: 1 },
+    few: { minItems: 3 },
+    many: { maxItems: 1 },
+    sparse: { minProperties: 2 },
+    dense: { maxProperties: 0 },
+    tuple: { prefixItems: [{}, {}], items: false },
+    unevaluated: { prefixItems: [{}], unevaluatedItems: false },
+    patterned: { pattern: '^x' },
+    ticked: { pattern: '`a``' },
+    unique: { uniqueItems: true },
+    containing: { contains: { const: 1 } },
+    bounded: { contains: { const: 1 }, minContains: 1, maxContains: 2 },
+    forbidden: false,
+    typed: { type: ['string', 'number'] },
+  }, {
+    constant: 'other',
+    exclusive: 2,
+    multiple: 7,
+    short: 'ab',
+    long: 'ab',
+    few: [1],
+    many: [1, 2],
+    sparse: {},
+    dense: { mock: 1 },
+    tuple: [1, 2, 3],
+    unevaluated: [1, 2],
+    patterned: 'y',
+    ticked: 'y',
+    unique: [2, 1, 1, 2],
+    containing: [2],
+    bounded: [1, 1, 1],
+    forbidden: 1,
+    typed: true,
+  });
+  assert.deepEqual(problems.map(([, message]) => message), [
+    '`constant` must be `"mock"`',
+    '`exclusive` must be < `2`',
+    '`multiple` must be multiple of `5`',
+    '`short` must NOT have fewer than `3` characters',
+    '`long` must NOT have more than `1` characters',
+    '`few` must NOT have fewer than `3` items',
+    '`many` must NOT have more than `1` items',
+    '`sparse` must NOT have fewer than `2` properties',
+    '`dense` must NOT have more than `0` properties',
+    '`tuple` must NOT have more than `2` items',
+    '`unevaluated` must NOT have more than `1` items',
+    '`patterned` must match pattern `^x`',
+    '`ticked` must match pattern ``` `a`` ```',
+    '`unique` must NOT have duplicate items (items ## 2 and 1 are identical)',
+    '`containing` must contain at least `1` valid item(s)',
+    '`bounded` must contain at least `1` and no more than `2` valid item(s)',
+    '`forbidden` boolean schema is false',
+    '`typed` must be `string` or `number`',
+  ]);
 });
 
 test('a key failing its map\'s key schema is marked on the key, and one message repeated on a path is reported once', () => {
@@ -375,11 +484,11 @@ test('a key failing its map\'s key schema is marked on the key, and one message 
   }).map(({ path, message }) => [path, message]);
   assert.deepEqual(messages, [
     [['mocktype', 'mock-bad'], '`mock-bad` is not a valid key of `mocktype`'],
-    [['settings'], '`settings` must NOT be valid'],
+    [['settings'], '`settings` matches a form that is not allowed'],
   ]);
 });
 
-test('a value none of whose forms holds reads as the described definition its field refers to, in a schema with an $id', () => {
+test('a value none of whose forms holds is noted with the described definition its field refers to, in a schema with an $id', () => {
   const identifiedSchema = {
     $schema: 'http://json-schema.org/draft-07/schema#',
     $id: 'https://example.test/mock.schema.json',
@@ -394,8 +503,11 @@ test('a value none of whose forms holds reads as the described definition its fi
     },
   };
   const checks = createSchemaChecks(() => identifiedSchema);
-  const messages = checks.documentProblems('mock-identified', { threshold: 'mock-high' }).map(({ message }) => message);
-  assert.deepEqual(messages, ['`threshold` must be a literal number, or a `ref` resolving to one']);
+  const problems = checks.documentProblems('mock-identified', { threshold: 'mock-high' })
+    .map(({ message, schemaNote }) => [message, schemaNote]);
+  assert.deepEqual(problems, [
+    ['`threshold` matches none of its allowed forms', 'A literal number, or a `ref` resolving to one.'],
+  ]);
 });
 
 test('a dependency its key does not meet is marked on that key, worded as what the key needs', () => {
@@ -450,7 +562,9 @@ test('a required list inside not or if is a condition the markers leave as writt
   const checks = createSchemaChecks(() => conditionSchema);
   assert.deepEqual(checks.documentProblems('mock-condition', { group: { node_type: 'master' } }), []);
   const counted = checks.documentProblems('mock-condition', { group: { node_type: 'master', count: 1 } });
-  assert.deepEqual(counted.map(({ path, message }) => [path, message]), [[['group'], '`group` must NOT be valid']]);
+  assert.deepEqual(counted.map(({ path, message }) => [path, message]), [
+    [['group'], '`group` matches a form that is not allowed'],
+  ]);
 });
 
 test('a required list inside an anyOf or oneOf branch selects a form the markers leave as written', () => {

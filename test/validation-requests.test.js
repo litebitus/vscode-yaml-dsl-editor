@@ -61,9 +61,9 @@ const messagesOf = (problems) => problems.map((problem) => problem.message);
 test('in process, a document is validated when asked, its schema added once and again after it is dropped', () => {
   const validation = createInProcessValidation();
   const problems = validation.problemsOf(mockRequest({ size: 'mock', extra: 1 }));
-  assert.deepEqual(messagesOf(problems), ['`extra` is not a field of the document', '`size` must be integer']);
+  assert.deepEqual(messagesOf(problems), ['`extra` is not a field of the document', '`size` must be `integer`']);
   validation.dropSchema('mock-schema-hash');
-  assert.deepEqual(messagesOf(validation.problemsOf(mockRequest({ size: 'mock' }))), ['`size` must be integer']);
+  assert.deepEqual(messagesOf(validation.problemsOf(mockRequest({ size: 'mock' }))), ['`size` must be `integer`']);
   validation.onAnswered(() => assert.fail('an in-process validation answers when asked'));
   validation.dropSlot('/mock/mock.yml');
   validation.close();
@@ -88,6 +88,23 @@ test('in the worker, a document is pending until answered, then answered from th
   validation.close();
 });
 
+test('in the worker, a problem\'s schema note arrives beside its message', async () => {
+  const validation = createWorkerValidation();
+  const notedRequest = mockRequest({ mapping: { color: 'red' } }, {
+    schemaHash: 'mock-noted-schema-hash',
+    schemaRoot: {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      properties: { mapping: { not: { description: 'Mock: no `color` here.', required: ['color'] } } },
+    },
+  });
+  validation.problemsOf(notedRequest);
+  await validation.whenSettled();
+  assert.deepEqual(validation.problemsOf(notedRequest).map(({ message, schemaNote }) => [message, schemaNote]), [
+    ['`mapping` matches a form that is not allowed', 'Mock: no `color` here.'],
+  ]);
+  validation.close();
+});
+
 test('the types a quoted value is read as reach the worker, and other types are another request', async () => {
   const validation = createWorkerValidation();
   const quoted = { size: '12' };
@@ -101,7 +118,7 @@ test('the types a quoted value is read as reach the worker, and other types are 
   await validation.whenSettled();
   assert.deepEqual(
     messagesOf(validation.problemsOf(mockRequest(quoted, { allowQuotedValues: ['boolean'] }))),
-    ['`size` must be integer'],
+    ['`size` must be `integer`'],
   );
   validation.close();
 });

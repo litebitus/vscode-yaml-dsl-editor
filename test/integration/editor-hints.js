@@ -61,6 +61,11 @@ function applyArgumentIn(tooltip) {
   return JSON.parse(decodeURIComponent(encoded));
 }
 
+function schemaNoteOf(text, theme = 'dark') {
+  const color = `var(--vscode-yamlDslEditor-${theme}-overlayHeadingForeground)`;
+  return `<span style="color:${color};"><strong>[schema]</strong> ${text}</span>`;
+}
+
 function positionInText(doc, needle, offset = 0) {
   return doc.positionAt(doc.getText().indexOf(needle) + offset);
 }
@@ -205,4 +210,5 @@ module.exports = {
   fileEventSeen,
   paintedProblemMessagesOf,
   paintedProblemMessagesBecome,
+  schemaNoteOf,
 };

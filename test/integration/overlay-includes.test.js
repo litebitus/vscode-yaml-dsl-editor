@@ -1,7 +1,13 @@
 const assert = require('assert');
 const path = require('path');
 const vscode = require('vscode');
-const { WAIT_DEADLINE_MILLISECONDS, shownDocument, positionInText, hoverTextBecomes } = require('./editor-hints');
+const {
+  WAIT_DEADLINE_MILLISECONDS,
+  shownDocument,
+  positionInText,
+  hoverTextBecomes,
+  schemaNoteOf,
+} = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
 function includesFixture(...parts) {
@@ -60,7 +66,7 @@ suite('overlay includes', () => {
     await hoverTextBecomes(
       fragment,
       positionInText(fragment, 'Type', 1),
-      `\`Type\`: *string*    \`${struckRequired}\`\n\nThe resource type.`,
+      `\`Type\`: *string*    \`${struckRequired}\`\n\n${schemaNoteOf('The resource type.')}`,
     );
   });
 
@@ -70,7 +76,7 @@ suite('overlay includes', () => {
     await hoverTextBecomes(
       snippet,
       positionInText(snippet, 'Type', 1),
-      '`Type`: *string*    `[required]`\n\nThe resource type.',
+      `\`Type\`: *string*    \`[required]\`\n\n${schemaNoteOf('The resource type.')}`,
     );
   });
 });

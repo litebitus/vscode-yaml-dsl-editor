@@ -43,12 +43,12 @@ A problem has a severity, drawn in the color the DevOps tools print it in:
 | warning | its own mark, such as a struck-through key | a triangle | the warning yellow |
 | info | a wavy underline, the text unchanged | the info mark | the info blue |
 
-- A problem shows its message on hover.
+- A problem shows its message on hover, then its schema note, if it has one: `[schema]` in bold, then the note as written, all in the theme's `overlayHeadingForeground`.
 - An empty range covers its whole line.
 - The gutter marks share one size.
 - An info problem is a schema the file names that cannot be loaded.
 - A validation error takes the severity its setting names.
-- The validation errors on one key share one hover: a `validation errors` heading in bold, in the theme's `validationErrorsHeadingForeground`, and each error a bullet.
+- The validation errors on one key share one hover: a `validation errors` heading in bold, in the theme's `validationErrorsHeadingForeground`, and each error a bullet, its schema note under it.
 - Every warning but a deprecation is underlined in yellow.
 
 Keys:
@@ -560,13 +560,13 @@ A schema for this kind of value is built this way. This extension reads the sche
 
 - Hover walks the YAML path through `properties`, then `patternProperties`, then what the schema's draft reads for a key `properties` does not list.
 - On an object that carries both a `$ref` and a `description`, it keeps that `description`, then follows the `$ref` only to keep walking.
-- A field an `allOf` part or an `if` branch restates keeps what the object states for it that the restatement does not, such as its `description` and its `items`; where both state a keyword, the restatement's applies.
+- A field an `allOf` part or an `if` branch restates keeps what the object states for it that the restatement does not, such as its `description` and its `items`; where both state a keyword, the restatement's applies, except a schema for its items or unlisted keys, which is restated the same way.
 - The tooltip documents the field, as a javadoc documents a method:
 
 | Part | Shows |
 |---|---|
 | signature | the field's name and its requirement as code, and its effective forms in italics after following `$ref`, `allOf`, each `anyOf`/`oneOf` alternative and the field's own `if` branch the value selects, each named by the definition the field refers to or by its type; a definition whose own `if` branch the value selects is named by that branch's definition, and a form adding its own type or properties to a definition is named by its type |
-| description | the description kept at the field, rendered as markdown; the composite's description is the value shape and is not shown |
+| description | the description kept at the field, as a schema note, rendered as markdown; the composite's description is the value shape and is not shown |
 | accepts | one line per form, with its constraints, when the field has more than one form |
 | tags | one line per constraint, when it has one form: values, default, pattern, bounds, lengths, items, dependencies, deprecated |
 | conditions | each `if`/`then`/`else` on the object, as when and otherwise; and on a field, what its parent's dependencies require when it is set, and its parent's conditions that name it, cut to what they say about the field |
@@ -697,10 +697,10 @@ The server validates documents in a worker thread, so a schema that takes long t
 
 In a draft that reads `deprecated`, a deprecated key or value is a warning:
 
-| Deprecated | When `deprecated: true` stands on | Struck through, and the warning's hover | Warning |
-|---|---|---|---|
-| key | its field's node, a node its references reach, or an `allOf` part | the key; the hover of the key and its value | `` `<key>` is deprecated: <description> ``, the field's description, or the deprecated schema's where the field states none |
-| value | a `oneOf` or `anyOf` branch the value passes | the value | `` the value of `<key>` is deprecated: <description> ``, the branch's description |
+| Deprecated | When `deprecated: true` stands on | Struck through, and the warning's hover | Warning | Schema note |
+|---|---|---|---|---|
+| key | its field's node, a node its references reach, or an `allOf` part | the key; the hover of the key and its value | `` `<key>` is deprecated `` | the field's description, or the deprecated schema's where the field states none |
+| value | a `oneOf` or `anyOf` branch the value passes | the value | `` the value of `<key>` is deprecated `` | the branch's description |
 
 - the struck key or value is in the warning yellow;
 - a field's documentation strikes the name of each deprecated `oneOf` or `anyOf` choice;
@@ -925,7 +925,7 @@ A block that fails either check is a potential move with no link:
 
 - Its hint names the check that failed.
 - Its hover lists the overlays and the schema's own messages, so the user decides the fix.
-- A failed `anyOf` or `oneOf` is listed as its alternatives, each with its own failures, and a failed `not` reads as the description of the schema it sits in, so the user reads the schema's intent without opening it.
+- A failed `anyOf` or `oneOf` is listed as its alternatives, each with its own failures, and a failed `not` matches a form that is not allowed, the description of the schema it sits in its schema note, a `[schema]` line under it, so the user reads the schema's intent without opening it.
 - Once the schemas agree, or the overlays hold the block, the suggestions worked out next offer the move.
 
 A field directly under the node marked `[~required]` is one the `{}` opt-out leaves out, and the extension does not read the condition. A block whose opt-out leaves one out is a potential move that keeps its link:
@@ -1181,7 +1181,7 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 | `warningForeground` | a warning's underline, strike-through and gutter mark; the name of a file holding one and its folders |
 | `infoForeground` | an info problem's underline and gutter mark, a potential move's border; the name of a file holding one and its folders |
 | `suggestionForeground` | a suggestion's gutter mark, border and badge; the name of a file holding one and its folders |
-| `overlayHeadingForeground` | the heading naming a common layer hover section's overlays |
+| `overlayHeadingForeground` | the heading naming a common layer hover section's overlays; a schema note |
 | `validationErrorsHeadingForeground` | the heading of a key's validation errors |
 | `overlayDiff.difference<n>` | the background of the overlay diff's n-th difference color |
 | `declaration.keyForeground` | a key in the declaration a reference hover shows |

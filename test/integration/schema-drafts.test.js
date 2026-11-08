@@ -6,11 +6,13 @@ const {
   positionInText,
   hoverTextBecomes,
   paintedProblemMessagesOf,
+  extensionClient,
+  schemaNoteOf,
   WAIT_DEADLINE_MILLISECONDS,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
-const DEPRECATED_OLD_WARNING = '`old` is deprecated: use pair';
+const DEPRECATED_OLD_WARNING = `\`old\` is deprecated\n\n${schemaNoteOf('use pair')}`;
 
 function positionOf(doc, needle) {
   return doc.positionAt(doc.getText().indexOf(needle));
@@ -40,10 +42,10 @@ async function draftDocument(draftFolder) {
   return (await shownDocument(path.join(fixtures, 'drafts', draftFolder, 'mock.yml'))).document;
 }
 
-const FIRST_OF_PAIR = '`pair[0]`\n\nthe first of the pair';
-const LATER_ITEM = '`pair[1]`\n\nevery later item';
-const NAMED_LABEL = '`label`    `[optional]`\n\nthe named label';
-const OLD_USE_PAIR = '`old`    `[optional]`\n\nuse pair';
+const FIRST_OF_PAIR = `\`pair[0]\`\n\n${schemaNoteOf('the first of the pair')}`;
+const LATER_ITEM = `\`pair[1]\`\n\n${schemaNoteOf('every later item')}`;
+const NAMED_LABEL = `\`label\`    \`[optional]\`\n\n${schemaNoteOf('the named label')}`;
+const OLD_USE_PAIR = `\`old\`    \`[optional]\`\n\n${schemaNoteOf('use pair')}`;
 
 suite('JSON Schema drafts', () => {
   isolateEachTest();
@@ -73,9 +75,10 @@ suite('JSON Schema drafts', () => {
     await hoverTextBecomes(doc, positionInText(doc, 'old: ', 'old: '.length), DEPRECATED_OLD_WARNING);
   });
 
-  test('draft 2020-12 warns on a value passing a deprecated oneOf branch, not on its key or a value passing the other', async () => {
+  test('draft 2020-12 warns on a value passing a deprecated oneOf branch, not on its key or a value passing the other, '
+    + 'under a then branch restating the field', async () => {
     const doc = await draftDocument('draft-2020-12');
-    const valueWarning = 'the value of `short` is deprecated: write it as text';
+    const valueWarning = `the value of \`short\` is deprecated\n\n${schemaNoteOf('write it as text')}`;
     const struckString = 's̶t̶r̶i̶n̶g̶';
     const fieldDocumentation = (key) => `\`${key}\`: *object | ${struckString}*    \`[optional]\`\n\n`
       + `*Accepts:*\n- \`object\`\n- \`${struckString}\``;
@@ -84,11 +87,26 @@ suite('JSON Schema drafts', () => {
     await hoverTextBecomes(doc, positionInText(doc, 'full'), fieldDocumentation('full'));
   });
 
+  test('draft 2020-12 words a failed not as a form that is not allowed, '
+    + 'the description of the schema it rules out its schema note as written', async () => {
+    const doc = await draftDocument('draft-2020-12');
+    const message = '`colored` matches a form that is not allowed';
+    const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+    while (Date.now() < deadline && !(await paintedProblemMessagesOf(doc)).includes(message)) {
+      await new Promise((resolve) => { setTimeout(resolve, 50); });
+    }
+    const answer = await (await extensionClient()).sendRequest('yaml-dsl/decorations', { uri: doc.uri.toString() });
+    const painted = answer.problems.map((problem) => [problem.message, problem.schemaNote]);
+    assert.deepEqual(painted.filter(([paintedMessage]) => paintedMessage === message), [
+      [message, 'Mock: no `color` here.'],
+    ]);
+  });
+
   test('draft 2020-12 hovers a field with what setting it requires, from its holder\'s dependentSchemas', async () => {
     const doc = await draftDocument('draft-2020-12');
     assert.equal(
       await hoverTextAt(doc, 'queue'),
-      '`queue`: *string*    `[optional]`\n\nthe mock queue\n\n*When set:* `role` required, or a `node`.',
+      `\`queue\`: *string*    \`[optional]\`\n\n${schemaNoteOf('the mock queue')}\n\n*When set:* \`role\` required, or a \`node\`.`,
     );
   });
 
@@ -96,8 +114,8 @@ suite('JSON Schema drafts', () => {
     const doc = await draftDocument('draft-2020-12');
     assert.equal(
       await hoverTextAt(doc, 'id mock-entry'),
-      '`id mock-entry`    `[optional]`\n\na mock entry\n\n*Sets* `id` *to* `mock-entry`:\n\n'
-        + '`id`: *string*    `[optional]`\n\nthe entry\'s identity',
+      `\`id mock-entry\`    \`[optional]\`\n\n${schemaNoteOf('a mock entry')}\n\n*Sets* \`id\` *to* \`mock-entry\`:\n\n`
+        + `\`id\`: *string*    \`[optional]\`\n\n${schemaNoteOf('the entry\'s identity')}`,
     );
   });
 

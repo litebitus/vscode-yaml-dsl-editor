@@ -5,6 +5,7 @@ const {
   positionInText,
   hoverTextBecomes,
   paintedProblemMessagesBecome,
+  schemaNoteOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -38,7 +39,7 @@ suite('function table', () => {
   test('a list item a call without a name computes is not checked against the item type', async () => {
     const doc = (await shownDocument(functionTableFixture())).document;
     await paintedProblemMessagesBecome(doc, [
-      '`mock-list[2]` must be string',
+      '`mock-list[2]` must be `string`',
       '#/x-yaml-dsl-functions maps a function straight to its arguments, a deprecated form: '
         + 'map each function to its description, arguments and return',
     ]);
@@ -49,7 +50,7 @@ suite('function table', () => {
     await hoverTextBecomes(
       doc,
       positionInText(doc, 'value fn.ssm', 1),
-      '`value`: *string*    `[required]`\n\nThe mock value.',
+      `\`value\`: *string*    \`[required]\`\n\n${schemaNoteOf('The mock value.')}`,
     );
     await hoverTextBecomes(
       doc,

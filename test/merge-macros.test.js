@@ -193,7 +193,7 @@ test('a merge reads a local from the overlay or the common layer, validates what
     .filter((problem) => problem.kind === 'validationError')
     .map((problem) => [problem.range.start.line, problem.message]);
   assert.deepEqual(validationMessages(one), [
-    [5, '`size` must be integer'],
+    [5, '`size` must be `integer`'],
     [11, '`size` is required'],
   ]);
   assert.deepEqual(validationMessages(common), []);

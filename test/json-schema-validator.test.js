@@ -384,6 +384,43 @@ test('a compiled root is saved with references to the schema\'s own nodes, and a
   assert.equal(loading.saved.length, 0);
 });
 
+test('a failed not carries the description of the schema it rules out, from a compiled root and a loaded one', () => {
+  const schemaText = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: { mapping: { not: { description: 'Mock: no `color` here.', required: ['color'] } } },
+  });
+  const document = { mapping: { color: 'red' } };
+  const compiling = memoryCompiledRootStore();
+  const compiled = schemaValidatorFor(JSON.parse(schemaText), compiling).documentFailures(document);
+  assert.equal(compiling.saved.length, 1);
+  const loading = memoryCompiledRootStore(compiling.saved[0]);
+  const loaded = schemaValidatorFor(JSON.parse(schemaText), loading).documentFailures(document);
+  assert.equal(loading.saved.length, 0);
+  for (const failures of [compiled, loaded]) {
+    assert.deepEqual(failures.map(({ keyword, notSchemaDescription }) => [keyword, notSchemaDescription]), [
+      ['not', 'Mock: no `color` here.'],
+    ]);
+  }
+});
+
+test('a failed uniqueItems carries its later and earlier duplicate, and a failed contains stands for its items\' failures', () => {
+  const schemaText = JSON.stringify({
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: { unique: { uniqueItems: true }, containing: { contains: { const: 1 } } },
+  });
+  const document = { unique: [2, 1, 1, 2], containing: [2, 3] };
+  const compiling = memoryCompiledRootStore();
+  const compiled = schemaValidatorFor(JSON.parse(schemaText), compiling).documentFailures(document);
+  const loaded = schemaValidatorFor(JSON.parse(schemaText), memoryCompiledRootStore(compiling.saved[0]))
+    .documentFailures(document);
+  for (const failures of [compiled, loaded]) {
+    assert.deepEqual(failures.map(({ path, keyword, duplicateItems }) => [path, keyword, duplicateItems]), [
+      [['unique'], 'uniqueItems', [2, 1]],
+      [['containing'], 'contains', undefined],
+    ]);
+  }
+});
+
 test('a saved compiled root that cannot be loaded is compiled again and saved over', () => {
   for (const unreadable of ['this is not javascript (', '"use strict";module.exports = 1;']) {
     const store = memoryCompiledRootStore(unreadable);

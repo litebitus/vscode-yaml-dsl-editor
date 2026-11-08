@@ -8,6 +8,7 @@ const {
   hintLabelsBecome,
   positionInText,
   hoverTextBecomes,
+  schemaNoteOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -79,9 +80,9 @@ suite('feature settings', () => {
     const doc = (await shownDocument(path.join(fixtures, 'drafts', 'draft-2019-09', 'mock.yml'))).document;
     const key = positionInText(doc, 'old');
     const value = positionInText(doc, 'old: ', 'old: '.length);
-    const warning = '`old` is deprecated: use pair';
+    const warning = `\`old\` is deprecated\n\n${schemaNoteOf('use pair')}`;
     await hoverTextBecomes(doc, value, warning);
-    const documentation = '`old`    `[optional]`\n\nuse pair\n\n*Deprecated*';
+    const documentation = `\`old\`    \`[optional]\`\n\n${schemaNoteOf('use pair')}\n\n*Deprecated*`;
     await withSetting('warning.deprecation.enabled', false, async () => {
       await hoverTextBecomes(doc, key, documentation);
       await hoverTextBecomes(doc, value, documentation);

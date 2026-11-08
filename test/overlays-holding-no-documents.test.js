@@ -131,7 +131,7 @@ function at(text, needle) {
   return { line, character: index - text.lastIndexOf('\n', index - 1) - 1 };
 }
 
-const LABEL_INTEGER_PROBLEM = '`label` must be integer';
+const LABEL_INTEGER_PROBLEM = '`label` must be `integer`';
 const OVERLAY_3_PROBLEM = `${LABEL_INTEGER_PROBLEM} (overlay-3)`;
 
 let ws = null;
