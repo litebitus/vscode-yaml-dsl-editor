@@ -345,8 +345,8 @@ test('a document\'s validation errors are worded by field, the markers deciding 
     mock_field: 1,
   };
   assert.deepEqual(documentMessages({ mocktype: { primary }, other: 1 }), [
-    [['other'], '`other` is not a field of the document'],
-    [['mocktype', 'primary', 'mock_field'], '`mock_field` is not a field of `primary`'],
+    [['other'], '`other` is not defined in the schema'],
+    [['mocktype', 'primary', 'mock_field'], '`mock_field` is not defined in the schema'],
     [['mocktype', 'primary', 'mode'], '`mode` must be one of `"fast"`, `"slow"`'],
     [['mocktype', 'primary', 'size'], '`size` matches none of its allowed forms'],
     [['mocktype', 'primary', 'count'], '`count` matches none of its allowed forms'],

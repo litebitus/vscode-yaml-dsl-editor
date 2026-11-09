@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Validation
+  - An unknown field reads `` `name` is not defined in the schema ``.
+
 ## 0.11.0 - 2026-11-07
 
 - Schemas

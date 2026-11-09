@@ -272,7 +272,7 @@ test('a yaml-dsl.yml problem is at the field it is about, and the folder keeps t
     ],
     [
       { start: { line: 5, character: 4 }, end: { line: 5, character: 16 } },
-      '`file_exclude` is not a field of `dsls[0]`\n\n`dsls[0]` has no field `file_exclude`; did you mean `file_excludes`?',
+      '`file_exclude` is not defined in the schema\n\ndid you mean `file_excludes`?',
     ],
   ]);
   const text = 'name: kept\n';
@@ -317,7 +317,7 @@ test('a yaml-dsl.yml shows the reader\'s problems only, never its schema\'s agai
   await ws.sync('file:///repo/yaml-dsl.yml', '/repo/yaml-dsl.yml', misspelt);
   assert.deepEqual(ws.problems('file:///repo/yaml-dsl.yml').map((problem) => problem.message.split('\n')[0]), [
     '`file_excludes` is required',
-    '`file_exclude` is not a field of `dsls[0]`',
+    '`file_exclude` is not defined in the schema',
   ]);
 });
 

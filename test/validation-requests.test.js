@@ -61,7 +61,7 @@ const messagesOf = (problems) => problems.map((problem) => problem.message);
 test('in process, a document is validated when asked, its schema added once and again after it is dropped', () => {
   const validation = createInProcessValidation();
   const problems = validation.problemsOf(mockRequest({ size: 'mock', extra: 1 }));
-  assert.deepEqual(messagesOf(problems), ['`extra` is not a field of the document', '`size` must be `integer`']);
+  assert.deepEqual(messagesOf(problems), ['`extra` is not defined in the schema', '`size` must be `integer`']);
   validation.dropSchema('mock-schema-hash');
   assert.deepEqual(messagesOf(validation.problemsOf(mockRequest({ size: 'mock' }))), ['`size` must be `integer`']);
   validation.onAnswered(() => assert.fail('an in-process validation answers when asked'));

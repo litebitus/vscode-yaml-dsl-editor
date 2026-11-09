@@ -12,4 +12,4 @@ A mock DSL whose `loop` macro repeats a body once per item of a list or a map, i
 | `endpoints fn.loop` | a loop in a loop's body: `${~region}` reads the outer loop's name |
 | `${~name}` or `~region` | hover shows the loop that declares the loop variable and the items it is bound to; a value typed in a loop's body completes its loop variables |
 | `ref queue.orders` in `reports` | resolves to the key the loop's body writes, and Command-click opens it |
-| `fn.loop` under `reports` | its entries land among the queue's fields, so each is an error naming the item it holds for: `` `orders_retention` is not a field of `reports` (for `orders`) `` |
+| `fn.loop` under `reports` | its entries land among the queue's fields, so each is an error naming the item it holds for: `` `orders_retention` is not defined in the schema (for `orders`) `` |

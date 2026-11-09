@@ -765,6 +765,6 @@
     "vscode-languageserver": "9.0.1",
     "vscode-languageserver-textdocument": "1.0.15",
     "yaml": "2.9.1",
-    "yaml-dsl-spec": "0.2.1"
+    "yaml-dsl-spec": "0.2.2-snapshot.20261109232620"
   }
 }

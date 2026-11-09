@@ -349,7 +349,7 @@ test('a config is read by the YAML DSL standard, each problem a diagnostic at it
   ]);
   assert.deepEqual(placed, [
     [3, 5, '`file_excludes` is required', null],
-    [6, 5, '`file_exclude` is not a field of `dsls[0]`', 'did you mean `file_excludes`?'],
+    [6, 5, '`file_exclude` is not defined in the schema', 'did you mean `file_excludes`?'],
   ]);
   assert.equal(parsed.problems[0].position.file, '/repo/yaml-dsl.yml');
 });
