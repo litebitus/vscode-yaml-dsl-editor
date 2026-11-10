@@ -93,6 +93,24 @@ test('a field a call key of the marker function supplies is not reported missing
   ]);
 });
 
+test('a call key naming a field stands for that field alone, its problems placed on the key as written', () => {
+  const written = { mocktype: { doors: { 'value fn.jsonencode': { mock: 1 } }, gates: { 'mode fn.lower': 'X' } } };
+  const entrySchema = {
+    type: 'object',
+    maxProperties: 1,
+    additionalProperties: false,
+    properties: { value: { type: 'string' }, mode: { enum: ['fast'] } },
+    required: ['value'],
+  };
+  assert.deepEqual(sourceProblemsOf(entrySchema, written), [
+    [['mocktype', 'gates'], '`value` is required'],
+  ]);
+  const closedSchema = { type: 'object', additionalProperties: false, properties: { size: { type: 'integer' } } };
+  assert.deepEqual(sourceProblemsOf(closedSchema, { mocktype: { doors: { 'value fn.jsonencode': {} } } }), [
+    [['mocktype', 'doors', 'value fn.jsonencode'], '`value` is not defined in the schema'],
+  ]);
+});
+
 test('a value a call without a name or a reference computes is not checked against its type', () => {
   const written = {
     mocktype: {

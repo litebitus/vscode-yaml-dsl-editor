@@ -65,6 +65,14 @@ test('the lines around an unfinished key parse as if it were not there', () => {
   assert.deepEqual(parsed.tree.entries[0].value.entries[0].keyRange.start, { line: 3, character: 2 });
 });
 
+test('an item holding a block map ends on its last written line, never at the start of the next item', () => {
+  const { tree } = parseYaml('list:\n  - mock-a fn.mock*:\n      - x\n      - y\n  - mock-b: z\n');
+  assert.deepEqual(keyRangeAt(tree, ['list', 0]), {
+    start: { line: 1, character: 4 },
+    end: { line: 3, character: 9 },
+  });
+});
+
 test('the key range at a path is the last key of that name, or an item\'s range, and nothing for a path not held', () => {
   const { tree } = parseYaml('a:\n  b: 1\n  b: 2\n  list:\n    - x\n    -\n');
   assert.deepEqual(keyRangeAt(tree, ['a', 'b']), { start: { line: 2, character: 2 }, end: { line: 2, character: 3 } });
