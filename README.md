@@ -146,11 +146,11 @@ MockQueue:
 
 ### Large schemas
 
-Validation runs in a worker, so hover, completion and suggestions answer while a large schema compiles. A DSL can keep its compiled schema in the extension's storage for later sessions:
+Validation runs in a worker, so hover, completion and suggestions answer while a large schema compiles. A DSL can keep what the standard prepares from its schema in the extension's storage for later sessions:
 
 ```yaml
 performance:
-  compiled_schema_cache: true
+  schema_store: true
 ```
 
 ### Navigation and completion

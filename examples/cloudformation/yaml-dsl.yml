@@ -52,7 +52,7 @@ dsls:
       child_values_from_parent_key: []
       allow_quoted_values: [boolean, integer, number]
     performance:
-      compiled_schema_cache: true
+      schema_store: true
     key_sort_orders:
       - path: "$"
         skip_keys: []

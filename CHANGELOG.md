@@ -4,6 +4,13 @@
 
 - Validation
   - An unknown field reads `` `name` is not defined in the schema ``.
+  - A document is validated by the YAML DSL standard's package, `yaml-dsl-spec`.
+  - A schema that cannot be compiled reads `the schema cannot be compiled: <why>` on one line.
+
+### Deprecated
+
+- Config
+  - `performance.compiled_schema_cache`, replaced by `performance.schema_store`.
 
 ## 0.11.0 - 2026-11-07
 

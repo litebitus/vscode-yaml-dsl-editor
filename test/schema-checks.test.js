@@ -2,6 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { FAILURE_KINDS, NODE_STATES, createSchemaChecks } = require('../lib/schema-checks');
 const { schemaParserFor } = require('../lib/json-schema');
+const { createValidationHost } = require('../lib/validation-host');
+const { resolvedDocumentOf } = require('../lib/resolved-document');
+const { validationProblemsOf, problemTextsOf } = require('./validation-builders');
 
 const schemaNodeAt = (root, path) => schemaParserFor(root).nodeAt(path);
 
@@ -159,7 +162,7 @@ test('an opt-out is checked against the branch its condition selects, the other 
   const entry = checks.nodeCheck('mock-branches', ['entry']);
   assert.deepEqual(entry.optOutFailures({}), [messageFailure("must have required property 'queue'")]);
   assert.deepEqual(entry.optOutFailures({ kind: 'mock-bucket', bucket: 'mock' }), [
-    messageFailure('the schema cannot be compiled\n\n```text\nInvalid regular expression: /(/u: Unterminated group\n```'),
+    messageFailure('the schema cannot be compiled: Invalid regular expression: /(/u: Unterminated group'),
   ]);
   const bare = checks.nodeCheck('mock-branches', ['bare']);
   assert.deepEqual(bare.optOutFailures({}), []);
@@ -324,8 +327,7 @@ const validatedSchema = {
 };
 
 function documentMessages(value) {
-  const checks = createSchemaChecks((schemaHash) => (schemaHash === 'mock-validated' ? validatedSchema : null));
-  return checks.documentProblems('mock-validated', value).map(({ path, message }) => [path, message]);
+  return validationProblemsOf(validatedSchema, value).map(({ path, message }) => [path, message]);
 }
 
 test('a document\'s validation errors are worded by field, the markers deciding which fields are required', () => {
@@ -345,33 +347,30 @@ test('a document\'s validation errors are worded by field, the markers deciding 
     mock_field: 1,
   };
   assert.deepEqual(documentMessages({ mocktype: { primary }, other: 1 }), [
-    [['other'], '`other` is not defined in the schema'],
-    [['mocktype', 'primary', 'mock_field'], '`mock_field` is not defined in the schema'],
     [['mocktype', 'primary', 'mode'], '`mode` must be one of `"fast"`, `"slow"`'],
     [['mocktype', 'primary', 'size'], '`size` matches none of its allowed forms'],
     [['mocktype', 'primary', 'count'], '`count` matches none of its allowed forms'],
     [['mocktype', 'primary', 'enabled'], '`enabled` must be `boolean`'],
     [['mocktype', 'primary', 'tags', 1], '`tags[1]` must be `string`'],
     [['mocktype', 'primary', 'ratio'], '`ratio` must be >= `1`'],
+    [['mocktype', 'primary', 'mock_field'], '`mock_field` is not defined in the schema'],
+    [['other'], '`other` is not defined in the schema'],
   ]);
-  assert.deepEqual(createSchemaChecks(() => null).documentProblems(null, {}), []);
+  assert.deepEqual(createValidationHost().problemsOf('mock-unheld-hash', resolvedDocumentOf({})), []);
 });
 
-test('a schema that cannot be compiled is the editor\'s sentence, then the compiler\'s text as written in a code block', () => {
+test('a schema that cannot be compiled is the editor\'s sentence, then the reason after a colon', () => {
   const draft07 = 'http://json-schema.org/draft-07/schema#';
   assert.deepEqual(problemsOfSchema({ mock_label: { type: 'string', pattern: '(_mock_' } }, {}, draft07), [
-    [[], 'the schema cannot be compiled\n\n```text\nInvalid regular expression: /(_mock_/u: Unterminated group\n```'],
+    [[], 'the schema cannot be compiled: `(_mock_` is not a pattern'],
   ]);
   assert.deepEqual(problemsOfSchema({ mock_label: { $ref: '#/$defs/mock-missing' } }, {}), [
-    [[], 'the schema cannot be compiled\n\n```text\ncan\'t resolve reference #/$defs/mock-missing from id #\n```'],
+    [[], 'the schema cannot be compiled: `#/$defs/mock-missing` names no node of the schema'],
   ]);
 });
 
 function problemsOfSchema(schemaProperties, value, schemaUri = 'https://json-schema.org/draft/2020-12/schema') {
-  const schema = { $schema: schemaUri, properties: schemaProperties };
-  const checks = createSchemaChecks((schemaHash) => (schemaHash === 'mock-worded' ? schema : null));
-  return checks.documentProblems('mock-worded', value)
-    .map(({ path, message, schemaNote }) => (schemaNote ? [path, message, schemaNote] : [path, message]));
+  return problemTextsOf(validationProblemsOf({ $schema: schemaUri, properties: schemaProperties }, value));
 }
 
 test('a value failing a not matches a form that is not allowed, the description of the schema it rules out its note', () => {
@@ -404,9 +403,11 @@ test('a value no form holds matches none of its allowed forms, the described def
       undescribed: { oneOf: [{ type: 'number' }, { type: 'boolean' }] },
     },
   };
-  const checks = createSchemaChecks((schemaHash) => (schemaHash === 'mock-defined' ? definedSchema : null));
-  const problems = checks.documentProblems('mock-defined', { described: 'mock', borrowed: 'mock', undescribed: 'mock' })
-    .map(({ path, message, schemaNote }) => (schemaNote ? [path, message, schemaNote] : [path, message]));
+  const problems = problemTextsOf(validationProblemsOf(definedSchema, {
+    described: 'mock',
+    borrowed: 'mock',
+    undescribed: 'mock',
+  }));
   assert.deepEqual(problems, [
     [
       ['described'],
@@ -494,8 +495,7 @@ test('a key failing its map\'s key schema is marked on the key, and one message 
       },
     },
   };
-  const checks = createSchemaChecks(() => keyedSchema);
-  const messages = checks.documentProblems('mock-keyed', {
+  const messages = validationProblemsOf(keyedSchema, {
     mocktype: { 'mock-bad': {} },
     settings: { mode: 'fast', size: 1 },
   }).map(({ path, message }) => [path, message]);
@@ -519,8 +519,7 @@ test('a value none of whose forms holds is noted with the described definition i
       threshold: { $ref: '#/definitions/number_or_ref', description: '[optional] The mock threshold.' },
     },
   };
-  const checks = createSchemaChecks(() => identifiedSchema);
-  const problems = checks.documentProblems('mock-identified', { threshold: 'mock-high' })
+  const problems = validationProblemsOf(identifiedSchema, { threshold: 'mock-high' })
     .map(({ message, schemaNote }) => [message, schemaNote]);
   assert.deepEqual(problems, [
     ['`threshold` matches none of its allowed forms', 'A literal number, or a `ref` resolving to one.'],
@@ -549,13 +548,12 @@ test('a dependency its key does not meet is marked on that key, worded as what t
     },
     properties: { mocktype: { type: 'object', additionalProperties: { $ref: '#/$defs/mock_entry' } } },
   };
-  const checks = createSchemaChecks(() => dependentSchema);
-  const messagesOf = (primary) => checks.documentProblems('mock-dependent', { mocktype: { primary } })
+  const messagesOf = (primary) => validationProblemsOf(dependentSchema, { mocktype: { primary } })
     .map(({ path, message }) => [path, message]);
   assert.deepEqual(messagesOf({ queue: 'mock-queue', role: 'mock-role' }), []);
   assert.deepEqual(messagesOf({ queue: 'mock-queue', label: 'mock' }), [
-    [['mocktype', 'primary', 'label'], '`label` needs `size`'],
     [['mocktype', 'primary', 'queue'], '`queue` needs `role`, or a `mock_call_form`'],
+    [['mocktype', 'primary', 'label'], '`label` needs `size`'],
   ]);
   assert.deepEqual(messagesOf({ role: 'mock-role' }), [
     [['mocktype', 'primary', 'role'], '`role` needs `queue`, or a `mock_call_form`'],
@@ -576,9 +574,8 @@ test('a required list inside not or if is a condition the markers leave as writt
       },
     },
   };
-  const checks = createSchemaChecks(() => conditionSchema);
-  assert.deepEqual(checks.documentProblems('mock-condition', { group: { node_type: 'master' } }), []);
-  const counted = checks.documentProblems('mock-condition', { group: { node_type: 'master', count: 1 } });
+  assert.deepEqual(validationProblemsOf(conditionSchema, { group: { node_type: 'master' } }), []);
+  const counted = validationProblemsOf(conditionSchema, { group: { node_type: 'master', count: 1 } });
   assert.deepEqual(counted.map(({ path, message }) => [path, message]), [
     [['group'], '`group` matches a form that is not allowed'],
   ]);
@@ -606,8 +603,7 @@ test('a required list inside an anyOf or oneOf branch selects a form the markers
       },
     },
   };
-  const checks = createSchemaChecks(() => formSchema);
-  const messagesOf = (document) => checks.documentProblems('mock-form', document)
+  const messagesOf = (document) => validationProblemsOf(formSchema, document)
     .map(({ path, message }) => [path, message]);
   assert.deepEqual(messagesOf({ one_of: { host: 'mock-host' }, any_of: { host_ssm: '/mock/host' } }), []);
   assert.deepEqual(messagesOf({ one_of: { host: 'mock-host', host_ssm: '/mock/host' } }), [

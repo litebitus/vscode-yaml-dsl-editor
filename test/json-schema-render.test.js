@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { schemaRendererFor } = require('../lib/json-schema');
 const { fencedCodeBlock } = require('../lib/json-schema/render');
+const { validationProblemsOf } = require('./validation-builders');
 
 test('a code block\'s fence is longer than any backtick run its text holds', () => {
   assert.equal(fencedCodeBlock('mock _text_', 'text'), '```text\nmock _text_\n```');
@@ -85,12 +86,10 @@ test('a field\'s own dependencies render as what setting it requires, and as wha
     '*When set:* `kind` required.',
     '*When set:* `size` required, or a `mock_call_form`.',
   ]);
-  assert.equal(
-    renderer.dependencyTextOf(root.properties.mock, 'label'),
-    '`label` needs `kind`; `size`, or a `mock_call_form`',
-  );
+  const messagesOf = (mock) => validationProblemsOf(root, { mock }).map(({ message }) => message);
+  assert.deepEqual(messagesOf({ label: 'mock' }), ['`label` needs `kind`; `size`, or a `mock_call_form`']);
   assert.deepEqual(renderer.keyDependencyLinesOf(root.properties.mock, 'size'), []);
-  assert.equal(renderer.dependencyTextOf(root.properties.mock, 'size'), null);
+  assert.deepEqual(messagesOf({ size: 1 }), []);
 });
 
 test('a field is named by the reference it makes, and a node refining a reference by its own shape', () => {

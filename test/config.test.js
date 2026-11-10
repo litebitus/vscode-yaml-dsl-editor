@@ -57,7 +57,7 @@ dsls:
       child_values_from_parent_key:
         - pattern: '^(?<field>[a-z_]+) (?<value>[a-z0-9-]+)$'
     performance:
-      compiled_schema_cache: true
+      schema_store: true
     key_sort_orders:
       - path: "$.locals"
         skip_keys: []
@@ -186,7 +186,7 @@ test('a complete config states every field and keeps them', () => {
     childValuesFromParentKey: [{ pattern: '^(?<field>[a-z_]+) (?<value>[a-z0-9-]+)$' }],
     allowQuotedValues: [],
   });
-  assert.deepEqual(sample.performance, { compiledSchemaCache: true });
+  assert.deepEqual(sample.performance, { schemaStore: true });
   assert.deepEqual(sample.scopes.GLOBAL, {
     regions: [[]],
     laterItemsOfDeclaringList: false,
@@ -226,17 +226,15 @@ test('a block the config leaves out is a feature the DSL does not have', () => {
   assert.equal(flat.loops, null);
   assert.equal(flat.validator, null);
   assert.deepEqual(flat.tagKeys, []);
-  assert.deepEqual(flat.performance, { compiledSchemaCache: false });
+  assert.deepEqual(flat.performance, { schemaStore: false });
   assert.equal(flat.function.markerFunction, null);
 });
 
-test('the performance block states whether the compiled schema is kept', () => {
-  assert.deepEqual(withFields({ performance: { compiled_schema_cache: true } }).dsls[0].performance, {
-    compiledSchemaCache: true,
-  });
-  assert.deepEqual(withFields({ performance: { compiled_schema_cache: false } }).dsls[0].performance, {
-    compiledSchemaCache: false,
-  });
+test('the performance block states whether the schema store is on, its deprecated field read alike', () => {
+  for (const field of ['schema_store', 'compiled_schema_cache']) {
+    assert.deepEqual(withFields({ performance: { [field]: true } }).dsls[0].performance, { schemaStore: true }, field);
+    assert.deepEqual(withFields({ performance: { [field]: false } }).dsls[0].performance, { schemaStore: false }, field);
+  }
 });
 
 test('the validator block states its merge base keys, child value patterns and quoted value types', () => {
@@ -355,7 +353,7 @@ test('a config is read by the YAML DSL standard, each problem a diagnostic at it
 });
 
 test('a config states its version, and only a version the standard reads is read', () => {
-  assert.deepEqual(CONFIG_VERSIONS, ['1', '1.0', '1.1', '1.2']);
+  assert.deepEqual(CONFIG_VERSIONS, ['1', '1.0', '1.1', '1.2', '1.3']);
   for (const version of CONFIG_VERSIONS) {
     assert.deepEqual(parseConfig(`version: "${version}"\ndsls: []\n`), { ok: true, problems: [], dsls: [] });
   }

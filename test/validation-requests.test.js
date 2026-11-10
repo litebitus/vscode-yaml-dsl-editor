@@ -10,6 +10,8 @@ const {
   createWorkerValidation,
 } = require('../lib/validation-requests');
 const { VALIDATION_FAILED_KEYWORD, createValidationHost } = require('../lib/validation-host');
+const { resolvedDocumentOf } = require('../lib/resolved-document');
+const { quotedValuesValidator } = require('./validation-builders');
 
 const MOCK_SCHEMA = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -24,9 +26,10 @@ function mockRequest(value, fields = {}) {
     slot: '/mock/mock.yml',
     schemaHash: 'mock-schema-hash',
     schemaRoot: MOCK_SCHEMA,
-    compiledSchemaFile: null,
-    value,
+    schemaStoreFolder: null,
+    document: resolvedDocumentOf(value),
     fragmentPointer: null,
+    validator: null,
     ...fields,
   };
 }
@@ -61,7 +64,7 @@ const messagesOf = (problems) => problems.map((problem) => problem.message);
 test('in process, a document is validated when asked, its schema added once and again after it is dropped', () => {
   const validation = createInProcessValidation();
   const problems = validation.problemsOf(mockRequest({ size: 'mock', extra: 1 }));
-  assert.deepEqual(messagesOf(problems), ['`extra` is not defined in the schema', '`size` must be `integer`']);
+  assert.deepEqual(messagesOf(problems), ['`size` must be `integer`', '`extra` is not defined in the schema']);
   validation.dropSchema('mock-schema-hash');
   assert.deepEqual(messagesOf(validation.problemsOf(mockRequest({ size: 'mock' }))), ['`size` must be `integer`']);
   validation.onAnswered(() => assert.fail('an in-process validation answers when asked'));
@@ -108,16 +111,16 @@ test('in the worker, a problem\'s schema note arrives beside its message', async
 test('the types a quoted value is read as reach the worker, and other types are another request', async () => {
   const validation = createWorkerValidation();
   const quoted = { size: '12' };
-  assert.deepEqual(messagesOf(createInProcessValidation().problemsOf(mockRequest(quoted, {
-    allowQuotedValues: ['integer'],
-  }))), []);
-  validation.problemsOf(mockRequest(quoted, { allowQuotedValues: ['integer'] }));
+  const integers = { validator: quotedValuesValidator(['integer']) };
+  const booleans = { validator: quotedValuesValidator(['boolean']) };
+  assert.deepEqual(messagesOf(createInProcessValidation().problemsOf(mockRequest(quoted, integers))), []);
+  validation.problemsOf(mockRequest(quoted, integers));
   await validation.whenSettled();
-  assert.deepEqual(validation.problemsOf(mockRequest(quoted, { allowQuotedValues: ['integer'] })), []);
-  assert.deepEqual(validation.problemsOf(mockRequest(quoted, { allowQuotedValues: ['boolean'] })), []);
+  assert.deepEqual(validation.problemsOf(mockRequest(quoted, integers)), []);
+  assert.deepEqual(validation.problemsOf(mockRequest(quoted, booleans)), []);
   await validation.whenSettled();
   assert.deepEqual(
-    messagesOf(validation.problemsOf(mockRequest(quoted, { allowQuotedValues: ['boolean'] }))),
+    messagesOf(validation.problemsOf(mockRequest(quoted, booleans))),
     ['`size` must be `integer`'],
   );
   validation.close();
@@ -202,51 +205,80 @@ test('a worker\'s log lines reach the server\'s log, and a message of no known k
   await settled;
 });
 
-test('an opted-in schema compiled in the worker is saved, '
-  + 'and a later worker loads it and answers the same', async () => {
-  const storageFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-dsl-editor-mock-storage-'));
-  const compiledSchemaFile = path.join(storageFolder, 'compiled-schemas', 'mock-dsl.js');
+test('an opted-in schema prepared in the worker is kept in the schema store, '
+  + 'and a later worker reads it and answers the same', async () => {
+  const schemaStoreFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-dsl-editor-mock-schema-store-'));
   const answers = [];
-  const savedFiles = [];
-  for (const run of ['compiles', 'loads']) {
+  const keptEntries = [];
+  for (const run of ['prepares', 'reads']) {
     const validation = createWorkerValidation({ logError: (message) => assert.fail(`${run}: ${message}`) });
-    validation.problemsOf(mockRequest({ size: 'mock', extra: 1 }, { compiledSchemaFile }));
+    validation.problemsOf(mockRequest({ size: 'mock', extra: 1 }, { schemaStoreFolder }));
     await validation.whenSettled();
-    answers.push(validation.problemsOf(mockRequest({ size: 'mock', extra: 1 }, { compiledSchemaFile })));
+    answers.push(validation.problemsOf(mockRequest({ size: 'mock', extra: 1 }, { schemaStoreFolder })));
     validation.close();
-    savedFiles.push({ text: fs.readFileSync(compiledSchemaFile, 'utf8'), inode: fs.statSync(compiledSchemaFile).ino });
+    keptEntries.push(fs.readdirSync(schemaStoreFolder).map((name) => {
+      const entryFile = path.join(schemaStoreFolder, name);
+      return { name, text: fs.readFileSync(entryFile, 'utf8'), inode: fs.statSync(entryFile).ino };
+    }));
   }
-  const savedHeader = /^\/\/ yaml-dsl-editor compiled schema \{"schemaHash":"mock-schema-hash","buildKey":"/;
-  assert.match(savedFiles[0].text, savedHeader);
-  assert.deepEqual(savedFiles[1], savedFiles[0]);
+  assert.equal(keptEntries[0].length, 1);
+  assert.match(keptEntries[0][0].name, /^[0-9a-f]{64}\.json$/);
+  assert.deepEqual(keptEntries[1], keptEntries[0]);
   assert.deepEqual(answers[1], answers[0]);
   assert.deepEqual(answers[0], inProcessProblemsOf({ size: 'mock', extra: 1 }));
 });
 
-test('a compiled schema the worker cannot save reaches the server\'s log, '
+test('a prepared schema the worker cannot keep reaches the server\'s log, '
   + 'and the document is still answered', async () => {
   const folderThatIsAFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-dsl-editor-mock-storage-')), 'mock');
   fs.writeFileSync(folderThatIsAFile, 'mock');
   const logged = [];
   const validation = createWorkerValidation({ logError: (message) => logged.push(message) });
-  const compiledSchemaFile = path.join(folderThatIsAFile, 'mock-dsl.js');
-  validation.problemsOf(mockRequest({ size: 'mock' }, { compiledSchemaFile }));
+  const schemaStoreFolder = path.join(folderThatIsAFile, 'schema-store');
+  validation.problemsOf(mockRequest({ size: 'mock' }, { schemaStoreFolder }));
   await validation.whenSettled();
-  assert.deepEqual(validation.problemsOf(mockRequest({ size: 'mock' }, { compiledSchemaFile })), inProcessProblemsOf({
+  assert.deepEqual(validation.problemsOf(mockRequest({ size: 'mock' }, { schemaStoreFolder })), inProcessProblemsOf({
     size: 'mock',
   }));
   assert.equal(logged.length, 1);
-  assert.match(logged[0], /^the compiled schema could not be saved to .*mock-dsl\.js: /);
+  assert.match(logged[0], /^the compiled schema could not be saved to .*[0-9a-f]{64}\.json: /);
   validation.close();
 });
 
-test('a schema that breaks validation is answered with the reason', () => {
+test('a schema capacity set before the worker starts and after it runs reaches the worker, '
+  + 'and every held schema still answers', async (context) => {
+  const validation = createWorkerValidation({ logError: (message) => assert.fail(message) });
+  context.after(() => validation.close());
+  validation.setSchemaCapacity(1);
+  const otherSchema = { ...MOCK_SCHEMA, title: 'mock-other' };
+  const otherRequest = (value) => mockRequest(value, {
+    slot: '/mock/other.yml',
+    schemaHash: 'mock-other-hash',
+    schemaRoot: otherSchema,
+  });
+  validation.problemsOf(mockRequest({ size: 'mock' }));
+  validation.problemsOf(otherRequest({ mode: 'mock-c' }));
+  await validation.whenSettled();
+  validation.setSchemaCapacity(2);
+  validation.problemsOf(mockRequest({ size: 'mock', extra: 1 }));
+  await validation.whenSettled();
+  assert.deepEqual(validation.problemsOf(otherRequest({ mode: 'mock-c' })), inProcessProblemsOf({ mode: 'mock-c' }));
+  assert.deepEqual(
+    validation.problemsOf(mockRequest({ size: 'mock', extra: 1 })),
+    inProcessProblemsOf({ size: 'mock', extra: 1 }),
+  );
+  validation.close();
+  validation.setSchemaCapacity(3);
+  assert.deepEqual(validation.problemsOf(otherRequest({ mode: 'mock-c' })), inProcessProblemsOf({ mode: 'mock-c' }));
+});
+
+test('a document that breaks validation is answered with the reason', () => {
   const host = createValidationHost();
-  const brokenProperties = new Proxy({}, { ownKeys: () => { throw new Error('mock broken schema'); } });
-  host.addSchema('mock-broken-hash', { type: 'object', properties: brokenProperties }, null);
-  assert.deepEqual(host.problemsOf('mock-broken-hash', {}, { fragmentPointer: null, allowQuotedValues: [] }), [{
+  host.addSchema('mock-broken-hash', JSON.stringify(MOCK_SCHEMA), null);
+  const brokenDocument = { kind: 'map', get value() { throw new Error('mock broken document'); } };
+  assert.deepEqual(host.problemsOf('mock-broken-hash', brokenDocument, { fragmentPointer: null }), [{
     path: [],
-    message: 'validation failed: mock broken schema',
+    message: 'validation failed: mock broken document',
     keyword: VALIDATION_FAILED_KEYWORD,
   }]);
 });

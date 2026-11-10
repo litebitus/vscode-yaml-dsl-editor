@@ -92,9 +92,9 @@ test('a content that is not a local\'s map supplies the holding map\'s requireme
     },
   };
   const merged = mergedValueOf(written, contextWith({ merge: mergeMacro('shallow') }));
-  assert.deepEqual([...merged.requirementsSuppliedAt].sort(), [
-    JSON.stringify(['mocktype', 'missing_local']),
-    JSON.stringify(['mocktype', 'unknown']),
+  assert.deepEqual([...merged.unknownMergeFunctionsAt].sort(), [
+    [JSON.stringify(['mocktype', 'missing_local']), 'merge'],
+    [JSON.stringify(['mocktype', 'unknown']), 'merge'],
   ]);
   assert.deepEqual(merged.value.mocktype.unknown, { mode: 'fast' });
   assert.deepEqual(merged.value.mocktype.inline, { size: 3 });

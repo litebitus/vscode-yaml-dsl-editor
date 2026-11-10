@@ -1,7 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { schemaValidatorFor } = require('../lib/json-schema');
-const { SCHEMA_COMPILE_KEYWORD, DEPENDENCY_KEYWORD } = require('../lib/json-schema/validator');
+const { createValidationHost } = require('../lib/validation-host');
+const { resolvedDocumentOf } = require('../lib/resolved-document');
+const { validationProblemsOf, quotedValuesValidator, problemTextsOf } = require('./validation-builders');
 
 const DRAFT_URIS = [
   'http://json-schema.org/draft-07/schema#',
@@ -32,21 +37,23 @@ function mockSchema(draftUri) {
   };
 }
 
+function problemsOf(schema, value, options = {}) {
+  return problemTextsOf(validationProblemsOf(schema, value, options));
+}
+
 test('each draft validates with its own validator, a failure carrying its path, keyword and message', () => {
   for (const draftUri of DRAFT_URIS) {
-    const validator = schemaValidatorFor(mockSchema(draftUri));
-    assert.deepEqual(validator.documentFailures({ mocktype: { primary: { label: 'mock' } } }), [], draftUri);
-    const failures = validator.documentFailures({ mocktype: { primary: { label: 1, tags: ['mock-tag', 2] } } });
-    assert.deepEqual(failures.map(({ path, keyword }) => [path, keyword]), [
-      [['mocktype', 'primary', 'label'], 'type'],
-      [['mocktype', 'primary', 'tags', 1], 'type'],
+    const schema = mockSchema(draftUri);
+    assert.deepEqual(problemsOf(schema, { mocktype: { primary: { label: 'mock' } } }), [], draftUri);
+    assert.deepEqual(problemsOf(schema, { mocktype: { primary: { label: 1, tags: ['mock-tag', 2] } } }), [
+      [['mocktype', 'primary', 'label'], '`label` must be `string`'],
+      [['mocktype', 'primary', 'tags', 1], '`tags[1]` must be `string`'],
     ], draftUri);
-    assert.equal(failures[0].message, 'must be string');
   }
 });
 
 test('a quoted value of an allowed type is validated as the value it spells, its constraints still checked', () => {
-  const validator = schemaValidatorFor({
+  const schema = {
     $schema: DRAFT_URIS[2],
     type: 'object',
     properties: {
@@ -56,49 +63,48 @@ test('a quoted value of an allowed type is validated as the value it spells, its
       label: { type: 'string' },
       sizes: { type: 'array', items: { type: 'integer' } },
     },
-  });
-  const allowQuotedValues = ['boolean', 'integer', 'number'];
+  };
+  const validator = quotedValuesValidator(['boolean', 'integer', 'number']);
   const quoted = { enabled: 'true', count: '12', ratio: '-1.5e3', label: '12', sizes: ['1', '2'] };
-  assert.deepEqual(validator.documentFailures(quoted, { allowQuotedValues }), []);
-  const failures = validator.documentFailures(
-    { enabled: 'yes', count: '901', ratio: '1.', sizes: ['01', '2.5'] },
-    { allowQuotedValues },
-  );
-  assert.deepEqual(failures.map(({ path, keyword }) => [path, keyword]), [
-    [['enabled'], 'type'],
-    [['count'], 'maximum'],
-    [['ratio'], 'type'],
-    [['sizes', 0], 'type'],
-    [['sizes', 1], 'type'],
+  assert.deepEqual(problemsOf(schema, quoted, { validator }), []);
+  assert.deepEqual(problemsOf(schema, { enabled: 'yes', count: '901', ratio: '1.', sizes: ['01', '2.5'] }, { validator }), [
+    [['enabled'], '`enabled` must be `boolean`'],
+    [['count'], '`count` must be <= `900`'],
+    [['ratio'], '`ratio` must be `number`'],
+    [['sizes', 0], '`sizes[0]` must be `integer`'],
+    [['sizes', 1], '`sizes[1]` must be `integer`'],
   ]);
 });
 
 test('a quoted value is read only as a type the config lists, and only where the schema expects that type', () => {
-  const validator = schemaValidatorFor({
+  const schema = {
     $schema: DRAFT_URIS[2],
     type: 'object',
     properties: { enabled: { type: 'boolean' }, count: { type: 'integer' }, ratio: { type: 'number' } },
-  });
+  };
   const quoted = { enabled: 'true', count: '12', ratio: '12' };
-  assert.deepEqual(validator.documentFailures(quoted).map(({ path }) => path), [['enabled'], ['count'], ['ratio']]);
-  assert.deepEqual(
-    validator.documentFailures(quoted, { allowQuotedValues: ['boolean'] }).map(({ path }) => path),
-    [['count'], ['ratio']],
-  );
-  assert.deepEqual(
-    validator.documentFailures(quoted, { allowQuotedValues: ['number'] }).map(({ path }) => path),
-    [['enabled'], ['count']],
-  );
-  assert.deepEqual(
-    validator.documentFailures({ count: '1.5' }, { allowQuotedValues: ['integer', 'number'] }).map(({ keyword }) => keyword),
-    ['type'],
-  );
+  assert.deepEqual(problemsOf(schema, quoted), [
+    [['enabled'], '`enabled` must be `boolean`'],
+    [['count'], '`count` must be `integer`'],
+    [['ratio'], '`ratio` must be `number`'],
+  ]);
+  assert.deepEqual(problemsOf(schema, quoted, { validator: quotedValuesValidator(['boolean']) }), [
+    [['count'], '`count` must be `integer`'],
+    [['ratio'], '`ratio` must be `number`'],
+  ]);
+  assert.deepEqual(problemsOf(schema, quoted, { validator: quotedValuesValidator(['number']) }), [
+    [['enabled'], '`enabled` must be `boolean`'],
+    [['count'], '`count` must be `integer`'],
+  ]);
+  assert.deepEqual(problemsOf(schema, { count: '1.5' }, { validator: quotedValuesValidator(['integer', 'number']) }), [
+    [['count'], '`count` must be `integer`'],
+  ]);
 });
 
 test('an alternative none of whose branches holds is one failure, without the branches\' own', () => {
-  const validator = schemaValidatorFor(mockSchema(DRAFT_URIS[2]));
-  const failures = validator.documentFailures({ mocktype: { primary: { label: 'mock', size: 'mock-size' } } });
-  assert.deepEqual(failures.map(({ path, keyword }) => [path, keyword]), [[['mocktype', 'primary', 'size'], 'anyOf']]);
+  assert.deepEqual(problemsOf(mockSchema(DRAFT_URIS[2]), { mocktype: { primary: { label: 'mock', size: 'mock-size' } } }), [
+    [['mocktype', 'primary', 'size'], '`size` matches none of its allowed forms'],
+  ]);
 });
 
 test('an alternative failure carries each set of missing fields whose presence would make it hold, nested ones '
@@ -122,40 +128,27 @@ test('an alternative failure carries each set of missing fields whose presence w
         },
       },
     };
-    const validator = schemaValidatorFor(schema);
-    const requirementSetsOf = (value) => validator.documentFailures(value)
-      .map(({ path, keyword, requirementSetsToPass }) => [path, keyword, requirementSetsToPass]);
-    const missing = (path, requiredField) => ({ path, keyword: 'required', requiredField });
-    assert.deepEqual(requirementSetsOf({ mocktype: { mode: {} } }), [
-      [['mocktype'], 'oneOf', [
-        [missing(['mocktype'], 'label'), missing(['mocktype', 'mode'], 'kind')],
-        [missing(['mocktype'], 'label'), missing(['mocktype', 'mode'], 'ref')],
-      ]],
-    ], draftUri);
-    assert.deepEqual(requirementSetsOf({ mocktype: { label: 1 } }), [
-      [['mocktype'], 'oneOf', undefined],
-    ], draftUri);
+    const noFormHolds = [[['mocktype'], '`mocktype` matches none of its allowed forms']];
+    assert.deepEqual(problemsOf(schema, { mocktype: { mode: {} } }), noFormHolds, draftUri);
+    assert.deepEqual(problemsOf(schema, { mocktype: { label: 1 } }), noFormHolds, draftUri);
   }
 });
 
 test('a key its map\'s key schema rejects is one failure naming the key, without the key schema\'s own', () => {
-  const validator = schemaValidatorFor({
+  const schema = {
     $schema: DRAFT_URIS[0],
     definitions: { mock_key: { type: 'string', pattern: '^[a-z_]+$' } },
     properties: { mocktype: { type: 'object', propertyNames: { $ref: '#/definitions/mock_key' } } },
-  });
-  const failures = validator.documentFailures({ mocktype: { mock_good: {}, 'mock-bad': {} } });
-  assert.deepEqual(failures.map(({ path, keyword, params }) => [path, keyword, params]), [
-    [['mocktype'], 'propertyNames', { propertyName: 'mock-bad' }],
+  };
+  assert.deepEqual(problemsOf(schema, { mocktype: { mock_good: {}, 'mock-bad': {} } }), [
+    [['mocktype', 'mock-bad'], '`mock-bad` is not a valid key of `mocktype`'],
   ]);
 });
 
 test('a missing required field and an unknown field are failures of their map', () => {
-  const validator = schemaValidatorFor(mockSchema(DRAFT_URIS[0]));
-  const failures = validator.documentFailures({ mocktype: { primary: { mock_field: 1 } } });
-  assert.deepEqual(failures.map(({ path, keyword, params }) => [path, keyword, params]), [
-    [['mocktype', 'primary'], 'required', { missingProperty: 'label' }],
-    [['mocktype', 'primary'], 'additionalProperties', { additionalProperty: 'mock_field' }],
+  assert.deepEqual(problemsOf(mockSchema(DRAFT_URIS[0]), { mocktype: { primary: { mock_field: 1 } } }), [
+    [['mocktype', 'primary'], '`label` is required'],
+    [['mocktype', 'primary', 'mock_field'], '`mock_field` is not defined in the schema'],
   ]);
 });
 
@@ -171,30 +164,30 @@ test('a dependency its key does not meet is one failure naming the key, in each 
     holderOf(DRAFT_URIS[2], { dependentRequired: { label: ['size'] }, dependentSchemas: { mode: anyOfNeeds } }),
   ];
   for (const holder of holders) {
-    const failures = schemaValidatorFor(holder).documentFailures({ mocktype: { label: 'mock', mode: 'mock' } });
-    assert.deepEqual(failures.map(({ path, keyword, params }) => [path, keyword, params]), [
-      [['mocktype'], DEPENDENCY_KEYWORD, { property: 'label' }],
-      [['mocktype'], DEPENDENCY_KEYWORD, { property: 'mode' }],
+    assert.deepEqual(problemsOf(holder, { mocktype: { label: 'mock', mode: 'mock' } }), [
+      [['mocktype', 'label'], '`label` needs `size`'],
+      [['mocktype', 'mode'], '`mode` needs `size`, or `kind`'],
     ], holder.$schema);
   }
 });
 
 test('a dependent schema\'s failure inside a field of its holder stays that field\'s own', () => {
-  const validator = schemaValidatorFor({
+  const schema = {
     $schema: DRAFT_URIS[2],
     properties: {
       mocktype: { type: 'object', dependentSchemas: { label: { properties: { size: { type: 'integer' } } } } },
     },
-  });
-  const failures = validator.documentFailures({ mocktype: { label: 'mock', size: 'mock-size' } });
-  assert.deepEqual(failures.map(({ path, keyword }) => [path, keyword]), [[['mocktype', 'size'], 'type']]);
+  };
+  assert.deepEqual(problemsOf(schema, { mocktype: { label: 'mock', size: 'mock-size' } }), [
+    [['mocktype', 'size'], '`size` must be `integer`'],
+  ]);
 });
 
 test('a schema that cannot be compiled is one failure at the document, and an unread draft has no validator', () => {
   const broken = { $schema: DRAFT_URIS[2], properties: { label: { $ref: '#/$defs/missing' } } };
-  const [failure] = schemaValidatorFor(broken).documentFailures({ label: 'mock' });
-  assert.deepEqual([failure.path, failure.keyword], [[], SCHEMA_COMPILE_KEYWORD]);
-  assert.equal(failure.message, 'can\'t resolve reference #/$defs/missing from id #');
+  assert.deepEqual(problemsOf(broken, { label: 'mock' }), [
+    [[], 'the schema cannot be compiled: `#/$defs/missing` names no node of the schema'],
+  ]);
   assert.equal(schemaValidatorFor({ $schema: 'https://example.com/mock-draft' }), null);
   assert.equal(schemaValidatorFor(null), null);
 });
@@ -215,22 +208,21 @@ test('a fragment is validated against the node its pointer names, with no key re
         },
       },
     };
-    const validator = schemaValidatorFor(schema);
-    const keywordsOf = (failures) => failures.map(({ path, keyword }) => [path, keyword]);
-    assert.deepEqual(validator.documentFailures({}, { fragmentPointer: '' }), [], draftUri);
-    assert.deepEqual(keywordsOf(validator.documentFailures({}).filter((failure) => failure.keyword === 'required')), [
-      [[], 'required'],
-    ], draftUri);
+    assert.deepEqual(problemsOf(schema, {}, { fragmentPointer: '' }), [], draftUri);
+    assert.deepEqual(problemsOf(schema, {}), [[[], '`mocktype` is required']], draftUri);
     const atMocktype = { fragmentPointer: '/properties/mocktype' };
-    assert.deepEqual(validator.documentFailures({ primary: {} }, atMocktype), [], draftUri);
-    assert.deepEqual(keywordsOf(validator.documentFailures({ primary: { label: 1 } }, atMocktype)), [
-      [['primary', 'label'], 'type'],
+    assert.deepEqual(problemsOf(schema, { primary: {} }, atMocktype), [], draftUri);
+    assert.deepEqual(problemsOf(schema, { primary: { label: 1 } }, atMocktype), [
+      [['primary', 'label'], '`label` must be `string`'],
     ], draftUri);
     const atEntry = { fragmentPointer: '/definitions/mock_entry' };
-    assert.deepEqual(validator.documentFailures({ mode: {} }, atEntry), [], draftUri);
-    assert.deepEqual(keywordsOf(validator.documentFailures({ mode: 1 }, atEntry)), [[['mode'], 'anyOf']], draftUri);
-    const unread = validator.documentFailures({}, { fragmentPointer: '/properties/nothing' });
-    assert.deepEqual(unread.map((failure) => failure.message), ['the schema has no node at `#/properties/nothing`']);
+    assert.deepEqual(problemsOf(schema, { mode: {} }, atEntry), [], draftUri);
+    assert.deepEqual(problemsOf(schema, { mode: 1 }, atEntry), [
+      [['mode'], '`mode` matches none of its allowed forms'],
+    ], draftUri);
+    assert.deepEqual(problemsOf(schema, {}, { fragmentPointer: '/properties/nothing' }), [
+      [[], 'the schema has no node at `#/properties/nothing`'],
+    ], draftUri);
   }
 });
 
@@ -245,13 +237,11 @@ test('a pattern is built with the u flag, so a Unicode property escape and a cod
       },
       patternProperties: { '^\\p{Lu}': { type: 'integer' } },
     };
-    const validator = schemaValidatorFor(schema);
-    const keywordsOf = (value) => validator.documentFailures(value).map(({ path, keyword }) => [path, keyword]);
-    assert.deepEqual(keywordsOf({ letters: 'éß', astral: '😀', Mock: 1 }), [], draftUri);
-    assert.deepEqual(keywordsOf({ letters: 'mock-1', astral: 'x', Mock: 'x' }), [
-      [['letters'], 'pattern'],
-      [['astral'], 'pattern'],
-      [['Mock'], 'type'],
+    assert.deepEqual(problemsOf(schema, { letters: 'éß', astral: '😀', Mock: 1 }), [], draftUri);
+    assert.deepEqual(problemsOf(schema, { letters: 'mock-1', astral: 'x', Mock: 'x' }), [
+      [['letters'], '`letters` must match pattern `^\\p{L}+$`'],
+      [['astral'], '`astral` must match pattern `^[\\u{1F600}-\\u{1F64F}]$`'],
+      [['Mock'], '`Mock` must be `integer`'],
     ], draftUri);
   }
 });
@@ -266,28 +256,30 @@ test('a branch condition is compiled alone, so a part of the schema that cannot 
   const validator = schemaValidatorFor(schema);
   assert.equal(validator.conditionHolds(condition, { kind: 'mock-bucket' }), true);
   assert.equal(validator.conditionHolds(condition, { kind: 'mock-queue' }), false);
-  assert.deepEqual(validator.documentFailures({}).map((failure) => failure.keyword), [SCHEMA_COMPILE_KEYWORD]);
+  assert.deepEqual(problemsOf(schema, {}), [
+    [[], 'the schema cannot be compiled: `(` is not a pattern'],
+  ]);
   const unreadable = { properties: { kind: { pattern: '(' } } };
   assert.equal(validator.conditionHolds(unreadable, { kind: 'mock-bucket' }), null);
   assert.equal(validator.conditionHolds(true, {}), true);
 });
 
-test('a fragment whose node cannot be compiled reads as a node the schema does not have', () => {
+test('a schema with a reference naming no node does not load, whatever part a fragment names', () => {
   const schema = {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     properties: { entry: { properties: { gone: { $ref: '#/$defs/mock_missing' } } } },
   };
-  const failures = schemaValidatorFor(schema).documentFailures({}, { fragmentPointer: '/properties/entry' });
-  assert.deepEqual(failures.map((failure) => failure.message), [
-    'can\'t resolve reference #/$defs/mock_missing from id #',
+  assert.deepEqual(problemsOf(schema, {}, { fragmentPointer: '/properties/entry' }), [
+    [[], 'the schema cannot be compiled: `#/$defs/mock_missing` names no node of the schema'],
   ]);
-  const compilable = {
+  const unreferencedDefinition = {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     $defs: { mock_entry: { properties: { gone: { $ref: '#/$defs/mock_missing' } } } },
     properties: { name: { type: 'string' } },
   };
-  const fragment = schemaValidatorFor(compilable).documentFailures({}, { fragmentPointer: '/$defs/mock_entry' });
-  assert.deepEqual(fragment.map((failure) => failure.message), ['the schema has no node at `#/$defs/mock_entry`']);
+  assert.deepEqual(problemsOf(unreferencedDefinition, {}, { fragmentPointer: '/$defs/mock_entry' }), [
+    [[], 'the schema cannot be compiled: `#/$defs/mock_missing` names no node of the schema'],
+  ]);
 });
 
 test('a part of the schema compiled alone resolves its references in the schema, and data keeps its $ref keys', () => {
@@ -343,14 +335,19 @@ test('a part compiled alone carries only the nodes its references reach, through
   assert.throws(() => validator.compileRootPart({ properties: { gone: { $ref: '#/$defs/mock_missing' } } }));
 });
 
-function memoryCompiledRootStore(savedSource = null) {
-  const store = {
-    filename: '/mock/compiled-schema.js',
-    saved: [],
-    load: () => savedSource,
-    save: (source) => store.saved.push(source),
-  };
-  return store;
+const schemaStore = { folder: null };
+
+function storedProblemsOf(schemaText, value) {
+  const host = createValidationHost({ reportProblem: (message) => assert.fail(message) });
+  host.addSchema('mock-schema-hash', schemaText, schemaStore.folder);
+  return problemTextsOf(host.problemsOf('mock-schema-hash', resolvedDocumentOf(value)));
+}
+
+function storedEntries() {
+  return fs.readdirSync(schemaStore.folder).map((name) => {
+    const file = path.join(schemaStore.folder, name);
+    return { name, text: fs.readFileSync(file, 'utf8'), inode: fs.statSync(file).ino };
+  });
 }
 
 const savedSchemaText = JSON.stringify({
@@ -364,68 +361,71 @@ const savedSchemaText = JSON.stringify({
   },
 });
 
-test('a compiled root is saved with references to the schema\'s own nodes, and a saved one is loaded instead '
-  + 'of compiled, failing the same way', () => {
-  const document = { size: 0, mode: 3, extra: true };
-  const compiling = memoryCompiledRootStore();
-  const compiled = schemaValidatorFor(JSON.parse(savedSchemaText), compiling).documentFailures(document);
-  assert.equal(compiling.saved.length, 1);
-  const [source] = compiling.saved;
-  assert.match(source, /schemaNode\("\/\$defs\/mock_size"\)/);
-  assert.doesNotMatch(source, /mock-unique-size-description/);
-  const loading = memoryCompiledRootStore(source);
-  const loaded = schemaValidatorFor(JSON.parse(savedSchemaText), loading).documentFailures(document);
-  assert.deepEqual(loaded, compiled);
-  assert.deepEqual(compiled.map(({ path, keyword }) => [path, keyword]), [
-    [[], 'additionalProperties'],
-    [['size'], 'minimum'],
-    [['mode'], 'anyOf'],
-  ]);
-  assert.equal(loading.saved.length, 0);
-});
-
-test('a failed not carries the description of the schema it rules out, from a compiled root and a loaded one', () => {
-  const schemaText = JSON.stringify({
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    properties: { mapping: { not: { description: 'Mock: no `color` here.', required: ['color'] } } },
+test.describe('the schema store', () => {
+  test.beforeEach(() => {
+    schemaStore.folder = fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-dsl-editor-mock-schema-store-'));
   });
-  const document = { mapping: { color: 'red' } };
-  const compiling = memoryCompiledRootStore();
-  const compiled = schemaValidatorFor(JSON.parse(schemaText), compiling).documentFailures(document);
-  assert.equal(compiling.saved.length, 1);
-  const loading = memoryCompiledRootStore(compiling.saved[0]);
-  const loaded = schemaValidatorFor(JSON.parse(schemaText), loading).documentFailures(document);
-  assert.equal(loading.saved.length, 0);
-  for (const failures of [compiled, loaded]) {
-    assert.deepEqual(failures.map(({ keyword, notSchemaDescription }) => [keyword, notSchemaDescription]), [
-      ['not', 'Mock: no `color` here.'],
-    ]);
-  }
-});
 
-test('a failed uniqueItems carries its later and earlier duplicate, and a failed contains stands for its items\' failures', () => {
-  const schemaText = JSON.stringify({
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    properties: { unique: { uniqueItems: true }, containing: { contains: { const: 1 } } },
+  test.afterEach(() => {
+    schemaStore.folder = null;
   });
-  const document = { unique: [2, 1, 1, 2], containing: [2, 3] };
-  const compiling = memoryCompiledRootStore();
-  const compiled = schemaValidatorFor(JSON.parse(schemaText), compiling).documentFailures(document);
-  const loaded = schemaValidatorFor(JSON.parse(schemaText), memoryCompiledRootStore(compiling.saved[0]))
-    .documentFailures(document);
-  for (const failures of [compiled, loaded]) {
-    assert.deepEqual(failures.map(({ path, keyword, duplicateItems }) => [path, keyword, duplicateItems]), [
-      [['unique'], 'uniqueItems', [2, 1]],
-      [['containing'], 'contains', undefined],
-    ]);
-  }
-});
 
-test('a saved compiled root that cannot be loaded is compiled again and saved over', () => {
-  for (const unreadable of ['this is not javascript (', '"use strict";module.exports = 1;']) {
-    const store = memoryCompiledRootStore(unreadable);
-    const failures = schemaValidatorFor(JSON.parse(savedSchemaText), store).documentFailures({ size: 0 });
-    assert.deepEqual(failures.map(({ path, keyword }) => [path, keyword]), [[['size'], 'minimum']]);
-    assert.equal(store.saved.length, 1);
-  }
+  test('a prepared schema is kept in the schema store, and a later cache reads it instead of preparing it, '
+    + 'failing the same way', () => {
+    const document = { size: 0, mode: 3, extra: true };
+    const prepared = storedProblemsOf(savedSchemaText, document);
+    const [entry] = storedEntries();
+    assert.match(entry.name, /^[0-9a-f]{64}\.json$/);
+    assert.deepEqual(Object.keys(JSON.parse(entry.text)).sort(), ['draft', 'marked', 'schema']);
+    const read = storedProblemsOf(savedSchemaText, document);
+    assert.deepEqual(storedEntries(), [entry]);
+    assert.deepEqual(read, prepared);
+    assert.deepEqual(prepared, [
+      [['size'], '`size` must be >= `1`'],
+      [['mode'], '`mode` matches none of its allowed forms'],
+      [['extra'], '`extra` is not defined in the schema'],
+    ]);
+  });
+
+  test('a failed not carries the description of the schema it rules out, '
+    + 'from a prepared schema and a stored one', () => {
+    const schemaText = JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      properties: { mapping: { not: { description: 'Mock: no `color` here.', required: ['color'] } } },
+    });
+    const document = { mapping: { color: 'red' } };
+    const prepared = storedProblemsOf(schemaText, document);
+    const stored = storedProblemsOf(schemaText, document);
+    assert.equal(storedEntries().length, 1);
+    for (const problems of [prepared, stored]) {
+      assert.deepEqual(problems, [
+        [['mapping'], '`mapping` matches a form that is not allowed', 'Mock: no `color` here.'],
+      ]);
+    }
+  });
+
+  test('a failed uniqueItems names its later and earlier duplicate, '
+    + 'and a failed contains stands for its items\' failures', () => {
+    const schemaText = JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      properties: { unique: { uniqueItems: true }, containing: { contains: { const: 1 } } },
+    });
+    const document = { unique: [2, 1, 1, 2], containing: [2, 3] };
+    for (const problems of [storedProblemsOf(schemaText, document), storedProblemsOf(schemaText, document)]) {
+      assert.deepEqual(problems, [
+        [['unique'], '`unique` must NOT have duplicate items (items ## 2 and 1 are identical)'],
+        [['containing'], '`containing` must contain at least `1` valid item(s)'],
+      ]);
+    }
+  });
+
+  test('a stored schema that cannot be read is prepared again and stored over', () => {
+    storedProblemsOf(savedSchemaText, { size: 0 });
+    const [entry] = storedEntries();
+    for (const unreadable of ['this is not json (', '{"draft":"mock-draft"}']) {
+      fs.writeFileSync(path.join(schemaStore.folder, entry.name), unreadable);
+      assert.deepEqual(storedProblemsOf(savedSchemaText, { size: 0 }), [[['size'], '`size` must be >= `1`']]);
+      assert.deepEqual(storedEntries().map(({ name, text }) => [name, text]), [[entry.name, entry.text]]);
+    }
+  });
 });

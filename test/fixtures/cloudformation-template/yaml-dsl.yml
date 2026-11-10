@@ -22,7 +22,7 @@ dsls:
       pattern: "[$&]\\{(?<body>[^!}][^}]*)\\}"
       unscanned_paths: []
     performance:
-      compiled_schema_cache: true
+      schema_store: true
     key_sort_orders: []
     scopes:
       LOGICAL_ID:

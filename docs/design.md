@@ -213,33 +213,40 @@ A stack's schema is the `schema.json` of the grammar version that stack initiali
 - What the extension works out from a schema, such as the node fingerprints and validators of the schema checks, belongs to the schema's entry and goes with it.
 - A modeline's fragment names a node of the schema it reads: the schema is cached once by its text, and the fragment is kept with the reading file, never as a cache entry of its own.
 
+The validating worker loads each schema through the YAML DSL standard's schema cache, one per worker:
+
+- Its capacity is `yaml-dsl-editor.cache.schemaCapacity`.
+- A schema the worker is sent stays loaded until the editor's schema cache drops it.
+
 A DSL's `performance` block states how the editor keeps a large schema fast:
 
 | Field | What it states |
 |---|---|
-| `compiled_schema_cache` | whether the DSL's compiled schema is kept in the extension's storage and loaded in later sessions instead of compiled |
+| `schema_store` | whether the schema cache's store keeps the standard's prepared schema in the extension's storage, read in later sessions instead of prepared again |
 
-- A kept compiled schema is one file per DSL entry, stating the schema's hash, the extension's build and the validator library's version.
-- The validating worker loads it when all three match. When any differs, or the file cannot be loaded, the worker compiles the schema and saves over the file.
-- The saved validator refers to the nodes of the schema the worker holds, so a failure names the same schema nodes as a fresh compile.
-- A save writes a new file and renames it over the old one, so a reader finds the whole of one compile or the other.
+| Kept | Where |
+|---|---|
+| an entry | one file per entry key, named by the key, in the extension's storage |
+| its content | the standard's prepared schema: the draft, the schema as written, and the schema its requiredness markers are read into |
+| its key | the standard's, so a schema or package version that differs never reads it |
+
+- A write goes to a new file renamed over the entry, so a reader finds the whole of one write or the other.
+- An entry that does not read is prepared again from the schema and written over.
 
 ```mermaid
 flowchart TD
-  request["A document of an opted-in DSL<br/>is validated, its schema not yet compiled"] --> read{"Read the DSL entry's file"}
-  read -- "missing" --> compile
-  read -- "found" --> header{"Its header states this schema's hash,<br/>this extension build and this validator version?"}
-  header -- "any differs:<br/>the schema changed, or the extension was updated" --> compile
-  header -- "all match" --> load{"Load the saved validator,<br/>its schema references bound to the parsed schema"}
-  load -- "loaded" --> validate
-  load -- "cannot load" --> compile
-  compile["Compile the schema"] --> save["Write the validator with its header beside the file,<br/>then rename it over the file"]
+  request["A document of an opted-in DSL<br/>is validated, its schema not yet loaded"] --> read{"Read the entry's file"}
+  read -- "missing" --> prepare
+  read -- "found" --> restore{"Build the validator<br/>from the prepared schema"}
+  restore -- "built" --> validate
+  restore -- "does not read" --> prepare
+  prepare["Prepare the schema"] --> save["Write the entry beside the file,<br/>then rename it over the file"]
   save --> validate["Validate the document"]
-  validate --> held["Kept with the schema's cache entry<br/>until the schema cache drops it"]
-  classDef savedPath fill:#6495ED33
-  classDef compiledPath fill:#FFB74D40
-  class read,header,load savedPath
-  class compile,save compiledPath
+  validate --> held["Kept loaded until<br/>the schema cache drops it"]
+  classDef storedPath fill:#6495ED33
+  classDef preparedPath fill:#FFB74D40
+  class read,restore storedPath
+  class prepare,save preparedPath
 ```
 
 ### Staleness checks
@@ -670,7 +677,7 @@ A parser states what its draft's keywords mean:
 | `deprecated` | not read | read | read |
 | validator | Ajv's draft-07 | Ajv's draft 2019-09 | Ajv's draft 2020-12 |
 
-The validator's core compiles each schema once with its draft's validator, and reports each failure at its document path; an alternative none of whose branches holds is one failure, without the branches' own, and so is a key's dependency it does not meet.
+The validator's core compiles parts of a schema with its draft's validator, for the schema checks and the branches conditions select; a document is validated by the standard, under Validation.
 
 A `pattern` or `patternProperties` key is a regular expression built with the `u` flag, as JSON Schema says.
 
@@ -681,7 +688,19 @@ A part of a schema is compiled on its own, with only the schema's nodes its `$re
 
 ### Validation
 
-Specified by the YAML DSL standard's [package design](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/package-design.md), under Schema validation: how a document is read by its DSL's `validator` block before it is validated, and how each problem is worded.
+Validation is the YAML DSL standard's, specified by its [package design](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/package-design.md) under Schema validation: the standard's package reads a document by its DSL's `validator` block, validates it against its schema, and words each problem.
+
+The editor hands the standard the document its loops and merge macros expand to, each value as the standard's resolved value:
+
+| Written | Handed as |
+|---|---|
+| a scalar, a list or a map | itself |
+| a whole reference, or a tag key holding one | a `reference` |
+| a map whose one key is a call without a name | a `call` |
+| a string holding a placeholder | a `template` |
+| a key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode` | the key as written, and the field it names as a `call` where the map writes none |
+
+A problem's subject is placed back on the key that wrote it, through the call key, the merge macro and the loop that made it.
 
 Each document is validated against its schema:
 
@@ -696,10 +715,9 @@ Each document is validated against its schema:
 - A missing required field is marked on its map's key, and an unknown field on its own key.
 - A dependency a key does not meet is marked on that key, its message naming what the key needs.
 - A fold holding a file with a YAML error is not validated.
-- A schema that cannot be compiled is one error at the document: `the schema cannot be compiled`, then the compiler's text as written in its own `text` code block.
+- A schema that cannot be compiled is one error at the document: `the schema cannot be compiled: <why>`, the reason as the standard states it.
 - Validation reads the fold, so an opted-out key is not validated.
-- A key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode`, supplies that field, so the field is not reported missing.
-- A value an expression computes, a call without a name, a reference or a placeholder, is not checked against its field's type, as the standard states.
+- A schema whose draft the editor does not read is not validated.
 - Hover reads `child_values_from_parent_key` to document the field a key sets.
 - Where `allow_quoted_values` reads a quoted value, hover and completion show the schema's types, and what the extension writes stays unquoted.
 
@@ -1221,7 +1239,7 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 
 - The extension's own settings are VS Code settings under the extension's name, `yaml-dsl-editor`.
 - A setting is the user's choice of how the editor behaves, the same for every DSL. What a DSL is, and its syntax, lives in `yaml-dsl.yml`, never in a setting.
-- Every cache the extension keeps is bounded. A cache held in memory has its capacity as a setting; the compiled schemas kept on disk are bounded by the DSL entries that opt in, one each.
+- Every cache the extension keeps is bounded. A cache held in memory has its capacity as a setting; the schema store on disk holds one entry for each schema an opted-in DSL loads.
 - Every behavior that nags has a setting that turns it off.
 - A change to a setting applies at once.
 - The README lists every setting.

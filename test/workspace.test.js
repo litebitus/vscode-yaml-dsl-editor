@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorkspace, SCHEMA_UNAVAILABLE } = require('../lib/workspace');
+const { CONFIG_VERSIONS } = require('../lib/config');
 const {
   scope,
   declaration,
@@ -293,10 +294,14 @@ test('a yaml-dsl.yml hovers and completes by the standard\'s schema at the versi
   const fileIncludesNote = '<span style="color:var(--vscode-yamlDslEditor-dark-overlayHeadingForeground);">'
     + 'Globs of the files the DSL owns.';
   assert.ok(fileIncludes.startsWith(`\`file_includes\`: *globs*    \`[required]\`\n\n${fileIncludesNote}`), fileIncludes);
-  assert.match(ws.hover(uri, at(config, 'version')).contents.value, /\*One of:\* `"1"`, `"1\.2"`$/);
-  const minor = config.replace('version: "1"', 'version: "1.0"');
-  await ws.sync(uri, '/repo/yaml-dsl.yml', minor);
-  assert.match(ws.hover(uri, at(minor, 'version')).contents.value, /\*One of:\* `"1"`, `"1\.0"`$/);
+  for (const version of CONFIG_VERSIONS) {
+    const stated = config.replace('version: "1"', `version: "${version}"`);
+    await ws.sync(uri, '/repo/yaml-dsl.yml', stated);
+    const readMinor = version === '1' ? CONFIG_VERSIONS.at(-1) : version;
+    const versionHover = ws.hover(uri, at(stated, 'version')).contents.value;
+    assert.ok(versionHover.endsWith(`*One of:* \`"1"\`, \`"${readMinor}"\``), `${version}: ${versionHover}`);
+  }
+  await ws.sync(uri, '/repo/yaml-dsl.yml', config);
 
   const typing = 'version: "1"\ndsls:\n  - id: sample\n    fil\n';
   await ws.sync(uri, '/repo/yaml-dsl.yml', typing);

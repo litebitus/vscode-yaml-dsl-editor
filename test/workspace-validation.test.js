@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const { createWorkspace } = require('../lib/workspace');
 const { createInProcessValidation, createWorkerValidation } = require('../lib/validation-requests');
-const { compiledSchemaFileOf } = require('../lib/compiled-schema-files');
+const { schemaStoreFolderOf } = require('../lib/schema-store-files');
 const { dslEntry, configText } = require('./config-builders');
 
 const MOCK_SCHEMA_TEXT = JSON.stringify({
@@ -32,7 +32,7 @@ function mockConfigs(...entries) {
 const messagesOf = (problems) => problems.map((problem) => problem.message);
 
 test('with validation in the worker, a file\'s schema problems arrive when answered and the file is analyzed again, '
-  + 'and only an opted-in DSL keeps its compiled schema', async () => {
+  + 'and only an opted-in DSL keeps its prepared schema in the schema store', async () => {
   const storageFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-dsl-editor-mock-storage-'));
   const ws = mockWorkspace(() => createWorkerValidation());
   ws.setStorageFolder(storageFolder);
@@ -42,7 +42,7 @@ test('with validation in the worker, a file\'s schema problems arrive when answe
     dslEntry('mock-kept', {
       file_includes: ['{config_root}/kept/**/mock.yml'],
       schema_search_paths: ['{config_root}/mock.schema.json'],
-      performance: { compiled_schema_cache: true },
+      performance: { schema_store: true },
     }),
     dslEntry('mock-plain', {
       file_includes: ['{config_root}/plain/**/mock.yml'],
@@ -60,12 +60,11 @@ test('with validation in the worker, a file\'s schema problems arrive when answe
     assert.deepEqual(messagesOf(ws.problems(uri)), ['`name` must be `string`']);
   }
   assert.equal(answers, 2);
-  assert.equal(fs.existsSync(compiledSchemaFileOf(storageFolder, '/repo', 'mock-kept')), true);
-  assert.equal(fs.existsSync(compiledSchemaFileOf(storageFolder, '/repo', 'mock-plain')), false);
+  assert.equal(fs.readdirSync(schemaStoreFolderOf(storageFolder)).length, 1);
   ws.dispose();
 });
 
-test('without a storage folder no compiled schema is kept', async () => {
+test('without a storage folder no prepared schema is kept', async () => {
   const requests = [];
   const ws = mockWorkspace(() => {
     const validation = createInProcessValidation();
@@ -73,11 +72,11 @@ test('without a storage folder no compiled schema is kept', async () => {
   });
   await ws.setConfigs(mockConfigs(dslEntry('mock-kept', {
     schema_search_paths: ['{config_root}/mock.schema.json'],
-    performance: { compiled_schema_cache: true },
+    performance: { schema_store: true },
   })));
   await ws.sync('file:///repo/mock.yml', '/repo/mock.yml', 'name: 1\n');
   assert.deepEqual(messagesOf(ws.problems('file:///repo/mock.yml')), ['`name` must be `string`']);
-  assert.equal(requests.at(-1).compiledSchemaFile, null);
+  assert.equal(requests.at(-1).schemaStoreFolder, null);
   ws.dispose();
 });
 

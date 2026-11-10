@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validationDocumentOf } = require('../lib/validation-document');
+const { validationDocumentOf, validatorBlockOf } = require('../lib/validation-document');
+const { resolvedDocumentProblemsOf, problemTextsOf } = require('./validation-builders');
 
 const dsl = {
   validator: {
@@ -9,6 +10,19 @@ const dsl = {
   },
   function: { markerFunction: { callMarker: 'fn.', splatOperator: '*', callsWithoutNameAllowed: true } },
 };
+
+const entriesSchemaOf = (entrySchema) => ({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  properties: { mocktype: { type: 'object', additionalProperties: entrySchema } },
+});
+
+function sourceProblemsOf(entrySchema, written, documentDsl = dsl) {
+  const document = validationDocumentOf(written, documentDsl);
+  const problems = resolvedDocumentProblemsOf(entriesSchemaOf(entrySchema), document.resolvedDocument(), {
+    validator: validatorBlockOf(documentDsl),
+  });
+  return problemTextsOf(document.sourceProblemsOf(problems));
+}
 
 test('a key matching a child value pattern sets that field of its entry, unless the entry sets it', () => {
   const written = {
@@ -50,24 +64,33 @@ test('a merge base key is merged under each sibling entry, the sibling\'s own fi
 
 test('nothing under a merge base is required, and an error a merge base copied into a sibling is reported once, at the base', () => {
   const written = { mocktype: { defaults: { size: 'mock-wrong' }, primary: { mode: 'fast' } } };
-  const document = validationDocumentOf(written, dsl);
-  assert.equal(document.reports({ keyword: 'required', path: ['mocktype', 'defaults'] }), false);
-  assert.equal(document.reports({ keyword: 'required', path: ['mocktype', 'primary'] }), true);
-  assert.equal(document.reports({ keyword: 'type', path: ['mocktype', 'defaults', 'size'] }), true);
-  assert.equal(document.reports({ keyword: 'type', path: ['mocktype', 'primary', 'size'] }), false);
-  assert.equal(document.reports({ keyword: 'type', path: ['mocktype', 'primary', 'mode'] }), true);
+  const entrySchema = {
+    type: 'object',
+    required: ['label'],
+    properties: { label: { type: 'string' }, size: { type: 'integer' }, mode: { type: 'string' } },
+  };
+  assert.deepEqual(sourceProblemsOf(entrySchema, written), [
+    [['mocktype', 'defaults', 'size'], '`size` must be `integer`'],
+    [['mocktype', 'primary'], '`label` is required'],
+  ]);
 });
 
 test('a field a call key of the marker function supplies is not reported missing', () => {
   const written = { mocktype: { doors: { 'value fn.jsonencode': { mock: 1 } }, other: { 'fn.merge*': [] } } };
-  const document = validationDocumentOf(written, dsl);
-  const missing = (path, requiredField) => ({ keyword: 'required', path, requiredField });
-  assert.equal(document.reports(missing(['mocktype', 'doors'], 'value')), false);
-  assert.equal(document.reports(missing(['mocktype', 'doors'], 'path')), true);
-  assert.equal(document.reports(missing(['mocktype', 'other'], 'value')), true);
-  assert.equal(document.reports(missing(['mocktype', 'absent'], 'value')), true);
-  const withoutCalls = validationDocumentOf(written, { ...dsl, function: null });
-  assert.equal(withoutCalls.reports(missing(['mocktype', 'doors'], 'value')), true);
+  const entrySchema = {
+    type: 'object',
+    required: ['value', 'path'],
+    properties: { value: { type: 'string' }, path: { type: 'string' } },
+  };
+  assert.deepEqual(sourceProblemsOf(entrySchema, written), [
+    [['mocktype', 'doors'], '`path` is required'],
+  ]);
+  assert.deepEqual(sourceProblemsOf(entrySchema, written, { ...dsl, function: null }), [
+    [['mocktype', 'doors'], '`path` is required'],
+    [['mocktype', 'doors'], '`value` is required'],
+    [['mocktype', 'other'], '`path` is required'],
+    [['mocktype', 'other'], '`value` is required'],
+  ]);
 });
 
 test('a value a call without a name or a reference computes is not checked against its type', () => {
@@ -84,36 +107,47 @@ test('a value a call without a name or a reference computes is not checked again
       },
     },
   };
-  const primary = ['mocktype', 'primary'];
-  const document = validationDocumentOf(written, {
+  const entrySchema = {
+    type: 'object',
+    properties: {
+      command: { type: 'array', items: { type: 'string' } },
+      ports: { type: 'array' },
+      size: { type: 'integer' },
+    },
+  };
+  const referencingDsl = {
     ...dsl,
     references: [{ pattern: '^ref (?<type>[a-z]+)\\.(?<name>[a-z]+)', positions: ['whole_scalar'] }],
-  });
-  assert.equal(document.reports({ keyword: 'type', path: [...primary, 'command', 1] }), false);
-  assert.equal(document.reports({ keyword: 'type', path: [...primary, 'command', 1, 'fn.format*', 0] }), false);
-  assert.equal(document.reports({ keyword: 'type', path: [...primary, 'command', 2] }), true);
-  assert.equal(document.reports({ keyword: 'type', path: [...primary, 'ports'] }), false);
-  assert.equal(document.reports({ keyword: 'type', path: [...primary, 'size'] }), true);
+  };
+  assert.deepEqual(sourceProblemsOf(entrySchema, written, referencingDsl), [
+    [['mocktype', 'primary', 'command', 2], '`command[2]` must be `string`'],
+    [['mocktype', 'primary', 'size'], '`size` must be `integer`'],
+  ]);
 });
 
 test('an alternative is not reported when every field of one of its missing sets is supplied', () => {
   const written = { mocktype: { doors: { cors: { 'origins fn.formatlist*': [] } } } };
-  const document = validationDocumentOf(written, dsl);
-  const missing = (path, requiredField) => ({ keyword: 'required', path, requiredField });
-  const cors = ['mocktype', 'doors', 'cors'];
-  const alternative = (requirementSetsToPass) => (
-    { keyword: 'oneOf', path: ['mocktype', 'doors'], requirementSetsToPass }
-  );
-  const dependency = { keyword: 'dependentRequired', path: cors, requiredField: 'origins' };
-  assert.equal(document.reports(alternative([[missing(cors, 'methods')], [missing(cors, 'origins')]])), false);
-  assert.equal(document.reports(alternative([[missing(cors, 'origins'), missing(cors, 'methods')]])), true);
-  assert.equal(document.reports(alternative([[dependency]])), true);
-  assert.equal(document.reports(alternative(undefined)), true);
+  const entrySchemaWith = (alternatives) => ({
+    type: 'object',
+    properties: { cors: { type: 'object' } },
+    ...alternatives,
+  });
+  const corsRequiring = (...fields) => ({ properties: { cors: { required: fields } } });
+  assert.deepEqual(sourceProblemsOf(entrySchemaWith({
+    oneOf: [corsRequiring('methods'), corsRequiring('origins')],
+  }), written), []);
+  assert.deepEqual(sourceProblemsOf(entrySchemaWith({ anyOf: [corsRequiring('origins', 'methods')] }), written), [
+    [['mocktype', 'doors'], '`doors` matches none of its allowed forms'],
+  ]);
 });
 
 test('a DSL without validator rules is validated as written', () => {
   const written = { mocktype: { defaults: { size: 1 }, 'name mock-primary': {} } };
-  const document = validationDocumentOf(written, { validator: null, function: null });
-  assert.deepEqual(document.value, written);
-  assert.equal(document.reports({ keyword: 'required', path: ['mocktype', 'defaults'] }), true);
+  const withoutRules = { validator: null, function: null };
+  assert.deepEqual(validationDocumentOf(written, withoutRules).value, written);
+  const entrySchema = { type: 'object', required: ['label'], properties: { label: { type: 'string' } } };
+  assert.deepEqual(sourceProblemsOf(entrySchema, written, withoutRules), [
+    [['mocktype', 'defaults'], '`label` is required'],
+    [['mocktype', 'name mock-primary'], '`label` is required'],
+  ]);
 });

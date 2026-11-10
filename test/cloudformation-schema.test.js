@@ -2,7 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { schemaValidatorFor, schemaParserForDocument } = require('../lib/json-schema');
+const { schemaParserForDocument } = require('../lib/json-schema');
+const { validationProblemsOf } = require('./validation-builders');
 const { unicodePatternOf } = require('../scripts/cloudformation-schema/regex-patterns');
 const { zipEntriesOf } = require('../scripts/cloudformation-schema/zip-entries');
 const { resourceTypeDefinitionOf } = require('../scripts/cloudformation-schema/provider-schemas');
@@ -26,13 +27,13 @@ function mockProvider(typeName) {
   return mockProviders().find((provider) => provider.typeName === typeName);
 }
 
-function mockTemplateValidator() {
-  const { schema } = templateSchemaOf(mockProviders(), { region: 'mock-region-1', downloadDate: '2026-01-01' });
-  return schemaValidatorFor(schema);
+function mockTemplateSchema() {
+  return templateSchemaOf(mockProviders(), { region: 'mock-region-1', downloadDate: '2026-01-01' }).schema;
 }
 
-function failureKeywordsOf(validator, template) {
-  return validator.documentFailures(template).map(({ path: failurePath, keyword }) => [failurePath.join('.'), keyword]);
+function problemMessagesOf(schema, template) {
+  return validationProblemsOf(schema, template)
+    .map(({ path: problemPath, message }) => [problemPath.join('.'), message]);
 }
 
 test('a zip\'s stored and deflated entries are read, and its folders are not entries', () => {
@@ -93,8 +94,8 @@ test('the template schema states its source and gives each resource the properti
     'AWS::Mock::Bucket',
     'AWS::Mock::Queue',
   ]);
-  const validator = mockTemplateValidator();
-  assert.deepEqual(failureKeywordsOf(validator, {
+  const templateSchema = mockTemplateSchema();
+  assert.deepEqual(problemMessagesOf(templateSchema, {
     AWSTemplateFormatVersion: '2010-09-09',
     Resources: {
       MockBucket: {
@@ -107,7 +108,7 @@ test('the template schema states its source and gives each resource the properti
       MockRegistry: { Type: 'MockOrg::Mock::Thing' },
     },
   }), []);
-  assert.deepEqual(failureKeywordsOf(validator, {
+  assert.deepEqual(problemMessagesOf(templateSchema, {
     Resources: {
       MockBucket: { Type: 'AWS::Mock::Bucket', Properties: { Arn: 'mock-arn', Rules: [{ Days: 0 }] } },
       MockQueue: { Type: 'AWS::Mock::Queue', Properties: { DelaySeconds: 901 } },
@@ -115,17 +116,17 @@ test('the template schema states its source and gives each resource the properti
       MockBare: { Type: 'AWS::Mock::Bucket' },
     },
   }), [
-    ['Resources.MockBucket.Properties', 'required'],
-    ['Resources.MockBucket.Properties', 'additionalProperties'],
-    ['Resources.MockBucket.Properties.Rules.0', 'required'],
-    ['Resources.MockBucket.Properties.Rules.0.Days', 'minimum'],
-    ['Resources.MockQueue.Properties.DelaySeconds', 'maximum'],
-    ['Resources.MockMissing.Type', 'anyOf'],
-    ['Resources.MockBare', 'required'],
+    ['Resources.MockBucket.Properties', '`BucketName` is required'],
+    ['Resources.MockBucket.Properties.Arn', '`Arn` is not defined in the schema'],
+    ['Resources.MockBucket.Properties.Rules.0', '`Prefix` is required'],
+    ['Resources.MockBucket.Properties.Rules.0.Days', '`Days` must be >= `1`'],
+    ['Resources.MockQueue.Properties.DelaySeconds', '`DelaySeconds` must be <= `900`'],
+    ['Resources.MockMissing.Type', '`Type` matches none of its allowed forms'],
+    ['Resources.MockBare', '`Properties` is required'],
   ]);
-  assert.deepEqual(failureKeywordsOf(validator, {
+  assert.deepEqual(problemMessagesOf(templateSchema, {
     Resources: { MockQueue: { Type: 'AWS::Mock::Queue', Properties: { DelaySeconds: { 'Fn::Mock': 1 } } } },
-  }), [['Resources.MockQueue.Properties.DelaySeconds', 'type']]);
+  }), [['Resources.MockQueue.Properties.DelaySeconds', '`DelaySeconds` must be `integer`']]);
 });
 
 test('the template schema publishes every intrinsic and condition function in its function table, '
@@ -187,24 +188,27 @@ test('the template schema publishes every intrinsic and condition function in it
   assert.deepEqual(schema.properties.Conditions.patternProperties['^[A-Za-z0-9]+$'], {
     $ref: '#/$defs/condition_ref_or_func',
   });
-  const conditionFailures = (condition) => failureKeywordsOf(mockTemplateValidator(), {
+  const conditionFailures = (condition) => problemMessagesOf(mockTemplateSchema(), {
     Conditions: { MockOn: condition },
     Resources: { MockQueue: { Type: 'AWS::Mock::Queue' } },
   });
   assert.deepEqual(conditionFailures({ Condition: 'MockOther' }), []);
   assert.deepEqual(conditionFailures({ 'Fn::Equals': ['mock', 'mock'] }), []);
-  assert.deepEqual(conditionFailures({ Condition: 3 }), [['Conditions.MockOn.Condition', 'type']]);
-  const delaySecondsFailures = (delaySeconds) => failureKeywordsOf(mockTemplateValidator(), {
+  assert.deepEqual(conditionFailures({ Condition: 3 }), [
+    ['Conditions.MockOn.Condition', '`Condition` must be `string`'],
+  ]);
+  const delaySecondsFailures = (delaySeconds) => problemMessagesOf(mockTemplateSchema(), {
     Resources: { MockQueue: { Type: 'AWS::Mock::Queue', Properties: { DelaySeconds: delaySeconds } } },
   });
   assert.deepEqual(delaySecondsFailures({ Ref: 'MockParameter' }), []);
-  assert.deepEqual(delaySecondsFailures({ Ref: 3 }), [['Resources.MockQueue.Properties.DelaySeconds', 'type']]);
+  assert.deepEqual(delaySecondsFailures({ Ref: 3 }), [
+    ['Resources.MockQueue.Properties.DelaySeconds', '`DelaySeconds` must be `integer`'],
+  ]);
   assert.deepEqual(published.vocabulary.Join.arguments.map(({ name, type }) => [name, type]), [
     ['delimiter', 'text'],
     ['values', 'list'],
   ]);
-  const validator = mockTemplateValidator();
-  assert.deepEqual(failureKeywordsOf(validator, {
+  assert.deepEqual(problemMessagesOf(mockTemplateSchema(), {
     Resources: { MockQueue: { Type: 'AWS::Mock::Queue', Properties: { DelaySeconds: { 'Fn::If': 'mock' } } } },
   }), []);
 });
@@ -236,11 +240,10 @@ test('an intrinsic function call stands in for a value at any depth of an open v
     Resources: { MockQueue: { Type: 'AWS::Mock::Queue' } },
     Outputs: { MockOut: { Value: { mockKey: [{ 'Fn::GetAtt': 'MockQueue.Arn' }] } } },
   };
-  const validator = schemaValidatorFor(schema);
-  assert.deepEqual(failureKeywordsOf(validator, template), []);
+  assert.deepEqual(problemMessagesOf(schema, template), []);
   const tableCheckedArguments = structuredClone(template);
   tableCheckedArguments.Outputs.MockOut.Value.mockKey[0]['Fn::GetAtt'] = 1;
-  assert.deepEqual(failureKeywordsOf(validator, tableCheckedArguments), []);
+  assert.deepEqual(problemMessagesOf(schema, tableCheckedArguments), []);
 });
 
 test('a resource\'s Type selects its service\'s branch and then its type\'s, for validation, fields and hover', () => {
@@ -268,8 +271,8 @@ test('a resource\'s Type selects its service\'s branch and then its type\'s, for
       MockTopic: { Type: 'AWS::MockOther::Topic', Properties: { BucketName: 'mock-bucket' } },
     },
   };
-  assert.deepEqual(failureKeywordsOf(schemaValidatorFor(schema), template), [
-    ['Resources.MockTopic.Properties', 'additionalProperties'],
+  assert.deepEqual(problemMessagesOf(schema, template), [
+    ['Resources.MockTopic.Properties.BucketName', '`BucketName` is not defined in the schema'],
   ]);
   const parser = schemaParserForDocument(schema, template);
   const fieldNamesAt = (logicalId) => Object.keys(parser.fieldsAt(['Resources', logicalId, 'Properties']));
@@ -284,25 +287,25 @@ test('a resource\'s Type selects its service\'s branch and then its type\'s, for
 
 test('the template sections hold the version, parameters, outputs and intrinsic functions '
   + 'as CloudFormation states them', () => {
-  const validator = mockTemplateValidator();
-  assert.deepEqual(failureKeywordsOf(validator, {
+  const templateSchema = mockTemplateSchema();
+  assert.deepEqual(problemMessagesOf(templateSchema, {
     Parameters: { MockName: { Type: 'String', Default: 'mock-name' } },
     Conditions: { MockOn: { 'Fn::Equals': [{ Ref: 'MockName' }, 'mock-name'] } },
     Resources: { MockQueue: { Type: 'AWS::Mock::Queue' } },
     Outputs: { MockOut: { Value: { 'Fn::GetAtt': ['MockQueue', 'Arn'] }, Export: { Name: 'mock-export' } } },
   }), []);
-  assert.deepEqual(failureKeywordsOf(validator, {
+  assert.deepEqual(problemMessagesOf(templateSchema, {
     AWSTemplateFormatVersion: '2000-01-01',
     Parameters: { MockName: { Default: 'mock-name' } },
     Resources: { 'mock-queue': { Type: 'AWS::Mock::Queue' } },
     Outputs: { MockOut: { Description: 'mock' } },
     MockSection: {},
   }), [
-    ['', 'additionalProperties'],
-    ['AWSTemplateFormatVersion', 'const'],
-    ['Parameters.MockName', 'required'],
-    ['Resources', 'additionalProperties'],
-    ['Outputs.MockOut', 'required'],
+    ['AWSTemplateFormatVersion', '`AWSTemplateFormatVersion` must be `"2010-09-09"`'],
+    ['Parameters.MockName', '`Type` is required'],
+    ['Resources.mock-queue', '`mock-queue` is not defined in the schema'],
+    ['Outputs.MockOut', '`Value` is required'],
+    ['MockSection', '`MockSection` is not defined in the schema'],
   ]);
-  assert.deepEqual(failureKeywordsOf(validator, {}), [['', 'required']]);
+  assert.deepEqual(problemMessagesOf(templateSchema, {}), [['', '`Resources` is required']]);
 });

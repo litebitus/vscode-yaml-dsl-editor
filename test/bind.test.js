@@ -214,7 +214,7 @@ test('document events analyze and custom requests answer', async () => {
 });
 
 test('the server validates in its worker, tells the editor to reread a file once answered, '
-  + 'keeps compiled schemas in the storage folder it is given, and stops the worker on shutdown', async () => {
+  + 'keeps its schema store in the storage folder it is given, and stops the worker on shutdown', async () => {
   const connection = fakeConnection();
   const documents = fakeDocuments();
   const storageFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-dsl-editor-mock-storage-'));
@@ -228,7 +228,7 @@ test('the server validates in its worker, tells the editor to reread a file once
     entries: [{
       text: configText(dslEntry('sample', {
         schema_search_paths: ['{config_root}/schema.json'],
-        performance: { compiled_schema_cache: true },
+        performance: { schema_store: true },
       })),
       dir: '/repo',
     }],
@@ -245,7 +245,7 @@ test('the server validates in its worker, tells the editor to reread a file once
   ]);
   const answered = await connection.handlers['yaml-dsl/decorations']({ uri });
   assert.deepEqual(answered.problems.map((problem) => problem.message), ['`name` must be `string`']);
-  assert.equal(fs.readdirSync(path.join(storageFolder, 'compiled-schemas')).length, 1);
+  assert.equal(fs.readdirSync(path.join(storageFolder, 'schema-store')).length, 1);
   connection.handlers.shutdown();
   documents.handlers.change({ document: { uri, getText: () => 'name: 2\n' } });
   await workspace.whenIdle();
