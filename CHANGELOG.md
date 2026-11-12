@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Validation
+  - A value that is none of the constants an `anyOf` or `oneOf` lists reads `` `name` must be one of `"a"`, `"b"` ``, as an `enum`'s does.
+
 ## 0.11.1 - 2026-11-10
 
 - Validation
