@@ -595,7 +595,7 @@ A schema for this kind of value is built this way. This extension reads the sche
 |---|---|
 | signature | the field's name and, when its description carries no marker, its requirement as code, and its effective forms in italics after following `$ref`, `allOf`, each `anyOf`/`oneOf` alternative and the field's own `if` branch the value selects, each named by the definition the field refers to or by its type; a definition whose own `if` branch the value selects is named by that branch's definition, and a form adding its own type or properties to a definition is named by its type |
 | description | the description kept at the field, as written, rendered as markdown, shown as the table under Analysis states; the composite's description is the value shape and is not shown |
-| accepts | one line per form, with its constraints, when the field has more than one form |
+| accepts | one line per form, with its constraints, when the field has more than one form; under it, the description its `anyOf`/`oneOf` alternative states, as written |
 | tags | one line per constraint, when it has one form: values, default, pattern, bounds, lengths, items, dependencies, deprecated |
 | conditions | each `if`/`then`/`else` on the object, as when and otherwise; and on a field, what its parent's dependencies require when it is set, and its parent's conditions that name it, cut to what they say about the field |
 

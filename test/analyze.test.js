@@ -289,6 +289,40 @@ test('a field hover documents it: a signature with its shape and requirement, it
   assert.equal(documentationAt('mock-a').value, '`tags[0]`: *string*\n\n*Pattern:* `^mock-`');
 });
 
+test('a field hover shows under each accepted form the description its alternative states, as written', () => {
+  const schema = {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    properties: {
+      labels: {
+        type: 'array',
+        items: {
+          oneOf: [
+            { const: 'mock_owner', description: 'The `owner`, as <written>.\nSecond line.\n\nSecond paragraph.' },
+            { const: 'mock_team', description: 'The team.' },
+            { const: 'mock_zone' },
+          ],
+        },
+      },
+    },
+  };
+  const text = 'labels:\n  - mock_owner\n';
+  const doc = analyzeDocument(text, '/repo/a.yml', { symbols: [], references: [] });
+  const documentation = hoverAt(doc, rangeOf(text, 'mock_owner').start, { symbols: [] }, schema).contents.value;
+  assert.equal(documentation, [
+    '`labels[0]`: *string | string | string*',
+    [
+      '*Accepts:*',
+      '- `string`: *Value:* `"mock_owner"`  ',
+      `  ${schemaTextOf('The `owner`, as &lt;written>.\n  Second line.')}`,
+      '  ',
+      `  ${schemaTextOf('Second paragraph.')}`,
+      '- `string`: *Value:* `"mock_team"`  ',
+      `  ${schemaTextOf('The team.')}`,
+      '- `string`: *Value:* `"mock_zone"`',
+    ].join('\n'),
+  ].join('\n\n'));
+});
+
 test('a hover on a valued target shows its value, and a builtin names its scope', () => {
   const globalRule = {
     pattern: '^(?<name>[a-z]+)$',

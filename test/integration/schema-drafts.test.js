@@ -82,7 +82,7 @@ suite('JSON Schema drafts', () => {
     const valueWarning = `the value of \`short\` is deprecated\n\n${schemaNoteOf('write it as text')}`;
     const struckString = 's̶t̶r̶i̶n̶g̶';
     const fieldDocumentation = (key) => `\`${key}\`: *object | ${struckString}*    \`[optional]\`\n\n`
-      + `*Accepts:*\n- \`object\`\n- \`${struckString}\``;
+      + `*Accepts:*\n- \`object\`\n- \`${struckString}\`  \n  ${schemaTextOf('write it as text')}`;
     await hoverTextBecomes(doc, positionInText(doc, 'short: mock', 'short: '.length), valueWarning);
     await hoverTextBecomes(doc, positionInText(doc, 'short'), fieldDocumentation('short'));
     await hoverTextBecomes(doc, positionInText(doc, 'full'), fieldDocumentation('full'));

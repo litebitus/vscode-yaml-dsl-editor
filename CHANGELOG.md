@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Schemas
+  - A field's hover shows, under each form it accepts, the description its `anyOf` or `oneOf` alternative states, as written.
 - Validation
   - A value that is none of the constants an `anyOf` or `oneOf` lists reads `` `name` must be one of `"a"`, `"b"` ``, as an `enum`'s does.
 

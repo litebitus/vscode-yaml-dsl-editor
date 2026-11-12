@@ -45,7 +45,10 @@ test('a deprecated oneOf or anyOf choice renders struck, in a draft that reads d
   const choices = { oneOf: [{ $ref: '#/$defs/mock_call_form' }, { type: 'string', deprecated: true }] };
   const rendered = renderedOf(DRAFT_2020_12, choices);
   assert.equal(rendered.shape, `mock_call_form | ${struckString}`);
-  assert.deepEqual(rendered.accepts, ['- `mock_call_form`: object', `- \`${struckString}\``]);
+  assert.deepEqual(
+    rendered.accepts.map((acceptedForm) => acceptedForm.line),
+    ['- `mock_call_form`: object', `- \`${struckString}\``],
+  );
   assert.equal(renderedOf(DRAFT_2020_12, { anyOf: choices.oneOf }).shape, `mock_call_form | ${struckString}`);
   assert.equal(renderedOf(DRAFT_07, choices).shape, 'mock_call_form | string');
   assert.equal(renderedOf(DRAFT_2020_12, { type: 'string', deprecated: true }).shape, 'string');
