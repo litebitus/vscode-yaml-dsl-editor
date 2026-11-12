@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.2 - 2026-11-12
 
 - Schemas
   - A field's hover shows, under each form it accepts, the description its `anyOf` or `oneOf` alternative states, as written.
