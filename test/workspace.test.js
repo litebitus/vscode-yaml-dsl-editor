@@ -448,8 +448,9 @@ test('a line edit re-parses that file and leaves the rest of the stack', async (
   assert.ok(ws.reads.includes(common));
   assert.ok(ws.reads.includes(overlay));
   assert.ok(ws.reads.includes(schema));
-  const marked = ws.reads.length;
   await visitStack(ws, common);
+  await ws.sync('file://' + overlay, overlay, files[overlay]);
+  const marked = ws.reads.length;
   const edited = 'locals:\n  kept: overlay\n';
   await ws.sync('file://' + overlay, overlay, edited);
   assert.equal(ws.reads.length, marked);
@@ -640,6 +641,51 @@ test('a schema that changes on disk revalidates every file reading it, the commo
   await visitStack(ws, one);
   assert.deepEqual(validationMessages(ws, common), []);
   assert.deepEqual(validationMessages(ws, one), [[4, '`size` must be `string`']]);
+});
+
+test('a file opened again reads its schema again, though no change on disk was reported', async () => {
+  const modeline = '# yaml-language-server: $schema=../schema.json\n';
+  const schemaPath = `${root}/schema.json`;
+  const files = {
+    [schemaPath]: validatedStackSchema,
+    [common]: 'mocktype: {}\n',
+    [one]: `${modeline}mocktype:\n  shared:\n    name: mock\n    size: 1\n    mock_added: mock-value\n`,
+  };
+  const ws = workspace(files);
+  await ws.setConfigs([{ text: configText(sampleEntry({ validator: validatorRules })), dir: '/repo' }]);
+  await ws.sync(`file://${one}`, one, files[one]);
+  await visitStack(ws, one);
+  assert.deepEqual(validationMessages(ws, one), [[5, '`mock_added` is not defined in the schema']]);
+  await ws.close(`file://${one}`);
+  const widened = JSON.parse(validatedStackSchema);
+  widened.properties.mocktype.additionalProperties.properties.mock_added = {
+    type: 'string',
+    description: '[optional] Mock field added on disk.',
+  };
+  files[schemaPath] = JSON.stringify(widened);
+  await ws.sync(`file://${one}`, one, files[one]);
+  await visitStack(ws, one);
+  assert.deepEqual(validationMessages(ws, one), []);
+});
+
+test('a file whose modeline names a schema URL opened again fetches nothing: the URL is read when a stack reading it loads', async () => {
+  const urlModeline = '# yaml-language-server: $schema=https://example.test/mock.schema.json\n';
+  const files = {
+    [common]: 'mocktype: {}\n',
+    [one]: `${urlModeline}mocktype: {}\n`,
+  };
+  const fetched = [];
+  const ws = workspace(files, async (url) => {
+    fetched.push(url);
+    return validatedStackSchema;
+  });
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${one}`, one, files[one]);
+  const fetchedOnLoad = fetched.length;
+  await ws.close(`file://${one}`);
+  await ws.sync(`file://${one}`, one, files[one]);
+  assert.ok(fetchedOnLoad > 0);
+  assert.equal(fetched.length, fetchedOnLoad);
 });
 
 test('an overlay schema that changes drops that overlay from the common layer\'s error, the other overlay\'s schema kept', async () => {

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Schemas
+  - A file opened again reads its schema on disk again, so a stack initialized while the file was closed is checked against its new schema; a schema URL keeps its max age.
+
 ## 0.11.2 - 2026-11-12
 
 - Schemas
