@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const vscode = require('vscode');
 const {
   shownDocument,
   fixtureCopy,
@@ -16,6 +17,22 @@ const {
   overlayHeadingOf,
 } = require('./overlay-schema-folders');
 const { isolateEachTest } = require('./test-isolation');
+
+const UNREPORTED_STACK_LABEL = 'unreported-schema';
+
+async function withUnreportedSchemaChanges(body) {
+  const ideSettings = vscode.workspace.getConfiguration();
+  const editorSettings = vscode.workspace.getConfiguration('yaml-dsl-editor');
+  const hidden = { [`**/${UNREPORTED_STACK_LABEL}-copy-*/**`]: true };
+  await ideSettings.update('files.watcherExclude', hidden, vscode.ConfigurationTarget.Global);
+  await editorSettings.update('cache.diskCheckSeconds', 1, vscode.ConfigurationTarget.Global);
+  try {
+    await body();
+  } finally {
+    await editorSettings.update('cache.diskCheckSeconds', undefined, vscode.ConfigurationTarget.Global);
+    await ideSettings.update('files.watcherExclude', undefined, vscode.ConfigurationTarget.Global);
+  }
+}
 
 function replaceSchemaFolder(overlayFolder, labelDescription) {
   const schemaFolder = path.join(overlayFolder, SCHEMA_FOLDER);
@@ -36,6 +53,19 @@ suite('schema reload', () => {
     await hoverTextBecomes(overlay, label, documentationOf('Label of two first'));
     replaceSchemaFolder(path.join(stack, 'two'), 'Label of two second');
     await hoverTextBecomes(overlay, label, documentationOf('Label of two second'));
+  });
+
+  test('a schema change the IDE does not report is read again at the next disk check', async () => {
+    await withUnreportedSchemaChanges(async () => {
+      const stack = fixtureCopy('stack', UNREPORTED_STACK_LABEL);
+      writeOverlays(stack, { one: 'Label of one first', two: 'Label of two first' });
+      const overlay = (await shownDocument(path.join(stack, 'two', 'mock.yml'))).document;
+      const label = positionInText(overlay, 'label: mock', 1);
+      const documentationOf = (description) => `\`label\`: *string*    \`[optional]\`\n\n${schemaTextOf(description)}`;
+      await hoverTextBecomes(overlay, label, documentationOf('Label of two first'));
+      fs.writeFileSync(path.join(stack, 'two', SCHEMA_FOLDER, SCHEMA_FILE), labelSchemaText('Label of two second'));
+      await hoverTextBecomes(overlay, label, documentationOf('Label of two second'));
+    });
   });
 
   test('a common layer field hover shows each overlay schema\'s documentation when the overlays\' schemas differ', async () => {

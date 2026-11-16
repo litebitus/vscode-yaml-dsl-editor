@@ -448,9 +448,8 @@ test('a line edit re-parses that file and leaves the rest of the stack', async (
   assert.ok(ws.reads.includes(common));
   assert.ok(ws.reads.includes(overlay));
   assert.ok(ws.reads.includes(schema));
-  await visitStack(ws, common);
-  await ws.sync('file://' + overlay, overlay, files[overlay]);
   const marked = ws.reads.length;
+  await visitStack(ws, common);
   const edited = 'locals:\n  kept: overlay\n';
   await ws.sync('file://' + overlay, overlay, edited);
   assert.equal(ws.reads.length, marked);
@@ -643,49 +642,111 @@ test('a schema that changes on disk revalidates every file reading it, the commo
   assert.deepEqual(validationMessages(ws, one), [[4, '`size` must be `string`']]);
 });
 
-test('a file opened again reads its schema again, though no change on disk was reported', async () => {
-  const modeline = '# yaml-language-server: $schema=../schema.json\n';
+function diskCheckedWorkspace(files, stats) {
+  const statted = [];
+  const read = [];
+  const ws = createWorkspace({
+    readFile: async (filePath) => {
+      read.push(filePath);
+      return Object.prototype.hasOwnProperty.call(files, filePath) ? files[filePath] : null;
+    },
+    statFile: async (filePath) => {
+      statted.push(filePath);
+      return Object.prototype.hasOwnProperty.call(stats, filePath) ? stats[filePath] : null;
+    },
+    fetchText: async () => validatedStackSchema,
+  });
+  ws.statted = statted;
+  ws.read = read;
+  return ws;
+}
+
+function widenedStackSchema() {
+  const widened = JSON.parse(validatedStackSchema);
+  widened.properties.mocktype.additionalProperties.properties.mode.enum.push('medium');
+  widened.properties.mocktype.additionalProperties.properties.size.type = 'string';
+  return JSON.stringify(widened);
+}
+
+test('a schema changed on disk with no change reported reloads at the next disk check, the common layer included', async () => {
+  const modeline = (schemaPath) => `# yaml-language-server: $schema=${schemaPath}\n`;
+  const schemaPath = `${root}/schema.json`;
+  const files = {
+    [schemaPath]: validatedStackSchema,
+    [common]: `${modeline('schema.json')}mocktype:\n  shared:\n    mode: medium\n`,
+    [one]: `${modeline('../schema.json')}mocktype:\n  shared:\n    name: mock\n    size: 1\n`,
+  };
+  const stats = { [schemaPath]: { modifiedMilliseconds: 1000, size: files[schemaPath].length } };
+  const ws = diskCheckedWorkspace(files, stats);
+  await ws.setConfigs([{ text: configText(sampleEntry({ validator: validatorRules })), dir: '/repo' }]);
+  await ws.sync(`file://${one}`, one, files[one]);
+  await visitStack(ws, one);
+  const heldSchemaHashes = () => [common, one].map((filePath) => ws.cache.get(common).data.schemas.get(filePath).hash);
+  const [commonHashBefore, oneHashBefore] = heldSchemaHashes();
+  assert.equal(commonHashBefore, oneHashBefore);
+  assert.deepEqual(validationMessages(ws, one), []);
+  files[schemaPath] = widenedStackSchema();
+  stats[schemaPath] = { modifiedMilliseconds: 2000, size: files[schemaPath].length };
+  await ws.checkSchemasOnDisk();
+  await visitStack(ws, one);
+  const [commonHashAfter, oneHashAfter] = heldSchemaHashes();
+  assert.notEqual(oneHashAfter, oneHashBefore);
+  assert.equal(commonHashAfter, oneHashAfter);
+  assert.deepEqual(validationMessages(ws, one), [[4, '`size` must be `string`']]);
+});
+
+test('a disk check whose stats are unchanged reads nothing', async () => {
   const schemaPath = `${root}/schema.json`;
   const files = {
     [schemaPath]: validatedStackSchema,
     [common]: 'mocktype: {}\n',
-    [one]: `${modeline}mocktype:\n  shared:\n    name: mock\n    size: 1\n    mock_added: mock-value\n`,
+    [one]: '# yaml-language-server: $schema=../schema.json\nmocktype: {}\n',
   };
-  const ws = workspace(files);
-  await ws.setConfigs([{ text: configText(sampleEntry({ validator: validatorRules })), dir: '/repo' }]);
-  await ws.sync(`file://${one}`, one, files[one]);
-  await visitStack(ws, one);
-  assert.deepEqual(validationMessages(ws, one), [[5, '`mock_added` is not defined in the schema']]);
-  await ws.close(`file://${one}`);
-  const widened = JSON.parse(validatedStackSchema);
-  widened.properties.mocktype.additionalProperties.properties.mock_added = {
-    type: 'string',
-    description: '[optional] Mock field added on disk.',
-  };
-  files[schemaPath] = JSON.stringify(widened);
-  await ws.sync(`file://${one}`, one, files[one]);
-  await visitStack(ws, one);
-  assert.deepEqual(validationMessages(ws, one), []);
-});
-
-test('a file whose modeline names a schema URL opened again fetches nothing: the URL is read when a stack reading it loads', async () => {
-  const urlModeline = '# yaml-language-server: $schema=https://example.test/mock.schema.json\n';
-  const files = {
-    [common]: 'mocktype: {}\n',
-    [one]: `${urlModeline}mocktype: {}\n`,
-  };
-  const fetched = [];
-  const ws = workspace(files, async (url) => {
-    fetched.push(url);
-    return validatedStackSchema;
-  });
+  const stats = { [schemaPath]: { modifiedMilliseconds: 1000, size: files[schemaPath].length } };
+  const ws = diskCheckedWorkspace(files, stats);
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   await ws.sync(`file://${one}`, one, files[one]);
-  const fetchedOnLoad = fetched.length;
-  await ws.close(`file://${one}`);
+  const readsBefore = ws.read.length;
+  ws.statted.length = 0;
+  await ws.checkSchemasOnDisk();
+  assert.deepEqual(ws.statted, [schemaPath]);
+  assert.equal(ws.read.length, readsBefore);
+});
+
+test('a disk check stats the current tab\'s schema first, and a file without an open tab not at all', async () => {
+  const otherRoot = '/repo/other-stack';
+  const otherOne = `${otherRoot}/one/mock.yml`;
+  const otherClosed = `${root}/two/mock.yml`;
+  const files = {
+    [`${root}/schema.json`]: validatedStackSchema,
+    [`${otherRoot}/schema.json`]: validatedStackSchema,
+    [common]: 'mocktype: {}\n',
+    [one]: '# yaml-language-server: $schema=../schema.json\nmocktype: {}\n',
+    [otherClosed]: '# yaml-language-server: $schema=../mock-unopened.schema.json\nmocktype: {}\n',
+    [`${otherRoot}/mock.yml`]: 'mocktype: {}\n',
+    [otherOne]: '# yaml-language-server: $schema=../schema.json\nmocktype: {}\n',
+  };
+  const ws = diskCheckedWorkspace(files, {});
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
   await ws.sync(`file://${one}`, one, files[one]);
-  assert.ok(fetchedOnLoad > 0);
-  assert.equal(fetched.length, fetchedOnLoad);
+  await ws.sync(`file://${otherOne}`, otherOne, files[otherOne]);
+  await ws.setActive(otherOne);
+  ws.statted.length = 0;
+  await ws.checkSchemasOnDisk();
+  assert.deepEqual(ws.statted, [`${otherRoot}/schema.json`, `${root}/schema.json`]);
+});
+
+test('a disk check leaves a schema read from a URL to its max age', async () => {
+  const files = {
+    [common]: 'mocktype: {}\n',
+    [one]: '# yaml-language-server: $schema=https://example.test/mock.schema.json\nmocktype: {}\n',
+  };
+  const ws = diskCheckedWorkspace(files, {});
+  await ws.setConfigs([{ text: config, dir: '/repo' }]);
+  await ws.sync(`file://${one}`, one, files[one]);
+  ws.statted.length = 0;
+  await ws.checkSchemasOnDisk();
+  assert.deepEqual(ws.statted, []);
 });
 
 test('an overlay schema that changes drops that overlay from the common layer\'s error, the other overlay\'s schema kept', async () => {

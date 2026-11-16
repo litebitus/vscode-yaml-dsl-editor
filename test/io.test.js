@@ -3,12 +3,27 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { readFileOrNull, fetchResponseOrNull, fetchTextOrNull, terraformFunctionsOrNull } = require('../lib/io');
+const {
+  readFileOrNull,
+  fileStatOrNull,
+  fetchResponseOrNull,
+  fetchTextOrNull,
+  terraformFunctionsOrNull,
+} = require('../lib/io');
 const { mockSchemaServer } = require('./mock-schema-server');
 
 const schemaServer = mockSchemaServer();
 test.before(() => schemaServer.start());
 test.after(() => schemaServer.stop());
+
+test('a file\'s stat is its modification time and size, and a missing file\'s is null', async (t) => {
+  const file = path.join(os.tmpdir(), `yaml-dsl-stat-${process.pid}.txt`);
+  t.after(() => fs.promises.rm(file, { force: true }));
+  await fs.promises.writeFile(file, 'mock-content');
+  const written = await fs.promises.stat(file);
+  assert.deepEqual(await fileStatOrNull(file), { modifiedMilliseconds: written.mtimeMs, size: 12 });
+  assert.equal(await fileStatOrNull(`${file}.missing`), null);
+});
 
 test('reading a missing file and a failed fetch yield null', async () => {
   const file = path.join(os.tmpdir(), `yaml-dsl-${process.pid}.txt`);

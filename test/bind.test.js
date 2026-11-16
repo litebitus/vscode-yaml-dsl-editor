@@ -141,6 +141,49 @@ test('rename answers the name to edit and the edit, and a refusal is an error th
   assert.equal((await connection.handlers.rename(params('file:///repo/mock.yml'))).message, 'mock refusal');
 });
 
+test('the disk check runs on the interval it is given, again after each check, and stops at shutdown', async () => {
+  const connection = fakeConnection();
+  const pending = new Map();
+  let nextTimer = 0;
+  const timerFunctions = {
+    setTimeout(callback, delay) {
+      nextTimer += 1;
+      pending.set(nextTimer, { callback, delay });
+      return nextTimer;
+    },
+    clearTimeout(timer) { pending.delete(timer); },
+  };
+  let checks = 0;
+  const workspace = {
+    onSuggestions() {},
+    onKeptSchemasChanged() {},
+    onVocabularyLoaded() {},
+    onValidationAnswered() {},
+    setStorageFolder() {},
+    dispose() {},
+    takeEvicted: () => [],
+    takeReanalyzedUris: () => [],
+    schemaWatchTargets: () => [],
+    layerWatchTargets: () => [],
+    checkSchemasOnDisk: async () => { checks += 1; },
+  };
+  const bound = bind(connection, fakeDocuments(), { workspace, timerFunctions });
+  assert.throws(() => connection.handlers['yaml-dsl/diskCheckSeconds']({ seconds: 0 }));
+  assert.equal(pending.size, 0);
+  connection.handlers['yaml-dsl/diskCheckSeconds']({ seconds: 7 });
+  assert.deepEqual([...pending.values()].map((timer) => timer.delay), [7000]);
+  const [[firstTimer, firstTick]] = [...pending.entries()];
+  pending.delete(firstTimer);
+  firstTick.callback();
+  await bound.whenIdle();
+  assert.equal(checks, 1);
+  assert.deepEqual([...pending.values()].map((timer) => timer.delay), [7000]);
+  connection.handlers['yaml-dsl/diskCheckSeconds']({ seconds: 3 });
+  assert.deepEqual([...pending.values()].map((timer) => timer.delay), [3000]);
+  connection.handlers.shutdown();
+  assert.equal(pending.size, 0);
+});
+
 test('the default workspace still answers initialize', () => {
   const connection = fakeConnection();
   bind(connection, fakeDocuments());

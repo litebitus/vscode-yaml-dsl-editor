@@ -215,6 +215,7 @@ The extension's own settings live under `yaml-dsl-editor` in the editor's settin
 
 | Setting | Values | What it sets |
 |---|---|---|
+| `yaml-dsl-editor.cache.diskCheckSeconds` | a whole number, 1 or more | How often, in seconds, the schema files open files read from disk are checked for a change the IDE did not report |
 | `yaml-dsl-editor.cache.schemaCapacity` | a whole number, 1 or more | Distinct schemas kept beyond those a loaded stack uses |
 | `yaml-dsl-editor.cache.stackCapacity` | a whole number, 1 or more | Stacks kept beyond the pinned ones |
 | `yaml-dsl-editor.suggestion.delete.enabled` | `true`, `false` | Whether delete suggestions are shown |

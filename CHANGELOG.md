@@ -3,7 +3,9 @@
 ## Unreleased
 
 - Schemas
-  - A file opened again reads its schema on disk again, so a stack initialized while the file was closed is checked against its new schema; a schema URL keeps its max age.
+  - The schema files open files read from disk are checked every `yaml-dsl-editor.cache.diskCheckSeconds`, so a change the IDE does not report is read without reloading the window.
+- Activity log
+  - The language server's lines carry the time, as the client's do.
 
 ## 0.11.2 - 2026-11-12
 

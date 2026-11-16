@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { clockTimeOf, createActivityLog } = require('../lib/activity-log');
+const { clockTimeOf, timestampedLine, createActivityLog } = require('../lib/activity-log');
 
 function recordingChannel() {
   const lines = [];
@@ -14,6 +14,13 @@ test('each line carries the local clock time to the millisecond', () => {
   const channel = recordingChannel();
   createActivityLog(channel, () => mockMoment).info('language server started');
   assert.deepEqual(channel.lines, ['[09:04:02.007] language server started']);
+});
+
+test('a language server line carries the same clock time as the client\'s', () => {
+  assert.equal(
+    timestampedLine('schema of mock.yml reloaded', mockMoment),
+    '[09:04:02.007] schema of mock.yml reloaded',
+  );
 });
 
 test('a failing step is logged with its name and message and yields its fallback, so the next step still runs', async () => {

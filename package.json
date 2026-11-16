@@ -35,6 +35,12 @@
     "configuration": {
       "title": "YAML DSL Editor",
       "properties": {
+        "yaml-dsl-editor.cache.diskCheckSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10,
+          "description": "How often the schema files open files read from disk are checked for a change the IDE did not report, in seconds."
+        },
         "yaml-dsl-editor.cache.schemaCapacity": {
           "type": "integer",
           "minimum": 1,
