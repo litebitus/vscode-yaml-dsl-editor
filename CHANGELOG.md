@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.3 - 2026-11-18
 
 - Schemas
   - The schema files open files read from disk are checked every `yaml-dsl-editor.cache.diskCheckSeconds`, so a change the IDE does not report is read without reloading the window.
