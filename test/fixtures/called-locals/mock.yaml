@@ -1,0 +1,13 @@
+locals:
+  policy fn.decode:
+    fn.read: mock-policy.yml
+  defaults:
+    branches fn.concat*:
+      - [mock-a]
+      - [mock-b]
+mocktype:
+  first:
+    branches: local.policy.branches
+    joined: local.defaults.branches
+    item: local.defaults.branches.0
+    absent: local.defaults.missing

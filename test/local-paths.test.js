@@ -138,8 +138,7 @@ test('a reference into a local reads the value at its path, through other locals
   assert.match(hover, /```yaml-dsl\n {4}queue:\n {6}size: 1\n```/);
   const pathDefinition = ws.definition(`file://${common}`, positionAt(commonText, 'local.defaults.queue', 2));
   assert.equal(pathDefinition.range.start.line, 2);
-  const missingHover = ws.hover(`file://${common}`, positionAt(commonText, 'local.defaults.queues', 2));
-  assert.equal(missingHover.contents.value, '`local.defaults` holds no `queues`');
+  assert.equal(ws.hover(`file://${common}`, positionAt(commonText, 'local.defaults.queues', 2)), null);
   assert.equal(ws.definition(`file://${common}`, positionAt(commonText, 'local.defaults.queues', 2)), null);
   const problems = ws.problems(`file://${common}`).map((problem) => [problem.range.start.line, problem.message]);
   assert.deepEqual(problems, [
@@ -167,4 +166,67 @@ test('a loop over a list a local holds repeats its body once per item of the lis
   assert.equal(definitionLineOf('ref mocktype.gamma_queue'), null);
   const kinds = ws.references(`file://${common}`).map((found) => [found.range.start.line, found.kind]);
   assert.deepEqual(kinds.filter(([line]) => line === 19), [[19, 'error']]);
+});
+
+const calledLocalsEntry = dslEntry('called', {
+  file_includes: ['**/mock.yml'],
+  schema_search_paths: ['{config_root}/mock-called/schema.json'],
+  placeholder: placeholder(),
+  function: markerFunction({ definitions: ['schema'] }),
+  locals: { scope_name: 'local', path_separator: '.' },
+  scopes: { local: scope(), ENTRY: scope({ named_by_parent_key: true }) },
+  declarations: [
+    declaration('$.locals.*', 'local', { key_token: 'first_word' }),
+    declaration('$.*.*', 'ENTRY', { skip_keys: ['locals'] }),
+  ],
+  references: [reference('^local\\.(?<name>[a-z0-9_]+)', 'local', { text_after_name_allowed: true })],
+});
+
+const calledLocalsSchema = JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  'x-yaml-dsl-functions': {
+    decode: { description: 'Decodes the mock text.', arguments: [mockArgument('text', 'text')] },
+    read: { description: 'Reads the mock file.', arguments: [mockArgument('path', 'text')] },
+    concat: {
+      description: 'Joins the mock lists.',
+      arguments: [{ ...mockArgument('lists', 'list'), repeated: true }],
+    },
+  },
+  type: 'object',
+});
+
+const calledRoot = '/repo/mock-called';
+const calledFile = `${calledRoot}/mock.yml`;
+const calledText = [
+  'locals:',
+  '  policy fn.decode:',
+  '    fn.read: mock-policy.yml',
+  '  defaults:',
+  '    branches fn.concat*:',
+  '      - [mock-a]',
+  '      - [mock-b]',
+  'mocktype:',
+  '  first:',
+  '    branches: local.policy.branches',
+  '    joined: local.defaults.branches',
+  '    item: local.defaults.branches.0',
+  '    absent: local.defaults.missing',
+  '',
+].join('\n');
+
+test('a path into a value a call gives, a local declared by a call or a key holding one, is known only when the '
+  + 'document is used, and a step the value lacks beside it is still an error', async () => {
+  const files = { [`${calledRoot}/schema.json`]: calledLocalsSchema, [calledFile]: calledText };
+  const ws = createWorkspace({
+    readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
+    fetchText: async () => null,
+  });
+  await ws.setConfigs([{ text: configText(calledLocalsEntry), dir: '/repo' }]);
+  await ws.sync(`file://${calledFile}`, calledFile, calledText);
+  const problems = ws.problems(`file://${calledFile}`).map((problem) => [problem.range.start.line, problem.message]);
+  assert.deepEqual(problems, [[12, '`local.defaults` holds no `missing`']]);
+  const joined = ws.definition(`file://${calledFile}`, positionAt(calledText, 'local.defaults.branches', 2));
+  assert.equal(joined.range.start.line, 4);
+  const kinds = ws.references(`file://${calledFile}`).map((found) => [found.range.start.line, found.kind]);
+  assert.deepEqual(kinds, [[9, 'local'], [10, 'local'], [11, 'local'], [12, 'error']]);
 });

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-yaml-dsl-functions": {
+    "concat": {
+      "description": "Joins the mock lists.",
+      "arguments": [
+        { "name": "lists", "type": "list", "required": true, "repeated": true, "description": "The mock lists." }
+      ]
+    },
+    "decode": {
+      "description": "Decodes the mock text.",
+      "arguments": [
+        { "name": "text", "type": "text", "required": true, "repeated": false, "description": "The mock text." }
+      ]
+    },
+    "read": {
+      "description": "Reads the mock file.",
+      "arguments": [
+        { "name": "path", "type": "text", "required": true, "repeated": false, "description": "The mock file." }
+      ]
+    }
+  },
+  "type": "object",
+  "properties": {
+    "locals": { "type": "object" },
+    "mocktype": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "absent": { "type": "array", "description": "[optional] The mock absent list." },
+          "branches": { "type": "array", "description": "[optional] The mock branches." },
+          "item": { "type": "string", "description": "[optional] The mock item." },
+          "joined": { "type": "array", "description": "[optional] The mock joined list." }
+        }
+      }
+    }
+  }
+}
