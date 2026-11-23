@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.4 - 2026-11-23
 
 - Validation
   - A path into the value that a call returns, whether a local or a key holds the call, is not reported as missing, because that value is known only when the document is used.
