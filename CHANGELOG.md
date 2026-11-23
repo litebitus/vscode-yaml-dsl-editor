@@ -8,6 +8,8 @@
   - A reference whose path names a missing key shows the problem alone, and its hover no longer repeats the message.
 - Schemas
   - A field whose schema states `$ref` beside `allOf`, `if` or `anyOf` is documented and completed with the fields of both.
+- Configs
+  - Each `yaml-dsl.yml` is read once while its text holds, so a workspace listing many configs no longer reads them all again on every change.
 
 ## 0.11.3 - 2026-11-18
 

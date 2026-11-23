@@ -111,3 +111,20 @@ test('a reread follows a changed, created or deleted config and drops folders le
   await index.reread(['/mock-repo/nested/yaml-dsl.yml']);
   assert.deepEqual(index.entries(), [{ text: 'outer changed', dir: '/mock-repo' }]);
 });
+
+test('a config keeps its entry while its text holds, however many configs the workspace lists, '
+  + 'and a changed text is a new entry', async () => {
+  const listedPaths = Array.from({ length: 40 }, (unused, number) => `/mock-repo/mock-${number}/yaml-dsl.yml`);
+  const configs = new Map(listedPaths.map((configPath) => [configPath, `mock text ${configPath}`]));
+  const vscode = fakeVscode(configs, ['/mock-repo'], listedPaths);
+  const index = createConfigIndex(vscode);
+  await index.readListedConfigs();
+  const first = index.entries();
+  configs.set(listedPaths[0], 'mock text changed');
+  await index.reread([listedPaths[0]]);
+  const second = index.entries();
+  assert.equal(second.length, 40);
+  assert.notEqual(second[0], first[0]);
+  assert.deepEqual(second[0], { text: 'mock text changed', dir: '/mock-repo/mock-0' });
+  assert.ok(second.slice(1).every((entry, offset) => entry === first[offset + 1]));
+});
