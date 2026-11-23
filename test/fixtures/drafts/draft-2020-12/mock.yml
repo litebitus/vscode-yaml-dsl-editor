@@ -14,6 +14,9 @@ mocktype:
       text: mock
       color: red
   queue: mock-queue
+  keyed:
+    keyed_label: mock-label
+    keyed_body: mock-body
   entries:
     id mock-entry:
       size: 1

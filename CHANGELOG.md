@@ -6,6 +6,8 @@
   - A path into the value that a call returns, whether a local or a key holds the call, is not reported as missing, because that value is known only when the document is used.
 - References
   - A reference whose path names a missing key shows the problem alone, and its hover no longer repeats the message.
+- Schemas
+  - A field whose schema states `$ref` beside `allOf`, `if` or `anyOf` is documented and completed with the fields of both.
 
 ## 0.11.3 - 2026-11-18
 

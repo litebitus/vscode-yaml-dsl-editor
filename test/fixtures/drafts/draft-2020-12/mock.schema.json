@@ -48,6 +48,14 @@
             }
           }
         },
+        "keyed": {
+          "$ref": "#/$defs/keyed_fields",
+          "allOf": [
+            {
+              "$ref": "#/$defs/keyed_document"
+            }
+          ]
+        },
         "queue": {
           "type": "string",
           "description": "the mock queue"
@@ -96,6 +104,22 @@
     }
   },
   "$defs": {
+    "keyed_document": {
+      "properties": {
+        "keyed_body": {
+          "type": "string",
+          "description": "the keyed body"
+        }
+      }
+    },
+    "keyed_fields": {
+      "properties": {
+        "keyed_label": {
+          "type": "string",
+          "description": "the keyed label"
+        }
+      }
+    },
     "node": {
       "$dynamicAnchor": "mock-node",
       "properties": {

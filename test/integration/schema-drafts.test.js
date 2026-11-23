@@ -9,6 +9,8 @@ const {
   extensionClient,
   schemaNoteOf,
   schemaTextOf,
+  fixtureCopy,
+  completionItemsAt,
   WAIT_DEADLINE_MILLISECONDS,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
@@ -118,6 +120,28 @@ suite('JSON Schema drafts', () => {
       `\`id mock-entry\`    \`[optional]\`\n\n${schemaTextOf('a mock entry')}\n\n*Sets* \`id\` *to* \`mock-entry\`:\n\n`
         + `\`id\`: *string*    \`[optional]\`\n\n${schemaTextOf('the entry\'s identity')}`,
     );
+  });
+
+  test('draft 2020-12 hovers and offers the fields of a $ref and of the allOf beside it', async () => {
+    const doc = await draftDocument('draft-2020-12');
+    assert.equal(
+      await hoverTextAt(doc, 'keyed_label'),
+      `\`keyed_label\`: *string*    \`[optional]\`\n\n${schemaTextOf('the keyed label')}`,
+    );
+    assert.equal(
+      await hoverTextAt(doc, 'keyed_body'),
+      `\`keyed_body\`: *string*    \`[optional]\`\n\n${schemaTextOf('the keyed body')}`,
+    );
+    const editor = await shownDocument(path.join(fixtureCopy('drafts/draft-2020-12', 'keyed'), 'mock.yml'));
+    const bodyLineNumber = editor.document.getText()
+      .split('\n')
+      .findIndex((text) => text.includes('keyed_body'));
+    const line = editor.document.lineAt(bodyLineNumber);
+    await editor.edit((edit) => { edit.insert(line.range.end, '\n    keyed_'); });
+    const cursor = editor.document.lineAt(line.lineNumber + 1).range.end;
+    const offered = (await completionItemsAt(editor.document, cursor))
+      .map((item) => (typeof item.label === 'string' ? item.label : item.label.label));
+    assert.deepEqual(offered.filter((label) => label.startsWith('keyed_')).sort(), ['keyed_body', 'keyed_label']);
   });
 
   test('a schema declaring an older draft is read as draft-07', async () => {

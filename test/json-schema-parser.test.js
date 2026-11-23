@@ -164,6 +164,22 @@ test('draft 2020-12 reads prefixItems with items, $dynamicRef to its $dynamicAnc
   assert.equal(draft2020.fieldDeprecated(['retired']), true);
 });
 
+test('a node stating $ref beside allOf holds the fields of both', () => {
+  const parser = schemaParserFor({
+    $schema: DRAFT_2020_12_URI,
+    properties: {
+      keyed: { $ref: '#/$defs/keyed_fields', allOf: [{ $ref: '#/$defs/keyed_document' }] },
+    },
+    $defs: {
+      keyed_fields: { properties: { keyed_label: { type: 'string', description: 'the keyed label' } } },
+      keyed_document: { properties: { keyed_body: { type: 'string', description: 'the keyed body' } } },
+    },
+  });
+  assert.deepEqual(Object.keys(parser.fieldsAt(['keyed'])).sort(), ['keyed_body', 'keyed_label']);
+  assert.equal(parser.fieldDescription(['keyed', 'keyed_label']), 'the keyed label');
+  assert.equal(parser.fieldDescription(['keyed', 'keyed_body']), 'the keyed body');
+});
+
 test('a field is deprecated by a deprecated allOf part, and its value by a deprecated oneOf or anyOf branch it passes', () => {
   const root = {
     $schema: DRAFT_2020_12_URI,
