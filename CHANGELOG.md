@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.5 - 2026-11-24
 
 - References
   - A ref whose name holds a local placeholder names the declaration known by the local's value, and a key holding a path into a local is known by the value at that path.
