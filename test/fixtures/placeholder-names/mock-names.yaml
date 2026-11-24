@@ -1,0 +1,10 @@
+locals:
+  mock_id: mock
+  basenames:
+    api: ${local.mock_id}-api
+mocktype:
+  name ${local.basenames.api}:
+    size: 1
+  user:
+    by_value: ref mocktype.mock_api
+    by_placeholder: ref mocktype.${local.mock_id}_api
