@@ -28,6 +28,7 @@
   "activationEvents": [
     "onLanguage:yaml",
     "onLanguage:yaml-dsl",
+    "onLanguage:yaml-dsl-template",
     "workspaceContains:**/yaml-dsl.yml"
   ],
   "main": "./extension.js",
@@ -155,6 +156,15 @@
         "editor.semanticHighlighting.enabled": true,
         "editor.wordBasedSuggestions": "off"
       },
+      "[yaml-dsl-template]": {
+        "editor.inlayHints.enabled": "on",
+        "editor.inlayHints.maximumLength": 64,
+        "editor.quickSuggestions": {
+          "strings": "on"
+        },
+        "editor.semanticHighlighting.enabled": true,
+        "editor.wordBasedSuggestions": "off"
+      },
       "[yaml-dsl-definition]": {
         "editor.quickSuggestions": {
           "strings": "on"
@@ -185,6 +195,32 @@
             "variable.language.hcl"
           ]
         }
+      },
+      {
+        "language": "yaml-dsl-template",
+        "scopes": {
+          "function": [
+            "support.function.hcl"
+          ],
+          "keyword": [
+            "support.function.builtin.hcl"
+          ],
+          "operator": [
+            "keyword.operator.accessor.hcl"
+          ],
+          "parameter": [
+            "variable.parameter.hcl"
+          ],
+          "type": [
+            "entity.name.type.hcl"
+          ],
+          "variable": [
+            "variable.other.readwrite.hcl"
+          ],
+          "variable.defaultLibrary": [
+            "variable.language.hcl"
+          ]
+        }
       }
     ],
     "languages": [
@@ -192,6 +228,17 @@
         "id": "yaml-dsl",
         "aliases": [
           "YAML DSL"
+        ],
+        "icon": {
+          "light": "./media/fileicon.svg",
+          "dark": "./media/fileicon.svg"
+        },
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "yaml-dsl-template",
+        "aliases": [
+          "YAML DSL Template"
         ],
         "icon": {
           "light": "./media/fileicon.svg",
@@ -233,6 +280,11 @@
         "path": "./syntaxes/yaml-dsl.tmLanguage.json"
       },
       {
+        "language": "yaml-dsl-template",
+        "scopeName": "source.yaml.dsl.template",
+        "path": "./syntaxes/yaml-dsl-template.tmLanguage.json"
+      },
+      {
         "language": "yaml-dsl-definition",
         "scopeName": "source.yaml.dsl.definition",
         "path": "./syntaxes/yaml-dsl-definition.tmLanguage.json"
@@ -272,24 +324,24 @@
       {
         "key": "tab",
         "command": "selectNextSuggestion",
-        "when": "editorLangId == yaml-dsl && suggestWidgetVisible && suggestWidgetMultipleSuggestions && textInputFocus"
+        "when": "editorLangId =~ /^yaml-dsl(-template)?$/ && suggestWidgetVisible && suggestWidgetMultipleSuggestions && textInputFocus"
       },
       {
         "key": "tab",
         "command": "yaml-dsl-editor.acceptLoneSuggestion",
-        "when": "editorLangId == yaml-dsl && suggestWidgetVisible && !suggestWidgetMultipleSuggestions && suggestWidgetHasFocusedSuggestion && textInputFocus"
+        "when": "editorLangId =~ /^yaml-dsl(-template)?$/ && suggestWidgetVisible && !suggestWidgetMultipleSuggestions && suggestWidgetHasFocusedSuggestion && textInputFocus"
       },
       {
         "key": "shift+tab",
         "command": "selectPrevSuggestion",
-        "when": "editorLangId == yaml-dsl && suggestWidgetVisible && suggestWidgetMultipleSuggestions && textInputFocus"
+        "when": "editorLangId =~ /^yaml-dsl(-template)?$/ && suggestWidgetVisible && suggestWidgetMultipleSuggestions && textInputFocus"
       }
     ],
     "menus": {
       "editor/title": [
         {
           "command": "yaml-dsl-editor.diffAcrossOverlays",
-          "when": "resourceLangId == yaml-dsl && resourceScheme == file",
+          "when": "resourceLangId =~ /^yaml-dsl(-template)?$/ && resourceScheme == file",
           "group": "navigation"
         },
         {
@@ -299,21 +351,21 @@
         },
         {
           "command": "yaml-dsl-editor.toggleTheme",
-          "when": "resourceLangId == yaml-dsl && resourceScheme == file",
+          "when": "resourceLangId =~ /^yaml-dsl(-template)?$/ && resourceScheme == file",
           "group": "navigation"
         }
       ],
       "editor/context": [
         {
           "command": "yaml-dsl-editor.diffAcrossOverlays",
-          "when": "editorLangId == yaml-dsl && editorHasSelection",
+          "when": "editorLangId =~ /^yaml-dsl(-template)?$/ && editorHasSelection",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
           "command": "yaml-dsl-editor.diffAcrossOverlays",
-          "when": "resourceLangId == yaml-dsl && resourceScheme == file"
+          "when": "resourceLangId =~ /^yaml-dsl(-template)?$/ && resourceScheme == file"
         },
         {
           "command": "yaml-dsl-editor.chooseDiffOverlays",
@@ -771,6 +823,6 @@
     "vscode-languageserver": "9.0.1",
     "vscode-languageserver-textdocument": "1.0.15",
     "yaml": "2.9.1",
-    "yaml-dsl-spec": "0.3.1"
+    "yaml-dsl-spec": "0.3.5-snapshot.20261125074227"
   }
 }

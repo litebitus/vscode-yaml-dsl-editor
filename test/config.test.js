@@ -353,7 +353,7 @@ test('a config is read by the YAML DSL standard, each problem a diagnostic at it
 });
 
 test('a config states its version, and only a version the standard reads is read', () => {
-  assert.deepEqual(CONFIG_VERSIONS, ['1', '1.0', '1.1', '1.2', '1.3']);
+  assert.deepEqual(CONFIG_VERSIONS, ['1', '1.0', '1.1', '1.2', '1.3', '1.4']);
   for (const version of CONFIG_VERSIONS) {
     assert.deepEqual(parseConfig(`version: "${version}"\ndsls: []\n`), { ok: true, problems: [], dsls: [] });
   }

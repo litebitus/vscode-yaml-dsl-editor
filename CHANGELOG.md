@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Templates
+  - A template language a config declares opens its templates as YAML DSL Template, read as documents of its DSL: they fold, resolve references and validate, and a value a template variable stands for is known only when the template is rendered.
+  - A template's own problems are marked at their directives, and a key repeated across the branches of one conditional is no duplicate.
+  - Directive words, loop variables and template variables are drawn by their own colors; a loop variable leads to its loop, and a template variable hovers as a value the template is rendered with.
+
 ## 0.11.5 - 2026-11-24
 
 - References

@@ -1,0 +1,15 @@
+mocktype:
+  user:
+    size: [[ .size ]]
+    source: ref mocktype.shared
+    label: local.team
+    tags:
+[[ range $item := .items ]]
+      - "[[ $item ]]"
+[[ end ]]
+[[ if .flagged ]]
+  extra: {}
+[[ else ]]
+  extra: {}
+[[ end ]]
+[[ end ]]

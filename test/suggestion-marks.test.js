@@ -719,7 +719,7 @@ test('activation paints the suggestions the server sends and registers the move'
   const deprecatedMark = decorationTypes.find((decorationType) => decorationType.options.textDecoration
     === 'line-through var(--vscode-yamlDslEditor-dark-warningForeground)');
   assert.ok(deprecatedMark);
-  assert.deepEqual(inlayProvider.selector, { language: 'yaml-dsl' });
+  assert.deepEqual(inlayProvider.selector, [{ language: 'yaml-dsl' }, { language: 'yaml-dsl-template' }]);
   assert.equal(inlayChanges, 1);
   const hints = inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:']));
   assert.equal(hints[0].label[0].value, '💡 move to common layer');

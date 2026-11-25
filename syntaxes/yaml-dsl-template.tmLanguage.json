@@ -1,0 +1,7 @@
+{
+  "name": "YAML DSL Template",
+  "scopeName": "source.yaml.dsl.template",
+  "patterns": [
+    { "include": "source.yaml.dsl" }
+  ]
+}

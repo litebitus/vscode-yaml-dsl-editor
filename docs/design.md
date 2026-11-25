@@ -400,6 +400,19 @@ Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus
 
 - Hover on a loop variable shows the loop that declares it and the items it is bound to.
 
+## Templates
+
+Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/spec.md), under Templates.
+
+A template works as a document of its DSL does, in every feature, except for its directives, loop variables and template variables.
+
+- A template opens in its own language, YAML DSL Template, and a file a DSL and a template language both claim is a template.
+- A template is read as its masked text: it folds over its common layer, resolves references, validates against its schema and takes every other feature as a document does. Templates fold among templates and documents among documents.
+- A problem a value known only when the template is rendered would decide is not reported, and a key repeated across the branches of one conditional is no duplicate.
+- The template reader's own problems are reported at their directives and actions.
+- Actions, directive words and loop variables are drawn by semantic tokens, since the delimiters and words come from the config.
+- Hover and go to definition on a loop variable lead to the loop that binds it.
+
 ## Navigating references
 
 | Action | On a reference naming one declaration | On a reference naming several | On a builtin, or nothing visible |

@@ -1,0 +1,5 @@
+locals:
+  team: [[ .team ]]
+mocktype:
+  shared:
+    size: 1

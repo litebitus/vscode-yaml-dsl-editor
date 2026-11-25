@@ -496,7 +496,7 @@ test('semantic tokens are encoded with the legend, and a config change asks the 
   const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
   const legend = connection.handlers.initialize().capabilities.semanticTokensProvider.legend;
   assert.deepEqual(legend, {
-    tokenTypes: ['function', 'keyword', 'operator', 'type', 'variable'],
+    tokenTypes: ['function', 'keyword', 'operator', 'type', 'variable', 'parameter'],
     tokenModifiers: ['defaultLibrary'],
   });
   const config = configText(dslEntry('note', {

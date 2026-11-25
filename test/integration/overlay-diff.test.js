@@ -51,7 +51,7 @@ suite('overlay diff', () => {
 
   test('the title-bar button shows on every DSL file on disk and opens the diff at once', async () => {
     const button = contributes.menus['editor/title'].find((item) => item.command === DIFF_COMMAND);
-    assert.equal(button.when, 'resourceLangId == yaml-dsl && resourceScheme == file');
+    assert.equal(button.when, 'resourceLangId =~ /^yaml-dsl(-template)?$/ && resourceScheme == file');
     assert.equal(contributes.commands.find((command) => command.command === DIFF_COMMAND).icon, '$(diff)');
     const editor = await shownDocument(concernPath('diff-group', 'overlay-1', 'diffed', 'mock.yml'));
     editor.selection = new vscode.Selection(1, 0, 5, 0);
