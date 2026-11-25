@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 - 2026-11-25
 
 - Templates
   - A template language a config declares opens its templates as YAML DSL Template, read as documents of its DSL: they fold, resolve references and validate, and a value a template variable stands for is known only when the template is rendered.
