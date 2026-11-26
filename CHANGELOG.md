@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.1 - 2026-11-26
 
 - Hover
   - Every problem's message is the extension's hover, beside the field's documentation unless a schema note already states it, and a setting that hides a problem hides its hover.
