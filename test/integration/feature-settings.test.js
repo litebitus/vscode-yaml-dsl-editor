@@ -1,3 +1,4 @@
+const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
@@ -7,7 +8,10 @@ const {
   shownDocument,
   hintLabelsBecome,
   positionInText,
+  hoverTextOf,
   hoverTextBecomes,
+  hoverTextHolds,
+  hoverTextLacks,
   schemaNoteOf,
   schemaTextOf,
 } = require('./editor-hints');
@@ -89,5 +93,41 @@ suite('feature settings', () => {
       await hoverTextBecomes(doc, value, documentation);
     });
     await hoverTextBecomes(doc, key, warning);
+    assert.equal((await hoverTextOf(doc, key)).split('use pair').length, 2);
+  });
+});
+
+const MACRO_WARNING = 'the loop body\'s key `mock_shared` reads no loop variable, '
+  + 'so every pass writes the same key';
+const VALIDATION_ERROR = '`mock_unknown` is not defined in the schema';
+const PROBLEM_SETTINGS = ['warning.macro.enabled', 'validator.enabled'];
+
+suite('problem hovers', () => {
+  isolateEachTest();
+
+  async function settingsCleared() {
+    const settings = vscode.workspace.getConfiguration('yaml-dsl-editor');
+    for (const key of PROBLEM_SETTINGS) await settings.update(key, undefined, vscode.ConfigurationTarget.Global);
+  }
+
+  setup(settingsCleared);
+  teardown(settingsCleared);
+
+  test('a macro warning is answered by the hover until warning.macro.enabled turns it off', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const doc = (await shownDocument(path.join(fixtures, 'loop-body-keys', 'mock-body.yaml'))).document;
+    const key = positionInText(doc, 'mock_shared:', 1);
+    await hoverTextHolds(doc, key, MACRO_WARNING);
+    await withSetting('warning.macro.enabled', false, () => hoverTextLacks(doc, key, MACRO_WARNING));
+    await hoverTextHolds(doc, key, MACRO_WARNING);
+  });
+
+  test('a validation error is answered by the hover until validator.enabled turns it off', async () => {
+    const fixtures = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const doc = (await shownDocument(path.join(fixtures, 'key-references', 'mock-keys.yaml'))).document;
+    const key = positionInText(doc, 'mock_unknown', 1);
+    await hoverTextHolds(doc, key, VALIDATION_ERROR);
+    await withSetting('validator.enabled', false, () => hoverTextLacks(doc, key, VALIDATION_ERROR));
+    await hoverTextHolds(doc, key, VALIDATION_ERROR);
   });
 });

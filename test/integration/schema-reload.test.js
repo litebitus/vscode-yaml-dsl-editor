@@ -7,6 +7,7 @@ const {
   positionInText,
   hoverTextBecomes,
   schemaTextOf,
+  validationErrorsOf,
 } = require('./editor-hints');
 const {
   SCHEMA_FOLDER,
@@ -86,7 +87,8 @@ suite('schema reload', () => {
     await hoverTextBecomes(common, label, `\`label\`: *string*    \`[optional]\`\n\n${schemaTextOf('Label of one first')}`);
   });
 
-  test('a common layer field hover names the overlays whose schema has no such field', async () => {
+  test('a common layer field hover names the overlays whose schema has no such field, '
+    + 'below the problems at its key', async () => {
     const stack = fixtureCopy('stack', 'overlay-schema-without-field');
     writeOverlays(stack, { one: 'Label of one', two: 'Label of one' });
     const closedSchema = JSON.parse(labelSchemaText('Label of two'));
@@ -100,10 +102,10 @@ suite('schema reload', () => {
     await hoverTextBecomes(
       common,
       positionInText(common, 'label: mock', 1),
-      [
+      `${validationErrorsOf(['`label` is not defined in the schema (two)'])}\n${[
         `${overlayHeadingOf('one')}\n\n\`label\`: *string*    \`[optional]\`\n\n${schemaTextOf('Label of one')}`,
         `${overlayHeadingOf('two')}\n\nnot a field`,
-      ].join('\n\n'),
+      ].join('\n\n')}`,
     );
   });
 });

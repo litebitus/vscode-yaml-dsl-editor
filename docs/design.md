@@ -43,7 +43,9 @@ A problem has a severity, drawn in the color the DevOps tools print it in:
 | warning | its own mark, such as a struck-through key | a triangle | the warning yellow |
 | info | a wavy underline, the text unchanged | the info mark | the info blue |
 
-- A problem shows its message on hover, then its schema note, if it has one.
+- The extension's hover shows each problem at the position, errors first, then warnings, then info, each its message then its schema note, if it has one; the field's documentation follows, unless a problem's schema note already states it.
+- A problem's mark is paint only: its color, underline and gutter mark.
+- A setting that hides a problem's paint hides its hover.
 
 The editor is faithful to the user's schema:
 
@@ -384,7 +386,10 @@ Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus
 
 ## Scopes
 
-Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/spec.md), under Scopes.
+Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/spec.md), under Scopes and Deferred keys.
+
+- A reference in a key takes every feature a reference in a value takes: completion, navigation, hover, rename, coloring and its class.
+- A name declared explicitly answers a reference before a loop key that can spell it, in every feature.
 
 ## Locals
 
@@ -713,6 +718,7 @@ The editor hands the standard the document its loops and merge macros expand to,
 | a map whose one key is a call without a name | a `call` |
 | a string holding a placeholder | a `template` |
 | a key the DSL's `marker_function` reads as a call naming a field, such as `value fn.jsonencode` | the key as written, and the field it names as a `call` where the map writes none |
+| a deferred key | its entry, the key as a `reference` or a `template` beside it, so a check the key decides reports nothing |
 
 A problem's subject is placed back on the key that wrote it, through the call key, the merge macro and the loop that made it.
 
@@ -1157,6 +1163,19 @@ Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus
 
 - A loop body's completion and hover are the holding map's.
 - A key in a local a merge reads takes the completion and hover of the maps it lands in.
+
+### Macro warnings
+
+A macro call used in a way its expansion makes no sense is a warning: underlined, with a warning mark in the gutter, and its file, and every folder above it, named in the warning yellow, with a `⚠` badge.
+
+| Warning | Raised at | Why |
+|---|---|---|
+| `` the loop body's key `<key>` reads no loop variable, so every pass writes the same key `` | a key of a loop's map body that reads none of its loop variables | every pass writes the same key |
+
+| Setting | `false` turns off |
+|---|---|
+| `yaml-dsl-editor.warning.macro.enabled` | all of the above |
+| `yaml-dsl-editor.warning.macro.fileDecoration` | the file and folder color and badge |
 
 ### Hover
 

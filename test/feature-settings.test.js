@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { featureSettingsOf, featureSettingsAffected } = require('../lib/feature-settings');
+const { featureSettingsOf, featureSettingsAffected, warningKindsTurnedOn } = require('../lib/feature-settings');
 const { contributes } = require('../package.json');
 
 const SETTING_DEFAULTS = Object.fromEntries(Object.entries(contributes.configuration.properties)
@@ -24,7 +24,10 @@ const ALL_ON = {
     potentialMove: { enabled: true, fileDecoration: false },
     rename: { enabled: true, fileDecoration: true },
   },
-  warning: { deprecation: { enabled: true, fileDecoration: true } },
+  warning: {
+    deprecation: { enabled: true, fileDecoration: true },
+    macro: { enabled: true, fileDecoration: true },
+  },
   validator: { enabled: true, errorSeverity: 'warning', fileDecoration: false },
 };
 
@@ -49,6 +52,7 @@ test('a file decoration turns off on its own', () => {
     'suggestion.move.fileDecoration': false,
     'suggestion.rename.fileDecoration': false,
     'warning.deprecation.fileDecoration': false,
+    'warning.macro.fileDecoration': false,
   }));
   assert.deepEqual(settings, {
     suggestion: {
@@ -57,7 +61,10 @@ test('a file decoration turns off on its own', () => {
       potentialMove: { enabled: true, fileDecoration: false },
       rename: { enabled: true, fileDecoration: false },
     },
-    warning: { deprecation: { enabled: true, fileDecoration: false } },
+    warning: {
+      deprecation: { enabled: true, fileDecoration: false },
+      macro: { enabled: true, fileDecoration: false },
+    },
     validator: { enabled: true, errorSeverity: 'warning', fileDecoration: false },
   });
 });
@@ -75,6 +82,20 @@ test('deprecation warnings turned off take their file decoration with them', () 
     'warning.deprecation.fileDecoration': true,
   }));
   assert.deepEqual(settings.warning.deprecation, { enabled: false, fileDecoration: false });
+});
+
+test('each warning kind turns off on its own, its file decoration with it, '
+  + 'and the problem kinds turned on are read from the settings', () => {
+  const settings = featureSettingsOf(vscodeWith({
+    'warning.macro.enabled': false,
+    'warning.macro.fileDecoration': true,
+  }));
+  assert.deepEqual(settings.warning, {
+    deprecation: { enabled: true, fileDecoration: true },
+    macro: { enabled: false, fileDecoration: false },
+  });
+  assert.deepEqual(warningKindsTurnedOn(settings.warning, 'enabled'), ['deprecation']);
+  assert.deepEqual(warningKindsTurnedOn(ALL_ON.warning, 'fileDecoration'), ['deprecation', 'macroWarning']);
 });
 
 test('the deprecated features.suggestions is read for each suggestion kind not set on its own', () => {

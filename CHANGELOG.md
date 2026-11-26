@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Hover
+  - Every problem's message is the extension's hover, beside the field's documentation unless a schema note already states it, and a setting that hides a problem hides its hover.
+- References
+  - A reference stands in a key as in a value, with completion, navigation, rename and its class, and a check a deferred key decides reports nothing.
+  - A name declared explicitly wins over a loop key that can spell it, in navigation, hover, rename and the reference's class.
+- Macros
+  - A loop body's key that reads no loop variable is a macro warning at the key and declares no name; `yaml-dsl-editor.warning.macro.enabled` and `.fileDecoration` turn macro warnings and their file badge off.
+
 ## 0.12.0 - 2026-11-25
 
 - Templates

@@ -266,22 +266,25 @@ test('a missing store file loads nothing, and one no migration reads is deleted'
   assert.match(logged[0], /^yaml-dsl suggestion marks in an unreadable format could not be deleted: Error: mock locked/);
 });
 
-test('a file holding only a warning is saved and loads back holding it, and a file saved before warnings holds none', async () => {
+test('a file holding only a warning is saved and loads back holding its warning kinds, '
+  + 'and a file saved before warnings holds none', async () => {
   const fileSystem = memoryFileSystem({ [devUri]: devText, [stagingUri]: stagingText });
   const timers = manualTimers();
   const store = storeOver(fileSystem, timers);
   store.replaceStack('/repo/mock.yml', [
-    { uri: devUri, textHash: textHashOf(devText), marks: [], warning: true },
-    { uri: stagingUri, textHash: textHashOf(stagingText), marks: [], warning: false },
+    { uri: devUri, textHash: textHashOf(devText), marks: [], warningKinds: ['deprecation'] },
+    { uri: stagingUri, textHash: textHashOf(stagingText), marks: [], warningKinds: ['macroWarning'] },
   ]);
-  assert.deepEqual(store.warningUris(), [devUri]);
+  assert.deepEqual(store.warningUris(['deprecation']), [devUri]);
+  assert.deepEqual(store.warningUris(['deprecation', 'macroWarning']), [devUri, stagingUri]);
+  assert.deepEqual(store.warningUris([]), []);
   timers.fireAll();
   await new Promise((resolve) => { setImmediate(resolve); });
   const saved = JSON.parse(fileSystem.files.get(storePath).toString('utf8'));
-  assert.deepEqual(Object.keys(saved.files), [devUri]);
+  assert.deepEqual(Object.keys(saved.files), [devUri, stagingUri]);
   const reloaded = storeOver(fileSystem, manualTimers());
   await reloaded.load();
-  assert.deepEqual(reloaded.warningUris(), [devUri]);
+  assert.deepEqual(reloaded.warningUris(['macroWarning']), [stagingUri]);
   const savedBeforeWarnings = {
     version: 2,
     build: MOCK_BUILD_HASH,
@@ -290,7 +293,7 @@ test('a file holding only a warning is saved and loads back holding it, and a fi
   fileSystem.files.set(storePath, Buffer.from(JSON.stringify(savedBeforeWarnings), 'utf8'));
   const older = storeOver(fileSystem, manualTimers());
   await older.load();
-  assert.deepEqual(older.warningUris(), []);
+  assert.deepEqual(older.warningUris(['deprecation', 'macroWarning']), []);
 });
 
 test('a file holding only a validation error is saved and loads back holding it, and an older file holds none', async () => {
@@ -301,7 +304,7 @@ test('a file holding only a validation error is saved and loads back holding it,
     { uri: devUri, textHash: textHashOf(devText), marks: [], validationError: true },
     { uri: stagingUri, textHash: textHashOf(stagingText), marks: [], validationError: false },
   ]);
-  assert.deepEqual([store.validationErrorUris(), store.warningUris()], [[devUri], []]);
+  assert.deepEqual([store.validationErrorUris(), store.warningUris(['deprecation'])], [[devUri], []]);
   timers.fireAll();
   await new Promise((resolve) => { setImmediate(resolve); });
   const saved = JSON.parse(fileSystem.files.get(storePath).toString('utf8'));

@@ -1,0 +1,14 @@
+locals:
+  mock_target: ref mocktype.mock_primary
+mocktype:
+  mock_primary:
+    size: 1
+  ref mocktype.mock_primary:
+    size: mock-one
+  ref mocktype.mock_missing:
+    size: 1
+  mock_user:
+    size: 1
+strict:
+  ref mocktype.mock_primary: 1
+  mock_unknown: 1

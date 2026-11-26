@@ -71,6 +71,12 @@ function schemaTextOf(text, theme = 'dark') {
   return `<span style="color:${color};">${text}</span>`;
 }
 
+function validationErrorsOf(messages, theme = 'dark') {
+  const color = `var(--vscode-yamlDslEditor-${theme}-validationErrorsHeadingForeground)`;
+  const bullets = messages.map((message) => `- ${message}`).join('\n');
+  return `<span style="color:${color};"><strong>validation errors</strong></span>\n\n${bullets}`;
+}
+
 function positionInText(doc, needle, offset = 0) {
   return doc.positionAt(doc.getText().indexOf(needle) + offset);
 }
@@ -103,6 +109,17 @@ async function hoverTextHolds(doc, position, expected) {
     await new Promise((resolve) => { setTimeout(resolve, 50); });
   }
   assert.ok(text.includes(expected), text);
+}
+
+async function hoverTextLacks(doc, position, unexpected) {
+  const deadline = Date.now() + WAIT_DEADLINE_MILLISECONDS;
+  let text = '';
+  while (Date.now() < deadline) {
+    text = await hoverTextOf(doc, position);
+    if (!text.includes(unexpected)) return;
+    await new Promise((resolve) => { setTimeout(resolve, 50); });
+  }
+  assert.ok(!text.includes(unexpected), text);
 }
 
 async function typedAfter(editor, needle, text) {
@@ -206,6 +223,7 @@ module.exports = {
   hoverTextOf,
   hoverTextBecomes,
   hoverTextHolds,
+  hoverTextLacks,
   typedAfter,
   completionItemsAt,
   definitionLineAt,
@@ -217,4 +235,5 @@ module.exports = {
   paintedProblemMessagesBecome,
   schemaNoteOf,
   schemaTextOf,
+  validationErrorsOf,
 };

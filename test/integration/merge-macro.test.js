@@ -10,6 +10,7 @@ const {
   completionItemsAt,
   definitionLineAt,
   schemaTextOf,
+  validationErrorsOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -20,14 +21,21 @@ function mergeFixture(...parts) {
 suite('merge macros', () => {
   isolateEachTest();
 
-  test('a merge call among its map\'s keys, with or without the splat, is documented as the macro', async () => {
+  test('a merge call among its map\'s keys, with or without the splat, is documented as the macro, '
+    + 'below the problems at its key', async () => {
     const doc = (await shownDocument(mergeFixture('one', 'mock.yaml'))).document;
     const documentation = '```yaml-dsl-signature\nmacro merge(...contents: map)\n```\n\n'
       + `${schemaTextOf('Merges the mock contents under the map holding the call.')}\n\n`
       + `*Arguments:*\n- \`contents\`: ${schemaTextOf('The mock contents.')}\n\n`
       + '*Expands to:* the map holding the call, merged over `contents` in order.';
-    await hoverTextBecomes(doc, positionInText(doc, 'merge: local.mock_wrong'), documentation);
-    await hoverTextBecomes(doc, positionInText(doc, 'merge*:'), documentation);
+    await hoverTextBecomes(
+      doc,
+      positionInText(doc, 'merge: local.mock_wrong'),
+      `${validationErrorsOf(['`size` must be `integer`'])}\n${documentation}`,
+    );
+    const differentSchemas = '`local.mock_defaults` is merged into maps with different schemas: '
+      + '`mocktype.{shared,unknown}` and `topictype.alerts`';
+    await hoverTextBecomes(doc, positionInText(doc, 'merge*:'), `${differentSchemas}\n${documentation}`);
   });
 
   test('a name a merge brings in from a local resolves where the local declares it', async () => {

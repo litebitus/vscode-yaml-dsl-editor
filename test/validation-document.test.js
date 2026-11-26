@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { validationDocumentOf, validatorBlockOf } = require('../lib/validation-document');
 const { resolvedDocumentProblemsOf, problemTextsOf } = require('./validation-builders');
+const { parsedDsl, dslEntry, placeholder, scope, declaration, reference } = require('./config-builders');
 
 const dsl = {
   validator: {
@@ -167,5 +168,85 @@ test('a DSL without validator rules is validated as written', () => {
   assert.deepEqual(sourceProblemsOf(entrySchema, written, withoutRules), [
     [['mocktype', 'defaults'], '`label` is required'],
     [['mocktype', 'name mock-primary'], '`label` is required'],
+  ]);
+});
+
+const keyedDsl = parsedDsl(dslEntry('mock-keyed', {
+  placeholder: placeholder(),
+  locals: { scope_name: 'local', path_separator: '.' },
+  scopes: {
+    GLOBAL: scope({ builtin_names: ['env'] }),
+    local: scope(),
+    ENTRY: scope({ named_by_parent_key: true }),
+  },
+  declarations: [declaration('$.locals.*', 'local')],
+  references: [
+    reference('^ref (?<type>[a-z0-9_]+)\\.(?<name>[a-z0-9_]+)', 'ENTRY', {
+      text_after_name_allowed: true,
+      scope_group: 'type',
+    }),
+    reference('^local\\.(?<name>[a-z0-9_]+)(?=$|\\.)', 'local', {
+      positions: ['whole_scalar', 'whole_placeholder', 'placeholder_in_text'],
+      text_after_name_allowed: true,
+    }),
+    reference('^(?<name>[a-z_]+)$', 'GLOBAL', { positions: ['whole_placeholder', 'placeholder_in_text'] }),
+  ],
+}));
+
+test('a key that is a whole reference, or holds a placeholder whose value is not a constant, '
+  + 'is a deferred key', () => {
+  const written = {
+    locals: {
+      mock_id: 'mock',
+      mock_names: { api: '${local.mock_id}-api' },
+      mock_target: 'ref mocktype.mock_primary',
+      mock_looped: '${local.mock_looped}',
+      mock_map: { size: 1 },
+    },
+    mocktype: {
+      mock_primary: {},
+      'ref mocktype.mock_primary': {},
+      '${local.mock_id}-socket': {},
+      '${local.mock_names.api}-v2': {},
+      '${env}-queue': {},
+      '${local.mock_target}-topic': {},
+      '${local.mock_looped}-bucket': {},
+      '${local.mock_map}-table': {},
+      '${unread}-stream': {},
+      '${GLOBAL}-key': {},
+    },
+  };
+  const localPaths = new Map(Object.keys(written.locals).map((name) => [name, ['locals', name]]));
+  const document = validationDocumentOf(written, keyedDsl, null, localPaths).resolvedDocument();
+  const mocktype = document.value.find((entry) => entry.key === 'mocktype').value;
+  assert.deepEqual(mocktype.value.map((entry) => [entry.key, entry.deferredKey && entry.deferredKey.kind]), [
+    ['mock_primary', null],
+    ['ref mocktype.mock_primary', 'reference'],
+    ['${local.mock_id}-socket', null],
+    ['${local.mock_names.api}-v2', null],
+    ['${env}-queue', null],
+    ['${local.mock_target}-topic', 'template'],
+    ['${local.mock_looped}-bucket', 'template'],
+    ['${local.mock_map}-table', 'template'],
+    ['${unread}-stream', 'template'],
+    ['${GLOBAL}-key', 'template'],
+  ]);
+});
+
+test('a deferred key reports no problem its name decides, while its siblings\' problems stand', () => {
+  const entrySchema = {
+    type: 'object',
+    required: ['size'],
+    properties: { size: { type: 'integer' } },
+    additionalProperties: false,
+  };
+  const written = {
+    mocktype: {
+      'ref mocktype.mock_primary': { size: 'mock-one' },
+      mock_other: { size: 'mock-one' },
+    },
+  };
+  assert.deepEqual(sourceProblemsOf(entrySchema, written, keyedDsl), [
+    [['mocktype', 'mock_other', 'size'], '`size` must be `integer`'],
   ]);
 });

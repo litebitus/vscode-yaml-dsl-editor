@@ -7,6 +7,7 @@ const {
   positionInText,
   hoverTextBecomes,
   schemaTextOf,
+  validationErrorsOf,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
 
@@ -61,13 +62,15 @@ suite('overlay includes', () => {
     );
   });
 
-  test('a fragment is documented from the schema node its modeline names, its requiredness marker struck', async () => {
+  test('a fragment is documented from the schema node its modeline names, its requiredness marker struck, '
+    + 'below the problems at its key', async () => {
     const fragment = (await shownDocument(includesFixture('snippets', 'mock-alone.yaml'))).document;
     const struckRequired = [...'[required]'].map((character) => `${character}̶`).join('');
     await hoverTextBecomes(
       fragment,
       positionInText(fragment, 'Type', 1),
-      `\`Type\`: *string*    \`${struckRequired}\`\n\n${schemaTextOf('The resource type.')}`,
+      `${validationErrorsOf(['`Type` must be `string`'])}\n`
+        + `\`Type\`: *string*    \`${struckRequired}\`\n\n${schemaTextOf('The resource type.')}`,
     );
   });
 

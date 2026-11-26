@@ -124,6 +124,16 @@
           "default": true,
           "description": "A file holding a deprecation warning, and every folder above it, named in the warning color with a warning badge."
         },
+        "yaml-dsl-editor.warning.macro.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Macro warnings: a macro call used in a way its expansion makes no sense is underlined and marked in the gutter."
+        },
+        "yaml-dsl-editor.warning.macro.fileDecoration": {
+          "type": "boolean",
+          "default": true,
+          "description": "A file holding a macro warning, and every folder above it, named in the warning color with a warning badge."
+        },
         "yaml-dsl-editor.validator.enabled": {
           "type": "boolean",
           "default": true,
@@ -823,6 +833,6 @@
     "vscode-languageserver": "9.0.1",
     "vscode-languageserver-textdocument": "1.0.15",
     "yaml": "2.9.1",
-    "yaml-dsl-spec": "0.4.0"
+    "yaml-dsl-spec": "0.4.1-snapshot.20261126042513"
   }
 }

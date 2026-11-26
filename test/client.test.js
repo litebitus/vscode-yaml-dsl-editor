@@ -733,7 +733,7 @@ function paintingVscode(visibleTextEditors, settings = {}) {
     workspace: { getConfiguration: () => ({ get: (key) => settings[key] }) },
     Hover: class {
       constructor(contents, range) {
-        this.contents = [contents];
+        this.contents = Array.isArray(contents) ? contents : [contents];
         this.range = range;
       }
     },
@@ -741,6 +741,14 @@ function paintingVscode(visibleTextEditors, settings = {}) {
       constructor(value) { this.value = value; }
     },
   };
+}
+
+async function problemHoverTextsAt(vscode, doc, position, serverHover = null) {
+  const hover = await editorMiddleware(vscode, () => [], clickOpenedPopup(vscode))
+    .provideHover(doc, position, null, async () => serverHover);
+  if (!hover) return [];
+  const contents = Array.isArray(hover.contents) ? hover.contents : [hover.contents];
+  return contents.map((content) => (typeof content === 'string' ? content : content.value));
 }
 
 function referenceMarks() {
@@ -831,7 +839,8 @@ test('references are painted by the class the server gives them', async () => {
   assert.deepEqual(plainPainted.map((item) => item.ranges.length), [0, 0, 0, 0, 0, 0, 0, 0]);
 });
 
-test('a deprecated key is struck through in yellow and its warning is the hover of its key and value, unless deprecation warnings are off', async () => {
+test('a deprecated key is struck through in yellow and its warning is the hover of its key and value, '
+  + 'its schema note the description once, unless deprecation warnings are off', async () => {
   const text = 'mocktype:\n  old: 1\n';
   const oldKey = rangeOf(1, 2, 5);
   const oldField = rangeOf(1, 2, 8);
@@ -839,31 +848,37 @@ test('a deprecated key is struck through in yellow and its warning is the hover 
   const schemaNote = 'use `kept`';
   const notedMessage = `${message}\n\n<span style="color:var(--vscode-yamlDslEditor-dark-overlayHeadingForeground);">`
     + '<strong>[schema]</strong> use `kept`</span>';
-  const deprecation = { range: oldKey, message, schemaNote, severity: 'warning', kind: 'deprecation' };
+  const deprecation = {
+    range: oldKey,
+    hoverRange: oldField,
+    message,
+    schemaNote,
+    severity: 'warning',
+    kind: 'deprecation',
+  };
   const deprecatedFields = [{ struckRange: oldKey, fieldRange: oldField, message, schemaNote }];
   const client = fakeClient({ decorations: { references: [], problems: [deprecation], deprecatedFields } });
   const doc = documentOf(text, 'deprecated.yml');
-  const schemaHover = async () => ({ contents: { value: 'the field description' } });
-  const hoverAt = (vscode, character) => editorMiddleware(vscode, () => [], clickOpenedPopup(vscode))
-    .provideHover(doc, { line: 1, character }, null, schemaHover);
-  const hoverText = (hover) => (hover.contents.value === undefined ? hover.contents[0].value : hover.contents.value);
+  const schemaHover = { contents: { value: 'use `kept`' } };
+  const hoverAt = (vscode, character) => problemHoverTextsAt(vscode, doc, { line: 1, character }, schemaHover);
   const painted = [];
   const shown = paintingVscode([recordingEditor(doc, painted)]);
   await paintUnderlines(shown, client, referenceMarks(), []);
   assert.deepEqual(lastPaint(painted, 'deprecated').ranges.map((range) => doc.getText(range)), ['old']);
   assert.deepEqual(lastPaint(painted, 'warning').ranges.map((mark) => mark.hoverMessage), [undefined]);
-  assert.equal(hoverText(await hoverAt(shown, 3)), notedMessage);
-  assert.equal(hoverText(await hoverAt(shown, 7)), notedMessage);
-  const shownHover = await hoverAt(shown, 3);
-  const shownContents = shownHover.contents.value === undefined ? shownHover.contents[0] : shownHover.contents;
-  assert.equal(shownContents.supportHtml, true);
+  assert.deepEqual(await hoverAt(shown, 3), [notedMessage]);
+  assert.deepEqual(await hoverAt(shown, 7), [notedMessage]);
+  const shownHover = await editorMiddleware(shown, () => [], clickOpenedPopup(shown))
+    .provideHover(doc, { line: 1, character: 3 }, null, async () => null);
+  assert.equal(shownHover.contents[0].supportHtml, true);
+  assert.deepEqual(shownHover.range, oldField);
   const hiddenPainted = [];
   const hidden = paintingVscode([recordingEditor(doc, hiddenPainted)], { 'warning.deprecation.enabled': false });
   await paintUnderlines(hidden, client, referenceMarks(), []);
   assert.deepEqual(lastPaint(hiddenPainted, 'deprecated').ranges, []);
   assert.deepEqual(lastPaint(hiddenPainted, 'warning').ranges, []);
-  assert.equal(hoverText(await hoverAt(hidden, 3)), 'the field description');
-  assert.equal(hoverText(await hoverAt(hidden, 7)), 'the field description');
+  assert.deepEqual(await hoverAt(hidden, 3), ['use `kept`']);
+  assert.deepEqual(await hoverAt(hidden, 7), ['use `kept`']);
   const activated = fakeVscode({ documents: [] });
   await activatedFully(activated, { subscriptions: [] }, () => fakeClient());
   assert.ok(activated.decorations.some((decoration) => decoration.options.textDecoration
@@ -891,6 +906,73 @@ test('a validation error takes the severity its setting names, every warning but
   assert.deepEqual((await paintedWith({ 'validator.errorSeverity': 'error' })).error, ['size']);
   const off = await paintedWith({ 'validator.enabled': false, 'validator.errorSeverity': 'error' });
   assert.deepEqual([off.error, off.warning], [[], ['mode']]);
+  const hoverWith = async (settings) => {
+    const vscode = paintingVscode([recordingEditor(doc, [])], settings);
+    await paintUnderlines(vscode, client, referenceMarks(), []);
+    return problemHoverTextsAt(vscode, doc, { line: 1, character: 3 });
+  };
+  const heading = '<span style="color:var(--vscode-yamlDslEditor-dark-validationErrorsHeadingForeground);">'
+    + '<strong>validation errors</strong></span>';
+  const validationHover = [`${heading}\n\n- \`size\` must be integer`];
+  assert.deepEqual(await hoverWith({ 'validator.errorSeverity': 'warning' }), validationHover);
+  assert.deepEqual(await hoverWith({ 'validator.errorSeverity': 'info' }), validationHover);
+  assert.deepEqual(await hoverWith({ 'validator.enabled': false }), []);
+});
+
+test('a hover holding a problem with a schema note shows no documentation below it, '
+  + 'and one without a note is followed by the field\'s documentation', async () => {
+  const noted = {
+    range: rangeOf(1, 2, 6),
+    message: '`size` must be integer',
+    schemaNote: 'The mock size.',
+    severity: 'error',
+    kind: 'validationError',
+  };
+  const plain = {
+    range: rangeOf(2, 2, 6),
+    message: '`mode` is also at line 4',
+    severity: 'warning',
+    kind: 'duplicateKey',
+  };
+  const client = fakeClient({ decorations: { references: [], problems: [noted, plain] } });
+  const doc = documentOf('a:\n  size: big\n  mode: fast\n  mode: slow\n', 'noted.yml');
+  const vscode = paintingVscode([recordingEditor(doc, [])]);
+  await paintUnderlines(vscode, client, referenceMarks(), []);
+  const documentation = { contents: { value: 'The mock size.' } };
+  const notedHover = await problemHoverTextsAt(vscode, doc, { line: 1, character: 3 }, documentation);
+  assert.equal(notedHover.length, 1);
+  assert.equal(notedHover[0].split('The mock size.').length, 2);
+  const plainHover = await problemHoverTextsAt(vscode, doc, { line: 2, character: 3 }, documentation);
+  assert.deepEqual(plainHover, ['`mode` is also at line 4', 'The mock size.']);
+});
+
+test('a macro warning is underlined, marked and answered by the hover '
+  + 'until warning.macro.enabled turns it off', async () => {
+  const macroWarning = {
+    range: rangeOf(3, 6, 17),
+    message: 'the loop body\'s key `mock_shared` reads no loop variable, so every pass writes the same key',
+    severity: 'warning',
+    kind: 'macroWarning',
+  };
+  const client = fakeClient({ decorations: { references: [], problems: [macroWarning] } });
+  const doc = documentOf('a:\n  fn.loop:\n    body:\n      mock_shared: 1\n', 'looped.yml');
+  const paintedWith = async (settings) => {
+    const painted = [];
+    const vscode = paintingVscode([recordingEditor(doc, painted)], settings);
+    await paintUnderlines(vscode, client, referenceMarks(), []);
+    const shown = (kind) => lastPaint(painted, kind).ranges.map((mark) => doc.getText(mark.range || mark));
+    return {
+      warning: shown('warning'),
+      underline: shown('warningUnderline'),
+      hover: await problemHoverTextsAt(vscode, doc, { line: 3, character: 8 }),
+    };
+  };
+  assert.deepEqual(await paintedWith({}), {
+    warning: ['mock_shared'],
+    underline: ['mock_shared'],
+    hover: [macroWarning.message],
+  });
+  assert.deepEqual(await paintedWith({ 'warning.macro.enabled': false }), { warning: [], underline: [], hover: [] });
 });
 
 test('an unfinished key is no error while the cursor is on its line, and is one once the cursor leaves it', async () => {
@@ -903,9 +985,12 @@ test('an unfinished key is no error while the cursor is on its line, and is one 
   const marks = referenceMarks();
   const vscode = paintingVscode([editor]);
   await paintUnderlines(vscode, client, marks, []);
-  const messages = (kind) => lastPaint(painted, kind).ranges.map((mark) => mark.hoverMessage);
-  assert.deepEqual(messages('error'), []);
-  assert.deepEqual(messages('warning'), ['`b` is also at line 4']);
+  const marked = (kind) => lastPaint(painted, kind).ranges.map((mark) => doc.getText(mark.range));
+  const unfinishedHover = () => problemHoverTextsAt(vscode, doc, { line: 1, character: 3 });
+  assert.deepEqual(marked('error'), []);
+  assert.deepEqual(await unfinishedHover(), []);
+  assert.deepEqual(marked('warning'), ['b']);
+  assert.deepEqual(await problemHoverTextsAt(vscode, doc, { line: 2, character: 2 }), ['`b` is also at line 4']);
   assert.deepEqual(lastPaint(painted, 'warningUnderline').ranges.map((range) => doc.getText(range)), ['b']);
   const paintCount = painted.length;
   editor.selection = { active: { line: 1, character: 2 } };
@@ -913,13 +998,14 @@ test('an unfinished key is no error while the cursor is on its line, and is one 
   assert.equal(painted.length, paintCount);
   editor.selection = { active: { line: 2, character: 0 } };
   repaintProblemsOnCursorMove(vscode, marks, editor);
-  assert.deepEqual(messages('error'), ['`sc` needs a `:`']);
+  assert.deepEqual(marked('error'), ['sc']);
+  assert.deepEqual(await unfinishedHover(), ['`sc` needs a `:`']);
   editor.selection = { active: { line: 3, character: 0 } };
   repaintProblemsOnCursorMove(vscode, marks, editor);
   assert.equal(painted.length, paintCount + 4);
   editor.selection = { active: { line: 1, character: 0 } };
   repaintProblemsOnCursorMove(vscode, marks, editor);
-  assert.deepEqual(messages('error'), []);
+  assert.deepEqual(marked('error'), []);
   repaintProblemsOnCursorMove(vscode, marks, { document: doc, selection: { active: { line: 0, character: 0 } } });
 });
 
@@ -944,6 +1030,9 @@ test('every ref is underlined from the text before the server classifies it, onc
     '  label: local.db',
     '  note: not a ref',
     '  Targets: ["%s/*", [ref data_source.bucket.arn], ref data_source.key.arn]',
+    '  ref mocktype.mock_key: mock-value',
+    '  "local.mock_quoted": mock-value',
+    '  local.mock_name trailing: mock-value',
   ].join('\n');
   const painted = [];
   const doc = documentOf(text);
@@ -963,10 +1052,12 @@ test('every ref is underlined from the text before the server classifies it, onc
   assert.deepEqual(early.sort(), [
     'local.ai_result',
     'local.db',
+    'local.mock_quoted',
     'ref data_source.bucket.arn',
     'ref data_source.key.arn',
     'ref data_source.vpc.id',
     'ref iam_role.redshift.arn',
+    'ref mocktype.mock_key',
   ]);
   release();
   await pending;
@@ -1035,7 +1126,8 @@ test('classes that arrive after a newer paint are dropped', async () => {
   assert.equal(localPaints[0].ranges[0].end.character, 2);
 });
 
-test('problems are error squiggles, or warning or info underlines, with their message on hover, a whole line when the range is empty', async () => {
+test('problems are error squiggles, or warning or info underlines carrying no message, '
+  + 'and the hover answers each message, a whole line when the range is empty', async () => {
   const painted = [];
   const doc = documentOf('# yaml-language-server: $schema=missing.json\nname: [\nsource: ref one.two\n');
   doc.lineCount = 4;
@@ -1053,16 +1145,14 @@ test('problems are error squiggles, or warning or info underlines, with their me
     },
   });
   await paintUnderlines(vscode, client, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
-  assert.deepEqual(lastPaint(painted, 'error').ranges, [
-    { range: rangeOf(1, 6, 7), hoverMessage: 'flow sequence is not closed' },
-    { range: rangeOf(9, 0, 0), hoverMessage: 'past the end' },
-  ]);
-  assert.deepEqual(lastPaint(painted, 'warning').ranges, [
-    { range: rangeOf(2, 0, 6), hoverMessage: '`source` is deprecated' },
-  ]);
-  assert.deepEqual(lastPaint(painted, 'info').ranges, [
-    { range: rangeOf(0, 0, 44), hoverMessage: 'schema is unavailable' },
-  ]);
+  assert.deepEqual(lastPaint(painted, 'error').ranges, [{ range: rangeOf(1, 6, 7) }, { range: rangeOf(9, 0, 0) }]);
+  assert.deepEqual(lastPaint(painted, 'warning').ranges, [{ range: rangeOf(2, 0, 6) }]);
+  assert.deepEqual(lastPaint(painted, 'info').ranges, [{ range: rangeOf(0, 0, 44) }]);
+  const flowHover = await problemHoverTextsAt(vscode, doc, { line: 1, character: 6 });
+  assert.deepEqual(flowHover, ['flow sequence is not closed']);
+  assert.deepEqual(await problemHoverTextsAt(vscode, doc, { line: 2, character: 3 }), ['`source` is deprecated']);
+  assert.deepEqual(await problemHoverTextsAt(vscode, doc, { line: 0, character: 30 }), ['schema is unavailable']);
+  assert.deepEqual(await problemHoverTextsAt(vscode, doc, { line: 1, character: 2 }), []);
   assert.equal(lastPaint(painted, 'unclassified').ranges.length, 1);
   assert.equal(painted.some((item) => item.kind === 'external' && item.ranges.length > 0), false);
 });
@@ -1087,16 +1177,24 @@ test('the validation errors on one key share one hover, under its heading with e
   const heading = '<span style="color:var(--vscode-yamlDslEditor-dark-validationErrorsHeadingForeground);">'
     + '<strong>validation errors</strong></span>';
   const errorMarks = lastPaint(painted, 'error').ranges;
-  assert.deepEqual(errorMarks.map((mark) => mark.range), [rangeOf(2, 4, 9), rangeOf(1, 2, 9), rangeOf(0, 0, 8)]);
-  assert.equal(errorMarks[0].hoverMessage.value, `${heading}\n\n- \`queue\` needs \`role\`\n- \`queue\` must be \`<arn>\``);
-  assert.equal(errorMarks[0].hoverMessage.supportHtml, true);
-  assert.equal(errorMarks[1].hoverMessage.value, `${heading}\n\n- \`size\` is required`);
-  assert.equal(errorMarks[2].hoverMessage, 'flow sequence is not closed');
-  const lightPainted = [];
-  const lightVscode = paintingVscode([recordingEditor(doc, lightPainted)], { theme: 'light' });
+  assert.deepEqual(errorMarks, [
+    { range: rangeOf(2, 4, 9) },
+    { range: rangeOf(1, 2, 9) },
+    { range: rangeOf(0, 0, 8) },
+  ]);
+  assert.deepEqual(
+    await problemHoverTextsAt(vscode, doc, { line: 2, character: 5 }),
+    [`${heading}\n\n- \`queue\` needs \`role\`\n- \`queue\` must be \`<arn>\``],
+  );
+  assert.deepEqual(await problemHoverTextsAt(vscode, doc, { line: 1, character: 3 }), [
+    `${heading}\n\n- \`size\` is required`,
+  ]);
+  const flowHover = await problemHoverTextsAt(vscode, doc, { line: 0, character: 3 });
+  assert.deepEqual(flowHover, ['flow sequence is not closed']);
+  const lightVscode = paintingVscode([recordingEditor(doc, [])], { theme: 'light' });
   await paintUnderlines(lightVscode, client, referenceMarks(), [{ text: referenceConfig, dir: '/repo' }]);
-  const [lightMark] = lastPaint(lightPainted, 'error').ranges;
-  assert.ok(lightMark.hoverMessage.value.startsWith(
+  const [lightHover] = await problemHoverTextsAt(lightVscode, doc, { line: 2, character: 5 });
+  assert.ok(lightHover.startsWith(
     '<span style="color:var(--vscode-yamlDslEditor-light-validationErrorsHeadingForeground);">',
   ));
 });
@@ -1126,8 +1224,7 @@ test('a validation error\'s schema note is drawn in color under its bullet, and 
   const noteStart = '<span style="color:var(--vscode-yamlDslEditor-dark-overlayHeadingForeground);">';
   const heading = '<span style="color:var(--vscode-yamlDslEditor-dark-validationErrorsHeadingForeground);">'
     + '<strong>validation errors</strong></span>';
-  const [validationMark, configMark] = lastPaint(painted, 'error').ranges;
-  assert.equal(validationMark.hoverMessage.value, [
+  assert.deepEqual(await problemHoverTextsAt(vscode, doc, { line: 1, character: 3 }), [[
     heading,
     '',
     '- `colored` matches a form that is not allowed',
@@ -1136,12 +1233,14 @@ test('a validation error\'s schema note is drawn in color under its bullet, and 
     '',
     `  ${noteStart}Mock second paragraph.</span>`,
     '- `colored` matches none of its allowed forms',
-  ].join('\n'));
-  assert.equal(
-    configMark.hoverMessage.value,
-    `\`version\` is a &lt;mock>\n\n${noteStart}<strong>[schema]</strong> Mock config note.</span>`,
+  ].join('\n')]);
+  assert.deepEqual(
+    await problemHoverTextsAt(vscode, doc, { line: 0, character: 3 }),
+    [`\`version\` is a &lt;mock>\n\n${noteStart}<strong>[schema]</strong> Mock config note.</span>`],
   );
-  assert.equal(configMark.hoverMessage.supportHtml, true);
+  const configHover = await editorMiddleware(vscode, () => [], clickOpenedPopup(vscode))
+    .provideHover(doc, { line: 0, character: 3 }, null, async () => null);
+  assert.equal(configHover.contents[0].supportHtml, true);
 });
 
 test('a hover from the server renders its HTML, so a field hover\'s headings show in their color', async () => {
@@ -1166,7 +1265,8 @@ test('a workspace config file shows its own problems and nothing else', async ()
   const vscode = paintingVscode([recordingEditor(config, painted), recordingEditor(elsewhere, otherPainted)]);
   const client = fakeClient({ decorations: { references: null, problems: [{ range: rangeOf(0, 3, 4), message: 'bad config' }] } });
   await paintUnderlines(vscode, client, referenceMarks(), [{ text: 'dsls: [\n', dir: '/repo' }]);
-  assert.deepEqual(lastPaint(painted, 'error').ranges, [{ range: rangeOf(0, 3, 4), hoverMessage: 'bad config' }]);
+  assert.deepEqual(lastPaint(painted, 'error').ranges, [{ range: rangeOf(0, 3, 4) }]);
+  assert.deepEqual(await problemHoverTextsAt(vscode, config, { line: 0, character: 3 }), ['bad config']);
   assert.equal(painted.some((item) => item.kind === 'unclassified'), false);
   assert.deepEqual(client.sent.map((item) => item.params.uri), ['file:///repo/yaml-dsl.yml']);
   assert.ok(otherPainted.every((item) => item.ranges.length === 0));
@@ -1187,13 +1287,14 @@ test('a hover colors the declaration by the declaring file\'s DSL, with no DSL s
     .provideHover({ uri: {} }, { line: 0, character: 0 }, null, async () => ({
       contents: {
         value: '[mock.yml:1](file:///repo/mock.yml#L1)\n\n```yaml-dsl\n'
-          + '  source: ref thing.one\n  name: "x" ${local.db} ${env} @{y}\n```',
+          + '  source: ref thing.one\n  name: "x" ${local.db} ${env} @{y}\n  local.mock_key: 1\n```',
       },
     }));
   const referenceSpan = '<span style="color:var(--vscode-yamlDslEditor-dark-declaration-referenceForeground);">';
   const placeholderSpan = '<span style="color:var(--vscode-yamlDslEditor-dark-declaration-placeholderForeground);">';
   const configured = (await hover(referenceConfig)).contents.value;
   assert.ok(configured.includes(`${referenceSpan}ref</span>`));
+  assert.ok(configured.includes(`${referenceSpan}local.</span>`), configured);
   assert.ok(configured.includes(`${placeholderSpan}\${local.db}</span>`));
   assert.ok(configured.includes(`${placeholderSpan}\${env}</span>`));
   assert.ok(!configured.includes(`${placeholderSpan}@{y}`));

@@ -232,6 +232,8 @@ The extension's own settings live under `yaml-dsl-editor` in the editor's settin
 | `yaml-dsl-editor.validator.fileDecoration` | `true`, `false` | Whether a file holding a validation error, and its folders, are colored |
 | `yaml-dsl-editor.warning.deprecation.enabled` | `true`, `false` | Whether deprecation warnings are shown |
 | `yaml-dsl-editor.warning.deprecation.fileDecoration` | `true`, `false` | Whether a file holding a deprecation warning, and its folders, are colored |
+| `yaml-dsl-editor.warning.macro.enabled` | `true`, `false` | Whether macro warnings are shown |
+| `yaml-dsl-editor.warning.macro.fileDecoration` | `true`, `false` | Whether a file holding a macro warning, and its folders, are colored |
 
 ## Development
 

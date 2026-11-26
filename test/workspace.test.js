@@ -2053,7 +2053,10 @@ test('a deprecated key is a warning problem carrying its description as its sche
   assert.deepEqual(deprecated.struckRange, { start: { line: 1, character: 0 }, end: { line: 1, character: 3 } });
   assert.deepEqual(deprecated.fieldRange, { start: { line: 1, character: 0 }, end: { line: 1, character: 6 } });
   const report = ws.suggestionMarks('/repo/warn/mock.yml');
-  assert.deepEqual(report.files.map((file) => [file.uri, file.warning]), [['file:///repo/warn/mock.yml', true]]);
+  assert.deepEqual(
+    report.files.map((file) => [file.uri, file.warningKinds]),
+    [['file:///repo/warn/mock.yml', ['deprecation']]],
+  );
 });
 
 test('a report carries the hash of each file\'s schema, and a kept file whose schema hash differs is stale', async () => {
@@ -2109,8 +2112,12 @@ test('a stack worked out in the background reports the files holding a deprecate
   const reports = [];
   ws.onSuggestions((stackId) => reports.push(ws.suggestionMarks(stackId)));
   await ws.refreshSuggestions(['/repo/warn/mock.yml', '/repo/kept/mock.yml']);
-  const flagged = reports.flatMap((stackReport) => stackReport.files.map((file) => [file.uri, file.warning]));
-  assert.deepEqual(flagged, [['file:///repo/warn/mock.yml', true], ['file:///repo/kept/mock.yml', false]]);
+  const flagged = reports
+    .flatMap((stackReport) => stackReport.files.map((file) => [file.uri, file.warningKinds]));
+  assert.deepEqual(flagged, [
+    ['file:///repo/warn/mock.yml', ['deprecation']],
+    ['file:///repo/kept/mock.yml', []],
+  ]);
 });
 
 const taggedPath = '/repo/tagged/mock.yaml';

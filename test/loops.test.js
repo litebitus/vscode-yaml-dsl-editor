@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const { parseConfig } = require('../lib/config');
 const { analyzeDocument } = require('../lib/analyze');
 const { collectSymbols } = require('../lib/symbols');
+const { validationDocumentOf } = require('../lib/validation-document');
+const { resolveTargets } = require('../lib/scope-resolution');
 const {
   loopContextOf,
   loopsOf,
@@ -122,7 +124,39 @@ test('a loop\'s expansion declares each item\'s names where its body lands, '
   ]);
 });
 
-test('a loop\'s expansion is written into the map holding it, each item\'s body substituted in keys and text', () => {
+test('a name declared explicitly wins over the pattern a loop with unknown items spells, '
+  + 'and the pattern answers a name nothing else declares', () => {
+  const explicitText = [
+    'Resources:',
+    '  Fn::ForEach::Unknown:',
+    '    - ItemName',
+    '    - Fn::Mock: [x]',
+    '    - Item&{ItemName}: { Type: mock-type }',
+    '  ItemMock:',
+    '    Type: mock-type',
+    '  MockUser:',
+    '    Label: ${ItemMock}',
+    '    Other: ${ItemOther}',
+    '',
+  ].join('\n');
+  const explicitDoc = analyzeDocument(explicitText, '/repo/mock.yml', dsl);
+  const symbols = collectSymbols(
+    expandedTreeOf(explicitDoc.tree, context),
+    dsl,
+    '/repo/mock.yml',
+    explicitText,
+  );
+  const stack = { symbols, dsl, loops: [], common: '/repo/mock.yml' };
+  const targetLinesOf = (name) => {
+    const ref = explicitDoc.references.find((found) => found.groups.name === name);
+    return resolveTargets(stack, ref, '/repo/mock.yml').map((target) => target.keyRange.start.line);
+  };
+  assert.deepEqual(targetLinesOf('ItemMock'), [5]);
+  assert.deepEqual(targetLinesOf('ItemOther'), [4]);
+});
+
+test('a loop\'s expansion is written into the map holding it, each item\'s body substituted in keys and text, '
+  + 'a key reading the variable of a loop left to when the document is used kept as written', () => {
   const { value, pathMap } = expandedValueOf(doc.value, context);
   assert.deepEqual(value, {
     Resources: {
@@ -136,7 +170,7 @@ test('a loop\'s expansion is written into the map holding it, each item\'s body 
         Label: 'mock-MockB-label',
         QueueMockBOne: { Type: 'mock-queue' },
       },
-      ItemItemName: { Type: 'mock-type' },
+      'Item&{ItemName}': { Type: 'mock-type' },
       MockBucket: { Type: 'mock-type' },
     },
   });
@@ -225,6 +259,18 @@ test('a loop whose arguments are written by name reads each role from the argume
   );
 });
 
+test('in the body of a loop left to when the document is used, '
+  + 'a key that reads a loop variable is a deferred key', () => {
+  const resources = validationDocumentOf(doc.value, dsl, table).resolvedDocument().value
+    .find((entry) => entry.key === 'Resources').value;
+  assert.deepEqual(resources.value.map((entry) => [entry.key, entry.deferredKey && entry.deferredKey.kind]), [
+    ['TopicMockA', null],
+    ['TopicMockB', null],
+    ['Item&{ItemName}', 'template'],
+    ['MockBucket', null],
+  ]);
+});
+
 test('a problem in an expansion is placed at the body\'s source, naming the items it holds for '
   + 'unless every item shares it', () => {
   const { pathMap } = expandedValueOf(doc.value, context);
@@ -234,7 +280,7 @@ test('a problem in an expansion is placed at the body\'s source, naming the item
     { path: ['Resources', 'TopicMockB', 'Label'], message: 'mock shared' },
     { path: ['Resources', 'TopicMockB', 'Type'], message: 'mock one item' },
     { path: ['Resources', 'TopicMockA', 'QueueMockAOne'], message: 'mock nested' },
-    { path: ['Resources', 'ItemItemName'], message: 'mock unknown' },
+    { path: ['Resources', 'Item&{ItemName}'], message: 'mock unknown' },
     { path: ['Resources', 'MockBucket'], message: 'mock written' },
   ], pathMap);
   assert.deepEqual(problems.map((problem) => [problem.path, problem.message]), [
@@ -394,4 +440,59 @@ test('a loop expanded in the tree lands under its name, '
   const unscoped = loopContextOf({ ...sigilDsl, loops: null }, sigilTable);
   const { value } = expandedValueOf(sigilDoc.value, unscoped);
   assert.deepEqual(value.lambda['mock-fn'].queue_names, ['${~it}-queue', '${~it}-queue']);
+});
+
+const [bodyKeysDsl] = parseConfig(configText(dslEntry('mock-body-keys', {
+  placeholder: { pattern: '\\$\\{(?<body>[^}]+)\\}', unscanned_paths: [] },
+  function: markerFunction({ definitions: ['schema'] }),
+  loops: { scope_name: 'LOOP' },
+  scopes: { LOOP: scope(), ENTRY: scope({ named_by_parent_key: true }) },
+  declarations: [declaration('$.*.*', 'ENTRY')],
+  references: [
+    reference('^~(?<name>[a-z_][a-z0-9_]*)', 'LOOP', {
+      positions: ['whole_scalar', 'whole_placeholder', 'placeholder_in_text'],
+      text_after_name_allowed: true,
+    }),
+    reference('@(?<name>[a-z]+)', 'LOOP', { positions: ['anywhere_in_scalar'] }),
+  ],
+}))).dsls;
+
+const bodyKeysContext = loopContextOf(bodyKeysDsl, sigilTable);
+
+const bodyKeysText = [
+  'mocktype:',
+  '  fn.loop:',
+  '    in: [mock-a, mock-b]',
+  '    body:',
+  '      ~it: 1',
+  '      at-@it: 2',
+  '      "${~it}-x": 3',
+  '      mock_fixed: 4',
+  '      ~other: 5',
+  '      labels fn.loop:',
+  '        in: [mock-c]',
+  '        body: [~it]',
+  '      fn.loop:',
+  '        in: [mock-d]',
+  '        body:',
+  '          "${~it}-inner": 6',
+  '',
+].join('\n');
+
+test('each key of a loop\'s map body reads one of its loop variables, '
+  + 'and a key that reads none declares no name', () => {
+  const bodyKeysDoc = analyzeDocument(bodyKeysText, '/repo/mock.yml', bodyKeysDsl);
+  const [outerLoop, , innerLoop] = loopsOf(bodyKeysDoc.tree, bodyKeysContext);
+  const outerKeys = outerLoop.bodyKeysReadingNoVariable
+    .map((bodyKey) => [bodyKey.key, bodyKey.keyRange.start.line]);
+  assert.deepEqual(outerKeys, [
+    ['mock_fixed', 7],
+    ['~other', 8],
+    ['labels fn.loop', 9],
+  ]);
+  assert.deepEqual(innerLoop.bodyKeysReadingNoVariable, []);
+  const expanded = expandedTreeOf(bodyKeysDoc.tree, bodyKeysContext);
+  const names = collectSymbols(expanded, bodyKeysDsl, '/repo/mock.yml', bodyKeysText)
+    .map((symbol) => symbol.name);
+  assert.deepEqual(names, ['at-@it', 'mock-a-x', 'mock-d-inner', 'at-@it', 'mock-b-x', 'mock-d-inner']);
 });

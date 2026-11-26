@@ -1,0 +1,15 @@
+mocktype:
+  fn.loop:
+    for: ["name"]
+    in: ref mocktype.mock_source
+    body:
+      "mock_${~name}":
+        size: 1
+  mock_a:
+    size: 2
+  mock_source:
+    size: 3
+  holder:
+    size: 4
+    source: ref mocktype.mock_a
+    other: ref mocktype.mock_other

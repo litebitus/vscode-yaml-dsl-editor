@@ -1,0 +1,9 @@
+mocktype:
+  fn.loop:
+    for: ["name"]
+    in: ["mock_a", "mock_b"]
+    body:
+      "mock_${~name}":
+        size: 1
+      mock_shared:
+        size: 2

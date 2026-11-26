@@ -728,7 +728,7 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri).color.id, 'yamlDslEditor.dark.suggestionForeground');
   notes['yaml-dsl/suggestions']({
     stackId: '/repo/mock.yml',
-    files: [{ uri: 'file:///repo/dev/mock.yml', warning: true, marks: [mark] }],
+    files: [{ uri: 'file:///repo/dev/mock.yml', warningKinds: ['deprecation', 'macroWarning'], marks: [mark] }],
   });
   assert.equal(fileDecorationChanges, 2);
   const warned = fileDecorationProvider.provideFileDecoration(devUri);
@@ -738,6 +738,9 @@ test('activation paints the suggestions the server sends and registers the move'
   });
   featureValues['warning.deprecation.fileDecoration'] = false;
   assert.deepEqual([fileDecorationProvider.provideFileDecoration(devUri).badge], ['⚠']);
+  featureSettingsChanged();
+  assert.equal(fileDecorationProvider.provideFileDecoration(devUri).badge, '⚠');
+  featureValues['warning.macro.fileDecoration'] = false;
   featureSettingsChanged();
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri).badge, '💡');
   featureValues['suggestion.move.fileDecoration'] = false;
@@ -749,12 +752,13 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri), undefined);
   assert.deepEqual(inlayProvider.provider.provideInlayHints(documentOf('file:///repo/dev/mock.yml', ['queue:'])), []);
   delete featureValues['warning.deprecation.fileDecoration'];
+  delete featureValues['warning.macro.fileDecoration'];
   delete featureValues['suggestion.move.fileDecoration'];
   delete featureValues['suggestion.move.enabled'];
   featureSettingsChanged();
   notes['yaml-dsl/suggestions']({
     stackId: '/repo/mock.yml',
-    files: [{ uri: 'file:///repo/dev/mock.yml', warning: false, marks: [mark] }],
+    files: [{ uri: 'file:///repo/dev/mock.yml', warningKinds: [], marks: [mark] }],
   });
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri).badge, '💡');
   const refreshesBefore = sent.filter(([method]) => method === 'yaml-dsl/refreshSuggestions').length;
@@ -764,7 +768,7 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.equal(sent.filter(([method]) => method === 'yaml-dsl/refreshSuggestions').length, refreshesBefore + 1);
   notes['yaml-dsl/suggestions']({
     stackId: '/repo/mock.yml',
-    files: [{ uri: 'file:///repo/dev/mock.yml', warning: false, marks: [mark] }],
+    files: [{ uri: 'file:///repo/dev/mock.yml', warningKinds: [], marks: [mark] }],
   });
   const suggestionMarkPaintsBefore = painted.filter(isSuggestionMark).length;
   vscode.visibleChanged();
@@ -868,13 +872,13 @@ test('activation paints the suggestions the server sends and registers the move'
   assert.deepEqual(sent.filter(([method]) => method === 'yaml-dsl/theme').at(-1), ['yaml-dsl/theme', { theme: 'light' }]);
   notes['yaml-dsl/suggestions']({
     stackId: '/repo/mock.yml',
-    files: [{ uri: 'file:///repo/dev/mock.yml', warning: true, marks: [] }],
+    files: [{ uri: 'file:///repo/dev/mock.yml', warningKinds: ['deprecation'], marks: [] }],
   });
   assert.equal(fileDecorationProvider.provideFileDecoration(devUri).color.id, 'yamlDslEditor.light.warningForeground');
   const inlayChangesBeforeLightMarks = inlayChanges;
   notes['yaml-dsl/suggestions']({
     stackId: '/repo/mock.yml',
-    files: [{ uri: 'file:///repo/dev/mock.yml', warning: false, marks: [mark] }],
+    files: [{ uri: 'file:///repo/dev/mock.yml', warningKinds: [], marks: [mark] }],
   });
   const lightSuggestionIcon = 'mock-extension/media/light/suggestion-gutter-mark.svg';
   const lightSuggestionMark = painted.filter((item) => item.mark.options

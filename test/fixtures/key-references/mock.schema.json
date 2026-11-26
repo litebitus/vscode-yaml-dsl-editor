@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "locals": { "type": "object" },
+    "mocktype": { "type": "object", "additionalProperties": { "$ref": "#/$defs/entry" } },
+    "strict": {
+      "type": "object",
+      "required": ["mock_required"],
+      "properties": { "mock_required": { "type": "integer" } },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["size"],
+      "properties": { "size": { "type": "integer" } },
+      "additionalProperties": false
+    }
+  }
+}
