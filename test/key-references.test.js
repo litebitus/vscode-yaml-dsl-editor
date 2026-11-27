@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const { scope, declaration, reference, placeholder, dslEntry, configText } = require('./config-builders');
 
 const inPlaceholders = ['whole_placeholder', 'placeholder_in_text'];
@@ -103,7 +103,7 @@ function positionAt(text, needle, offset = 0) {
 let ws;
 
 test.beforeEach(async () => {
-  ws = createWorkspace({
+  ws = createVirtualWorkspace({
     readFile: async (filePath) => {
       if (filePath === common) return commonText;
       return filePath === '/repo/mock.schema.json' ? mockSchemaText : null;

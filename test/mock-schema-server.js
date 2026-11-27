@@ -7,8 +7,8 @@ function mockSchemaServer() {
     const url = new URL(request.url, 'http://127.0.0.1');
     requests.push({ path: request.url, headers: request.headers });
     const served = documents.get(url.pathname);
-    if (!served) {
-      response.writeHead(404);
+    if (!served || served.status) {
+      response.writeHead(served ? served.status : 404);
       response.end();
       return;
     }

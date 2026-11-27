@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const {
   scope,
   declaration,
@@ -119,7 +119,7 @@ function positionAt(text, needle, shift = 0) {
 
 async function pathedWorkspace() {
   const files = { [`${root}/schema.json`]: schema, [common]: commonText };
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
   });
@@ -217,7 +217,7 @@ const calledText = [
 test('a path into a value a call gives, a local declared by a call or a key holding one, is known only when the '
   + 'document is used, and a step the value lacks beside it is still an error', async () => {
   const files = { [`${calledRoot}/schema.json`]: calledLocalsSchema, [calledFile]: calledText };
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
   });

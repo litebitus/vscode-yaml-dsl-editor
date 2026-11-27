@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const { dslEntry, configText } = require('./config-builders');
 
 const config = configText(dslEntry('sample', {
@@ -29,7 +29,7 @@ function selection(startLine, startCharacter, endLine, endCharacter) {
 }
 
 async function openedWorkspace(...paths) {
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
   });

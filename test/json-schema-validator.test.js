@@ -338,7 +338,7 @@ test('a part compiled alone carries only the nodes its references reach, through
 const schemaStore = { folder: null };
 
 function storedProblemsOf(schemaText, value) {
-  const host = createValidationHost({ reportProblem: (message) => assert.fail(message) });
+  const host = createValidationHost();
   host.addSchema('mock-schema-hash', schemaText, schemaStore.folder);
   return problemTextsOf(host.problemsOf('mock-schema-hash', resolvedDocumentOf(value)));
 }
@@ -385,6 +385,23 @@ test.describe('the schema store', () => {
       [['mode'], '`mode` matches none of its allowed forms'],
       [['extra'], '`extra` is not defined in the schema'],
     ]);
+  });
+
+  test('past the store capacity the least recently used prepared schema is dropped', () => {
+    const host = createValidationHost();
+    host.setSchemaStoreCapacity(1);
+    const longAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const problemsWith = (title) => {
+      host.addSchema(`${title}-hash`, JSON.stringify({ ...JSON.parse(savedSchemaText), title }), schemaStore.folder);
+      return host.problemsOf(`${title}-hash`, resolvedDocumentOf({ size: 1 }));
+    };
+    assert.deepEqual(problemsWith('mock-first'), []);
+    const [first] = storedEntries();
+    fs.utimesSync(path.join(schemaStore.folder, first.name), longAgo, longAgo);
+    assert.deepEqual(problemsWith('mock-second'), []);
+    const kept = storedEntries();
+    assert.equal(kept.length, 1);
+    assert.notEqual(kept[0].name, first.name);
   });
 
   test('a failed not carries the description of the schema it rules out, '

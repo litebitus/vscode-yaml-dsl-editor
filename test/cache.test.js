@@ -2,9 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createCache, DEFAULT_CACHE_CAPACITIES } = require('../lib/cache');
 
-function cacheHolding(stackCapacity, schemaCapacity = 32) {
+function cacheHolding(stackCapacity, inMemorySchemaCapacity = 32) {
   const cache = createCache();
-  cache.setCapacities({ stackCapacity, schemaCapacity });
+  cache.setCapacities({ stackCapacity, inMemorySchemaCapacity });
   return cache;
 }
 
@@ -17,17 +17,20 @@ test('a stack past the capacity evicts the least recently used', () => {
   assert.ok(cache.get('a'));
   assert.ok(cache.get('i'));
   assert.deepEqual(cache.takeEvicted(), ['b']);
-  assert.deepEqual(DEFAULT_CACHE_CAPACITIES, { stackCapacity: 32, schemaCapacity: 32 });
+  assert.deepEqual(DEFAULT_CACHE_CAPACITIES, { stackCapacity: 32, inMemorySchemaCapacity: 32 });
   assert.ok(cache.ids().includes('i'));
 });
 
 test('lowering the stack capacity evicts at once, and a capacity that is not a whole number above 0 is refused', () => {
   const cache = createCache();
   for (const id of ['a', 'b', 'c']) cache.hold(id, { id });
-  cache.setCapacities({ stackCapacity: 1, schemaCapacity: 32 });
+  cache.setCapacities({ stackCapacity: 1, inMemorySchemaCapacity: 32 });
   assert.deepEqual(cache.takeEvicted(), ['a', 'b']);
-  assert.throws(() => cache.setCapacities({ stackCapacity: 0, schemaCapacity: 32 }), /stackCapacity must be a whole number/);
-  assert.throws(() => cache.setCapacities({ stackCapacity: 2 }), /schemaCapacity must be a whole number/);
+  assert.throws(
+    () => cache.setCapacities({ stackCapacity: 0, inMemorySchemaCapacity: 32 }),
+    /stackCapacity must be a whole number/,
+  );
+  assert.throws(() => cache.setCapacities({ stackCapacity: 2 }), /inMemorySchemaCapacity must be a whole number/);
   assert.ok(cache.get('c'));
 });
 

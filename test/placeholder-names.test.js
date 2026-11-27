@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const { scope, declaration, reference, placeholder, dslEntry, configText } = require('./config-builders');
 
 const inPlaceholders = ['whole_placeholder', 'placeholder_in_text'];
@@ -64,7 +64,7 @@ function positionAt(text, needle) {
 let ws;
 
 test.beforeEach(async () => {
-  ws = createWorkspace({
+  ws = createVirtualWorkspace({
     readFile: async (filePath) => (filePath === common ? commonText : null),
     fetchText: async () => null,
   });

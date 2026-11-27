@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspace, SCHEMA_UNAVAILABLE } = require('../lib/workspace');
+const { createWorkspace } = require('../lib/workspace');
+const { virtualDocumentSchemasOf, NO_SCHEMA_FOUND } = require('./virtual-document-schemas');
 const { CONFIG_VERSIONS } = require('../lib/config');
 const {
   scope,
@@ -89,13 +90,17 @@ function at(text, needle) {
 
 function workspace(files, fetchText, readFile) {
   const reads = [];
+  const readFiles = readFile || (async (filePath) => {
+    reads.push(filePath);
+    if (Object.prototype.hasOwnProperty.call(files, filePath)) return files[filePath];
+    return null;
+  });
   const ws = createWorkspace({
-    readFile: readFile || (async (filePath) => {
-      reads.push(filePath);
-      if (Object.prototype.hasOwnProperty.call(files, filePath)) return files[filePath];
-      return null;
-    }),
-    fetchText: fetchText || (async () => { throw new Error('unused'); }),
+    readFile: readFiles,
+    documentSchemas: virtualDocumentSchemasOf(
+      readFiles,
+      fetchText || (async () => { throw new Error('unused'); }),
+    ),
   });
   ws.reads = reads;
   return ws;
@@ -174,7 +179,6 @@ test('hover, definition, and folds see the file\'s own layer and the common laye
   assert.equal(ws.definition('yaml-dsl-fold:nope', { line: 0, character: 0 }), null);
   assert.equal(ws.foldText('/missing', 'one'), '');
   assert.deepEqual(ws.foldsFor('/missing'), { stackId: null, overlayNames: [], overlayLabels: [] });
-  assert.equal(SCHEMA_UNAVAILABLE, 'schema is unavailable');
 });
 
 test('a common layer section is titled common layer, with its file name when the overlays\' files are named apart', async () => {
@@ -217,11 +221,12 @@ test('a schema search path starting with {config_root} is read from the config f
   await ws.setConfigs([{ text: configText(rooted), dir: '/repo/examples/mock-dsl' }]);
   const uri = 'file:///repo/examples/mock-dsl/deep/nested/mock.yml';
   await ws.sync(uri, '/repo/examples/mock-dsl/deep/nested/mock.yml', text);
-  assert.equal(ws.problems(uri).some((item) => item.message === SCHEMA_UNAVAILABLE), false);
+  assert.equal(ws.problems(uri).some((item) => item.message === NO_SCHEMA_FOUND), false);
   assert.equal(ws.hover(uri, at(text, 'name')).contents.value, `\`name\`    \`[optional]\`\n\n${schemaTextOf('the name')}`);
 });
 
-test('a modeline that fails falls through to the published schema', async () => {
+test('a modeline whose schema is missing falls through to the published schema, and one that does not read '
+  + 'is a problem', async () => {
   const files = {
     '/repo/only/mock.yml': '# yaml-language-server: $schema=https://example.test/missing.json\nname: plain\n',
     '/repo/bad.json': '[',
@@ -233,9 +238,10 @@ test('a modeline that fails falls through to the published schema', async () => 
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
   await ws.sync('file:///repo/only/mock.yml', '/repo/only/mock.yml', files['/repo/only/mock.yml']);
   const diags = ws.problems('file:///repo/only/mock.yml');
-  assert.equal(diags.some((item) => item.message === 'schema is unavailable'), false);
+  assert.equal(diags.some((item) => item.message === NO_SCHEMA_FOUND), false);
   await ws.sync('file:///repo/good/mock.yml', '/repo/good/mock.yml', files['/repo/good/mock.yml']);
-  assert.equal(ws.problems('file:///repo/good/mock.yml').some((item) => item.message === 'schema is unavailable'), false);
+  const unreadProblems = ws.problems('file:///repo/good/mock.yml').map((item) => item.message);
+  assert.ok(unreadProblems.some((message) => message.startsWith('schema bad.json: ')), unreadProblems.join('\n'));
 
   await ws.setConfigs([{ text: 'dsls: [', dir: '/repo' }]);
   await ws.sync('file:///repo/yaml-dsl.yml', '/repo/yaml-dsl.yml', 'dsls: [');
@@ -253,7 +259,7 @@ test('a modeline that fails falls through to the published schema', async () => 
   const boom = workspace({}, async () => schema, async () => { throw new Error('boom'); });
   await boom.setConfigs([{ text: config, dir: '/repo' }]);
   await boom.sync('file:///repo/boom/mock.yml', '/repo/boom/mock.yml', '# yaml-language-server: $schema=missing.json\nname: plain\n');
-  assert.equal(boom.problems('file:///repo/boom/mock.yml').some((item) => item.message === 'schema is unavailable'), false);
+  assert.equal(boom.problems('file:///repo/boom/mock.yml').some((item) => item.message === NO_SCHEMA_FOUND), false);
 });
 
 test('a yaml-dsl.yml problem is at the field it is about, and the folder keeps the DSLs it last read cleanly', async () => {
@@ -373,7 +379,7 @@ test('loading past the pin capacity evicts the oldest unpinned stack', async () 
   }));
   const ws = workspace({}, async () => null);
   await ws.setConfigs([{ text: plain, dir: '/repo' }]);
-  ws.setCacheCapacities({ stackCapacity: 7, schemaCapacity: 32 });
+  ws.setCacheCapacities({ stackCapacity: 7, inMemorySchemaCapacity: 32, schemaStoreCapacity: 100 });
   for (let i = 0; i < 10; i += 1) {
     const file = `/repo/s${i}/mock.yml`;
     await ws.setActive(file);
@@ -416,7 +422,7 @@ test('a missing modeline walks the schema search path from the file', async () =
   const bareText = 'name: plain\n';
   await ws.setConfigs([{ text: configText(dslEntry('sample')), dir: '/repo' }]);
   await ws.sync('file://' + bare, bare, bareText);
-  assert.ok(ws.problems('file://' + bare).some((item) => item.message === 'schema is unavailable'));
+  assert.ok(ws.problems('file://' + bare).some((item) => item.message === NO_SCHEMA_FOUND));
   assert.equal(ws.hover('file://' + bare, at(bareText, 'name')), null);
 });
 
@@ -645,16 +651,17 @@ test('a schema that changes on disk revalidates every file reading it, the commo
 function diskCheckedWorkspace(files, stats) {
   const statted = [];
   const read = [];
+  const readFile = async (filePath) => {
+    read.push(filePath);
+    return Object.prototype.hasOwnProperty.call(files, filePath) ? files[filePath] : null;
+  };
   const ws = createWorkspace({
-    readFile: async (filePath) => {
-      read.push(filePath);
-      return Object.prototype.hasOwnProperty.call(files, filePath) ? files[filePath] : null;
-    },
+    readFile,
     statFile: async (filePath) => {
       statted.push(filePath);
       return Object.prototype.hasOwnProperty.call(stats, filePath) ? stats[filePath] : null;
     },
-    fetchText: async () => validatedStackSchema,
+    documentSchemas: virtualDocumentSchemasOf(readFile, async () => validatedStackSchema),
   });
   ws.statted = statted;
   ws.read = read;
@@ -897,13 +904,13 @@ test('a schema written after the file opened replaces the missing one, and a new
   await ws.setConfigs([{ text: layered, dir: '/repo' }]);
   await ws.sync(`file://${onePath}`, onePath, files[onePath]);
   await ws.sync(`file://${commonPath}`, commonPath, files[commonPath]);
-  const unavailable = (filePath) => ws.problems(`file://${filePath}`).some((item) => item.message === SCHEMA_UNAVAILABLE);
+  const unavailable = (filePath) => ws.problems(`file://${filePath}`).some((item) => item.message === NO_SCHEMA_FOUND);
   assert.equal(unavailable(onePath), true);
   assert.equal(unavailable(commonPath), true);
   assert.equal(ws.problems(`file://${onePath}`)[0].range.start.line, 0);
   const named = `name: plain\n# yaml-language-server: $schema=.schema/mock.schema.json\n`;
   await ws.sync(`file://${onePath}`, onePath, named);
-  assert.equal(ws.problems(`file://${onePath}`).find((item) => item.message === SCHEMA_UNAVAILABLE).range.start.line, 1);
+  assert.equal(ws.problems(`file://${onePath}`).find((item) => item.message === NO_SCHEMA_FOUND).range.start.line, 1);
   await ws.sync(`file://${onePath}`, onePath, files[onePath]);
 
   assert.deepEqual(ws.schemaWatchTargets().map((target) => [target.base, target.pattern]).sort(), [
@@ -1300,7 +1307,7 @@ test('a request for an open file waits for its analysis, and builds a stack nobo
   const files = { [common]: 'locals:\n  db: mock-value\nuse: local.db\n' };
   const ws = workspace(files, async () => schema);
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
-  ws.setCacheCapacities({ stackCapacity: 8, schemaCapacity: 32 });
+  ws.setCacheCapacities({ stackCapacity: 8, inMemorySchemaCapacity: 32, schemaStoreCapacity: 100 });
   const opening = ws.sync(`file://${common}`, common, files[common]);
   await ws.whenAnalyzed(`file://${common}`);
   assert.deepEqual(ws.references(`file://${common}`).map((reference) => reference.kind), ['local']);
@@ -1349,7 +1356,7 @@ test('calls are checked against Terraform and the schema once both vocabularies 
   let answer;
   const ws = createWorkspace({
     readFile: async (filePath) => (filePath === common ? text : null),
-    fetchText: async () => functionsSchema,
+    documentSchemas: virtualDocumentSchemasOf(async () => null, async () => functionsSchema),
     terraformFunctions: () => new Promise((resolve) => { answer = resolve; }),
   });
   const loaded = [];
@@ -1391,7 +1398,7 @@ test('a schema that publishes nothing at the vocabulary pointer adds no function
   const text = 'locals:\n  db fn.ssm: /mock/key\n';
   const ws = createWorkspace({
     readFile: async (filePath) => (filePath === common ? text : null),
-    fetchText: async () => schema,
+    documentSchemas: virtualDocumentSchemasOf(async () => null, async () => schema),
   });
   await ws.setConfigs([{ text: functionsConfig(['schema']), dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, text);
@@ -1444,7 +1451,7 @@ test('with no splat operator, a call written as a tag binds its arguments by the
   }));
   const ws = createWorkspace({
     readFile: async (filePath) => (filePath === common ? text : null),
-    fetchText: async () => tableSchema,
+    documentSchemas: virtualDocumentSchemasOf(async () => null, async () => tableSchema),
   });
   await ws.setConfigs([{ text: tableConfig, dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, text);
@@ -1515,7 +1522,7 @@ test('a macro the schema\'s table publishes is called beside sibling keys by its
   }));
   const ws = createWorkspace({
     readFile: async (filePath) => (filePath === common ? text : null),
-    fetchText: async () => tableSchema,
+    documentSchemas: virtualDocumentSchemasOf(async () => null, async () => tableSchema),
   });
   await ws.setConfigs([{ text: tableConfig, dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, text);
@@ -1796,7 +1803,7 @@ test('an include\'s key is a function_call macro call, at its marked and unmarke
   }));
   const ws = createWorkspace({
     readFile: async (filePath) => (filePath === common ? text : null),
-    fetchText: async () => includeSchema,
+    documentSchemas: virtualDocumentSchemasOf(async () => null, async () => includeSchema),
   });
   await ws.setConfigs([{ text: includeConfig, dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, text);
@@ -1824,7 +1831,7 @@ test('a function table in the deprecated argument-list form is an info on the mo
   });
   const ws = createWorkspace({
     readFile: async (filePath) => (filePath === common ? text : null),
-    fetchText: async () => listedSchema,
+    documentSchemas: virtualDocumentSchemasOf(async () => null, async () => listedSchema),
   });
   await ws.setConfigs([{ text: functionsConfig(['schema']), dir: '/repo' }]);
   await ws.sync(`file://${common}`, common, text);

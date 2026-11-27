@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const {
   scope,
   declaration,
@@ -82,7 +82,7 @@ function folderEntriesOver(files) {
 }
 
 async function workspaceOver(files, commonLayerDiscovery, overlayFolders = OVERLAY_FOLDERS) {
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
     readFolderEntries: folderEntriesOver(files),
     fetchText: async () => null,

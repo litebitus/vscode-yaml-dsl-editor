@@ -241,15 +241,52 @@ test('a prepared schema the worker cannot keep reaches the server\'s log, '
     size: 'mock',
   }));
   assert.equal(logged.length, 1);
-  assert.match(logged[0], /^the compiled schema could not be saved to .*[0-9a-f]{64}\.json: /);
+  assert.match(logged[0], /^failed to save schema store entry `.*[0-9a-f]{64}\.json`: /);
   validation.close();
 });
 
-test('a schema capacity set before the worker starts and after it runs reaches the worker, '
+test('a schema store capacity set before the worker starts and after it runs reaches the worker, '
+  + 'which drops the least recently used prepared schema past it', async (context) => {
+  const schemaStoreFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-dsl-editor-mock-schema-store-'));
+  const validation = createWorkerValidation({ logError: (message) => assert.fail(message) });
+  context.after(() => {
+    validation.close();
+    fs.rmSync(schemaStoreFolder, { recursive: true, force: true });
+  });
+  const keptNames = () => fs.readdirSync(schemaStoreFolder).sort();
+  const longAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const ageEntries = () => {
+    for (const name of keptNames()) fs.utimesSync(path.join(schemaStoreFolder, name), longAgo, longAgo);
+  };
+  const storedRequest = (title) => mockRequest({ size: 'mock' }, {
+    slot: `/mock/${title}.yml`,
+    schemaHash: `${title}-hash`,
+    schemaRoot: { ...MOCK_SCHEMA, title },
+    schemaStoreFolder,
+  });
+  validation.setSchemaStoreCapacity(1);
+  validation.problemsOf(storedRequest('mock-first'));
+  await validation.whenSettled();
+  const [firstEntry] = keptNames();
+  ageEntries();
+  validation.problemsOf(storedRequest('mock-second'));
+  await validation.whenSettled();
+  const [secondEntry] = keptNames();
+  assert.equal(keptNames().length, 1);
+  assert.notEqual(secondEntry, firstEntry);
+  ageEntries();
+  validation.setSchemaStoreCapacity(2);
+  validation.problemsOf(storedRequest('mock-third'));
+  await validation.whenSettled();
+  assert.equal(keptNames().length, 2);
+  assert.ok(keptNames().includes(secondEntry));
+});
+
+test('an in-memory schema capacity set before the worker starts and after it runs reaches the worker, '
   + 'and every held schema still answers', async (context) => {
   const validation = createWorkerValidation({ logError: (message) => assert.fail(message) });
   context.after(() => validation.close());
-  validation.setSchemaCapacity(1);
+  validation.setInMemorySchemaCapacity(1);
   const otherSchema = { ...MOCK_SCHEMA, title: 'mock-other' };
   const otherRequest = (value) => mockRequest(value, {
     slot: '/mock/other.yml',
@@ -259,7 +296,7 @@ test('a schema capacity set before the worker starts and after it runs reaches t
   validation.problemsOf(mockRequest({ size: 'mock' }));
   validation.problemsOf(otherRequest({ mode: 'mock-c' }));
   await validation.whenSettled();
-  validation.setSchemaCapacity(2);
+  validation.setInMemorySchemaCapacity(2);
   validation.problemsOf(mockRequest({ size: 'mock', extra: 1 }));
   await validation.whenSettled();
   assert.deepEqual(validation.problemsOf(otherRequest({ mode: 'mock-c' })), inProcessProblemsOf({ mode: 'mock-c' }));
@@ -268,7 +305,7 @@ test('a schema capacity set before the worker starts and after it runs reaches t
     inProcessProblemsOf({ size: 'mock', extra: 1 }),
   );
   validation.close();
-  validation.setSchemaCapacity(3);
+  validation.setInMemorySchemaCapacity(3);
   assert.deepEqual(validation.problemsOf(otherRequest({ mode: 'mock-c' })), inProcessProblemsOf({ mode: 'mock-c' }));
 });
 

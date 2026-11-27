@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const { mergeTargetTermsOf } = require('../lib/merge-target-terms');
 const {
   scope,
@@ -123,7 +123,7 @@ function schemaTextOf(text) {
 }
 
 async function mergingWorkspace(entry = mergingEntry, terraformFunctions = async () => null) {
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
     terraformFunctions,
@@ -181,7 +181,7 @@ test('a key in a local a stack with no overlay files merges by lone calls, Terra
   const lone = `${loneRoot}/mock.yml`;
   const loneText = files[common];
   const loneFiles = { [`${loneRoot}/.schema/sample.schema.json`]: schemaWith('[required] Mock size.'), [lone]: loneText };
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(loneFiles, filePath) ? loneFiles[filePath] : null),
     fetchText: async () => null,
     terraformFunctions: async () => ({
@@ -251,7 +251,7 @@ test('a common layer with no schema of its own checks its calls against each ove
     [`${tableRoot}/one/mock.yml`]: 'mocktype: {}\n',
     [`${tableRoot}/two/mock.yml`]: 'mocktype: {}\n',
   };
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(tableFiles, filePath) ? tableFiles[filePath] : null),
     fetchText: async () => null,
   });

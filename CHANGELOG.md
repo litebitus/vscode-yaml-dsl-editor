@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+- Schemas
+  - A document's schema is found and read by the YAML DSL standard's schema resolution, through `yaml-dsl-spec` and its GitHub and S3 schema readers.
+  - A schema can be read from S3, `s3://<bucket>/<key>`; a private one with `yaml_dsl_machine_credentials=true`, as the machine's AWS credentials or the role `assume_role` names.
+  - A file with no schema found shows `no schema found`, with each schema it looked for and why it is missing.
+  - A schema read that is refused or fails shows the source's answer and how to fix it.
+  - A schema URL's copy is kept whatever its max age, and is read when the server does not answer.
+- Activity log
+  - Each schema finding's problems and warnings are logged, in place of each URL read.
+- Settings
+  - `yaml-dsl-editor.cache.schemaStoreCapacity` bounds the schema store on disk, kept copies of schema URLs and prepared schemas, least recently used first.
+  - `yaml-dsl-editor.cache.inMemorySchemaCapacity` bounds the schemas kept in memory.
+
+### Deprecated
+
+- Settings
+  - `yaml-dsl-editor.cache.schemaCapacity`, replaced by `yaml-dsl-editor.cache.inMemorySchemaCapacity`; it is read while the new setting is not set.
+
+### Breaking
+
+- Schemas
+  - A schema URL that refuses the read, or fails with no copy kept, now stops the search with a problem on the modeline line; only a source that answers it has nothing there, such as a 404, moves the search on. To read a private schema, add `yaml_dsl_machine_credentials=true` to its URL.
+  - A GitHub link that answers 404 without credentials is a refused read, since GitHub answers 404 for a private repository. To read it, add `yaml_dsl_machine_credentials=true` to its URL.
+  - A schema file that is not a JSON object now stops the search with a problem. To have the search move on, fix the file or remove it.
+
 ## 0.12.1 - 2026-11-26
 
 - Hover

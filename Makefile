@@ -17,10 +17,32 @@ EXT_ID = $(PUBLISHER).$(shell node -p "require('./package.json').name")
 ANTIGRAVITY_EXECUTABLE = /Applications/Antigravity IDE.app/Contents/MacOS/Electron
 CURSOR_EXECUTABLE = /Applications/Cursor.app/Contents/MacOS/Cursor
 CLOUDFORMATION_SCHEMA = examples/schemas/cloudformation-2010-09-09.schema.json
+MOTO_IMAGE = ghcr.io/litebitus/motoserver/moto:5.2.6
+MOTO_CREDENTIALS = AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
+	AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null
 
-.PHONY: test test-all test-antigravity test-cursor cloudformation-schema package install-cursor install-antigravity publish preflight bump push release-schemas publish-ovsx publish-vsce uninstall
+define with_moto
+	@container="$$(docker run -d --rm -p 127.0.0.1::5000 $(MOTO_IMAGE))" || exit 1; \
+	trap 'docker rm -f "$$container" >/dev/null' EXIT; \
+	endpoint="http://$$(docker port "$$container" 5000 | head -n 1)"; \
+	for attempt in $$(seq 1 120); do \
+		curl -sf "$$endpoint/moto-api/" >/dev/null && break; \
+		sleep 0.5; \
+	done; \
+	curl -sf "$$endpoint/moto-api/" >/dev/null || { echo "Moto did not start" >&2; exit 1; }; \
+	env -u AWS_PROFILE -u AWS_REGION -u AWS_DEFAULT_REGION AWS_ENDPOINT_URL="$$endpoint" $(MOTO_CREDENTIALS) \
+		$(MAKE) $(1)
+endef
+
+.PHONY: test test-all test-antigravity test-cursor \
+	unit-tests integration-tests antigravity-integration-tests cursor-integration-tests \
+	cloudformation-schema package install-cursor install-antigravity publish preflight bump push \
+	release-schemas publish-ovsx publish-vsce uninstall
 
 test:
+	$(call with_moto,unit-tests)
+
+unit-tests:
 	node --test --test-timeout=5000 --test-force-exit --experimental-test-coverage \
 		--test-coverage-include='lib/**/*.js' \
 		--test-coverage-include-all \
@@ -32,15 +54,24 @@ test:
 
 # unit tests plus integration tests: downloads a real VS Code on first run
 # (cached in .vscode-test/), launches it with the extension, runs test/integration/
-test-all: test
+test-all:
+	$(call with_moto,unit-tests integration-tests)
+
+integration-tests:
 	npx vscode-test
 
 test-antigravity:
+	$(call with_moto,antigravity-integration-tests)
+
+antigravity-integration-tests:
 	@if [ -x "$(ANTIGRAVITY_EXECUTABLE)" ]; then \
 		TARGET_IDE_LABEL=antigravity-ide TARGET_IDE_EXECUTABLE="$(ANTIGRAVITY_EXECUTABLE)" npx vscode-test; \
 	else echo "test-antigravity skipped: $(ANTIGRAVITY_EXECUTABLE) is not installed"; fi
 
 test-cursor:
+	$(call with_moto,cursor-integration-tests)
+
+cursor-integration-tests:
 	@if [ -x "$(CURSOR_EXECUTABLE)" ]; then \
 		TARGET_IDE_LABEL=cursor TARGET_IDE_EXECUTABLE="$(CURSOR_EXECUTABLE)" npx vscode-test; \
 	else echo "test-cursor skipped: $(CURSOR_EXECUTABLE) is not installed"; fi

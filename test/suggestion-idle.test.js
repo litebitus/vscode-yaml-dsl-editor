@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const { createWorkTracker } = require('../lib/work-tracker');
 const { commonLayerSuggestions } = require('../lib/common-layer-suggestions');
 const { dslEntry, configText } = require('./config-builders');
@@ -68,7 +68,7 @@ function sessionOf({ failingPass = false } = {}) {
   const tracker = createWorkTracker({ timerFunctions: boundTimers, logFailure: () => {} });
   const events = [];
   const loggedErrors = [];
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
     timerFunctions: quietTimers,
@@ -163,7 +163,7 @@ test('idle rejects at its bound while a pass is still armed', async () => {
 });
 
 test('an armed pass of an evicted stack lets idle answer', async () => {
-  session.ws.setCacheCapacities({ stackCapacity: 1, schemaCapacity: 32 });
+  session.ws.setCacheCapacities({ stackCapacity: 1, inMemorySchemaCapacity: 32, schemaStoreCapacity: 100 });
   for (const root of ['/repo/concern-1', '/repo/concern-2']) {
     await openedOverlay(root);
     await session.ws.close(`file://${root}/overlay-1/mock-dsl.yml`);

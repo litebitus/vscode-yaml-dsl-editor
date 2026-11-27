@@ -697,7 +697,11 @@ test('activation paints the suggestions the server sends and registers the move'
   vscode.window.showWarningMessage = (message) => { warnings.push(message); };
   await (await activateWith(vscode, { subscriptions: [], extensionUri: 'mock-extension' }, () => client)).startup;
   const capacityNotes = () => sent.filter(([method]) => method === 'yaml-dsl/cacheCapacities');
-  assert.deepEqual(capacityNotes(), [['yaml-dsl/cacheCapacities', { schemaCapacity: 32, stackCapacity: 32 }]]);
+  assert.deepEqual(capacityNotes(), [['yaml-dsl/cacheCapacities', {
+    inMemorySchemaCapacity: 32,
+    schemaStoreCapacity: 32,
+    stackCapacity: 32,
+  }]]);
   const position = { line: 0, character: 6 };
   const mark = { range: { start: position, end: position }, suggestion: moveSuggestion };
   notes['yaml-dsl/suggestions']({
@@ -805,7 +809,23 @@ test('activation paints the suggestions the server sends and registers the move'
   stackCapacitySetting = 4;
   configurationChanged(cacheChanged);
   await Promise.resolve();
-  assert.deepEqual(capacityNotes().at(-1), ['yaml-dsl/cacheCapacities', { schemaCapacity: 32, stackCapacity: 4 }]);
+  const sentCapacities = (changed) => ['yaml-dsl/cacheCapacities', {
+    inMemorySchemaCapacity: 32,
+    schemaStoreCapacity: 32,
+    stackCapacity: 4,
+    ...changed,
+  }];
+  assert.deepEqual(capacityNotes().at(-1), sentCapacities({}));
+  featureValues['cache.schemaCapacity'] = 7;
+  configurationChanged(cacheChanged);
+  await Promise.resolve();
+  assert.deepEqual(capacityNotes().at(-1), sentCapacities({ inMemorySchemaCapacity: 7 }));
+  featureValues['cache.inMemorySchemaCapacity'] = 9;
+  configurationChanged(cacheChanged);
+  await Promise.resolve();
+  assert.deepEqual(capacityNotes().at(-1), sentCapacities({ inMemorySchemaCapacity: 9 }));
+  delete featureValues['cache.schemaCapacity'];
+  delete featureValues['cache.inMemorySchemaCapacity'];
   stackCapacitySetting = 0;
   const sentBefore = capacityNotes().length;
   configurationChanged(cacheChanged);

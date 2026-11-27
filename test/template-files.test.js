@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const YAML = require('yaml');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const { parseConfig, claimFile } = require('../lib/config');
 const { languageOfDsl } = require('../lib/dsl-languages');
 const { scope, declaration, reference, placeholder, dslEntry } = require('./config-builders');
@@ -108,7 +108,7 @@ let ws;
 
 test.beforeEach(async () => {
   const files = { '/repo/mock.schema.json': schema, [common]: commonText, [overlay]: overlayText };
-  ws = createWorkspace({
+  ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
   });

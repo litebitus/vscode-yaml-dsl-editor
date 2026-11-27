@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const {
   mergeContextOf,
   mergedValueOf,
@@ -181,7 +181,7 @@ const files = {
 
 test('a merge reads a local from the overlay or the common layer, validates what it merges at the call, '
   + 'and lets a content known only at use supply required fields', async () => {
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
   });
@@ -225,7 +225,7 @@ test('the fold view documents a field by the branch a merged local\'s value sele
     [common]: 'locals:\n  mock_fast:\n    mode: fast\n',
     [one]: 'mocktype:\n  own:\n    fn.merge: local.mock_fast\n    label: mock-label\n',
   };
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(foldFiles, filePath) ? foldFiles[filePath] : null),
     fetchText: async () => null,
   });
@@ -299,7 +299,7 @@ function positionAt(text, needle) {
 
 test('a merge declares the names its local contents hold where it lands, through nested merges and the fold\'s locals',
   async () => {
-    const ws = createWorkspace({
+    const ws = createVirtualWorkspace({
       readFile: async (filePath) => (Object.hasOwn(landingFiles, filePath) ? landingFiles[filePath] : null),
       fetchText: async () => null,
     });

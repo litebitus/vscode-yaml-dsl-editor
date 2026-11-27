@@ -12,8 +12,16 @@ const {
   dslEntry,
   configText,
 } = require('./config-builders');
+const { virtualDocumentSchemasOf, NO_SCHEMA_FOUND } = require('./virtual-document-schemas');
 
 const sampleConfig = configText(dslEntry('sample'));
+
+function bindWithVirtualSchemas(connection, documents, { fetchText, ...options }) {
+  return bind(connection, documents, {
+    ...options,
+    documentSchemas: virtualDocumentSchemasOf(options.readFile, fetchText),
+  });
+}
 
 function fakeConnection() {
   const handlers = {};
@@ -197,7 +205,7 @@ test('document events analyze and custom requests answer', async () => {
   const connection = fakeConnection();
   const documents = fakeDocuments();
   const files = { '/repo/schema.json': '{"description":"root","properties":{"name":{"description":"the name"}}}' };
-  const workspace = bind(connection, documents, {
+  const workspace = bindWithVirtualSchemas(connection, documents, {
     readFile: async (filePath) => files[filePath] ?? null,
     fetchText: async () => null,
   });
@@ -238,14 +246,19 @@ test('document events analyze and custom requests answer', async () => {
   assert.deepEqual(await connection.handlers.links({ textDocument: { uri: 'file:///repo/note.yml' } }), []);
   await connection.handlers['yaml-dsl/active']({ path: '/repo/app/mock.yml' });
   connection.handlers['yaml-dsl/visibleFolds']({ stackIds: ['/repo/app/mock.yml'] });
-  connection.handlers['yaml-dsl/cacheCapacities']({ stackCapacity: 4, schemaCapacity: 4 });
-  assert.throws(() => connection.handlers['yaml-dsl/cacheCapacities']({ stackCapacity: 0, schemaCapacity: 4 }));
+  const capacities = { stackCapacity: 4, inMemorySchemaCapacity: 4, schemaStoreCapacity: 4 };
+  connection.handlers['yaml-dsl/cacheCapacities'](capacities);
+  assert.throws(() => connection.handlers['yaml-dsl/cacheCapacities']({ ...capacities, stackCapacity: 0 }));
+  assert.throws(
+    () => connection.handlers['yaml-dsl/cacheCapacities']({ ...capacities, schemaStoreCapacity: 0 }),
+    /schemaStoreCapacity must be a whole number/,
+  );
   assert.equal(await connection.handlers['yaml-dsl/fold']({ stackId: '/repo/app/mock.yml', overlayName: 'one' }), '');
   const noteDecorations = await connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/note.yml' });
   assert.deepEqual(noteDecorations.references.map((item) => item.kind), ['local']);
   assert.deepEqual(noteDecorations.problems, [{
     range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-    message: 'schema is unavailable',
+    message: NO_SCHEMA_FOUND,
     severity: 'info',
   }]);
   const folds = await connection.handlers['yaml-dsl/foldsFor']({ path: '/repo/app/mock.yml' });
@@ -262,7 +275,7 @@ test('the server validates in its worker, tells the editor to reread a file once
   const documents = fakeDocuments();
   const storageFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'yaml-dsl-editor-mock-storage-'));
   const files = { '/repo/schema.json': '{"type":"object","properties":{"name":{"type":"string"}}}' };
-  const workspace = bind(connection, documents, {
+  const workspace = bindWithVirtualSchemas(connection, documents, {
     readFile: async (filePath) => files[filePath] ?? null,
     fetchText: async () => null,
   });
@@ -300,7 +313,7 @@ test('the server watches each schema path it reads and reloads a schema that cha
   const connection = fakeConnection();
   const documents = fakeDocuments();
   const files = {};
-  const workspace = bind(connection, documents, {
+  const workspace = bindWithVirtualSchemas(connection, documents, {
     readFile: async (filePath) => files[filePath] ?? null,
     fetchText: async () => null,
   });
@@ -314,7 +327,7 @@ test('the server watches each schema path it reads and reloads a schema that cha
   documents.handlers.open({ document: { uri: 'file:///repo/app/mock.yml', getText: () => text } });
   await workspace.whenIdle();
   const unavailable = async () => (await connection.handlers['yaml-dsl/decorations']({ uri: 'file:///repo/app/mock.yml' }))
-    .problems.some((item) => item.message === 'schema is unavailable');
+    .problems.some((item) => item.message === NO_SCHEMA_FOUND);
   assert.equal(await unavailable(), true);
   const watchedPatterns = (registrations) => registrations
     .flatMap((registration) => registration.options.watchers)
@@ -348,7 +361,7 @@ test('the server watches each schema path it reads and reloads a schema that cha
 test('a client without relative-pattern watching gets no registration', async () => {
   const connection = fakeConnection();
   const documents = fakeDocuments();
-  const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
+  const workspace = bindWithVirtualSchemas(connection, documents, { readFile: async () => null });
   connection.handlers.initialize({ capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: true } } } });
   await connection.handlers['yaml-dsl/config']({
     entries: [{ text: sampleConfig, dir: '/repo' }],
@@ -361,7 +374,7 @@ test('a client without relative-pattern watching gets no registration', async ()
 test('an analysis that changes a stack tells the client which documents to repaint', async () => {
   const connection = fakeConnection();
   const documents = fakeDocuments();
-  const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
+  const workspace = bindWithVirtualSchemas(connection, documents, { readFile: async () => null });
   await connection.handlers['yaml-dsl/config']({
     entries: [{ text: sampleConfig, dir: '/repo' }],
   });
@@ -380,7 +393,7 @@ test('an analysis that changes a stack tells the client which documents to repai
 test('completion answers editor items that replace what was typed', async () => {
   const connection = fakeConnection();
   const documents = fakeDocuments();
-  const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
+  const workspace = bindWithVirtualSchemas(connection, documents, { readFile: async () => null });
   const config = configText(dslEntry('note', {
     file_includes: ['**/note.yml'],
     scopes: { local: scope(), ENTRY: scope({ named_by_parent_key: true }) },
@@ -417,7 +430,7 @@ test('completion answers editor items that replace what was typed', async () => 
   assert.equal(offered.label, 'ref thing.one');
   assert.equal(offered.kind, 18);
   assert.equal(connection.handlers.initialize().capabilities.completionProvider.triggerCharacters.join(''), ' .{!');
-  const bare = bind(fakeConnection(), fakeDocuments(), { readFile: async () => null, fetchText: async () => null });
+  const bare = bindWithVirtualSchemas(fakeConnection(), fakeDocuments(), { readFile: async () => null });
   assert.deepEqual(bare.completion('file:///repo/none.yml', { line: 0, character: 0 }), []);
 });
 
@@ -431,7 +444,7 @@ test('a schema field completes as an editor item that inserts its key and strike
       legacy: { type: 'string', deprecated: true, description: '[optional] Use mode.' },
     },
   });
-  const workspace = bind(connection, documents, {
+  const workspace = bindWithVirtualSchemas(connection, documents, {
     readFile: async (filePath) => (filePath === '/repo/mock.schema.json' ? schemaText : null),
     fetchText: async () => null,
   });
@@ -466,7 +479,7 @@ test('the shape hint answers signature help, one signature per row sharing the d
       },
     },
   });
-  const workspace = bind(connection, documents, {
+  const workspace = bindWithVirtualSchemas(connection, documents, {
     readFile: async (filePath) => (filePath === '/repo/mock.schema.json' ? schemaText : null),
     fetchText: async () => null,
   });
@@ -493,7 +506,7 @@ test('the shape hint answers signature help, one signature per row sharing the d
 test('semantic tokens are encoded with the legend, and a config change asks the editor to refresh them', async () => {
   const connection = fakeConnection();
   const documents = fakeDocuments();
-  const workspace = bind(connection, documents, { readFile: async () => null, fetchText: async () => null });
+  const workspace = bindWithVirtualSchemas(connection, documents, { readFile: async () => null });
   const legend = connection.handlers.initialize().capabilities.semanticTokensProvider.legend;
   assert.deepEqual(legend, {
     tokenTypes: ['function', 'keyword', 'operator', 'type', 'variable', 'parameter'],
@@ -662,7 +675,7 @@ test('a layer no editor has open is watched while its stack is loaded, and a cha
   };
   const connection = fakeConnection();
   const documents = fakeDocuments();
-  const workspace = bind(connection, documents, {
+  const workspace = bindWithVirtualSchemas(connection, documents, {
     readFile: async (filePath) => files[filePath] ?? null,
     fetchText: async () => null,
   });
@@ -701,7 +714,7 @@ test('the server answers a layer file\'s overlays and the diff of a selection ac
   };
   const connection = fakeConnection();
   const documents = fakeDocuments();
-  const workspace = bind(connection, documents, {
+  const workspace = bindWithVirtualSchemas(connection, documents, {
     readFile: async (filePath) => files[filePath] ?? null,
     fetchText: async () => null,
   });
@@ -731,7 +744,7 @@ async () => {
   const heldRead = new Promise((resolve) => { finishRead = resolve; });
   const connection = fakeConnection();
   const documents = fakeDocuments();
-  bind(connection, documents, {
+  bindWithVirtualSchemas(connection, documents, {
     readFile: async (filePath) => (filePath === '/repo/app/dev/mock.yml' ? heldRead : null),
     fetchText: async () => null,
   });

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const { textHashOf } = require('../lib/text-hash');
 const {
   scope,
@@ -61,7 +61,7 @@ function stackFiles(root) {
 }
 
 function workspaceOver(files, timerFunctions) {
-  return createWorkspace({
+  return createVirtualWorkspace({
     readFile: async (filePath) => (Object.prototype.hasOwnProperty.call(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
     timerFunctions,
@@ -73,7 +73,7 @@ test('a stack evicted and built again without an edit works its suggestions out 
   const files = { ...stackFiles('/repo/first'), ...stackFiles('/repo/second'), ...stackFiles('/repo/third') };
   const ws = workspaceOver(files, timers);
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
-  ws.setCacheCapacities({ stackCapacity: 1, schemaCapacity: 32 });
+  ws.setCacheCapacities({ stackCapacity: 1, inMemorySchemaCapacity: 32, schemaStoreCapacity: 100 });
   const firstDev = '/repo/first/dev/mock.yml';
   const secondDev = '/repo/second/dev/mock.yml';
   const marksOf = (stackId) => ws.suggestionMarks(stackId).files.flatMap((file) => file.marks);
@@ -98,7 +98,7 @@ test('a stack evicted and built again without an edit works its suggestions out 
   assert.ok(marksOf('/repo/first/mock.yml').length > 0);
   ws.takeEvicted();
   arrivals.length = 0;
-  ws.setCacheCapacities({ stackCapacity: 3, schemaCapacity: 32 });
+  ws.setCacheCapacities({ stackCapacity: 3, inMemorySchemaCapacity: 32, schemaStoreCapacity: 100 });
   await ws.setActive(secondDev);
   await settle();
   assert.ok(arrivals.includes('/repo/second/mock.yml'));
@@ -131,7 +131,7 @@ test('a suggestion job that throws is logged and clears that stack\'s suggestion
   const logged = [];
   let failing = true;
   const { commonLayerSuggestions } = require('../lib/common-layer-suggestions');
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.prototype.hasOwnProperty.call(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
     timerFunctions: timers,
@@ -267,7 +267,7 @@ test('one suggestion job waits per stack, a flat stack arms its report too, and 
   for (const root of roots) Object.assign(files, stackFiles(root));
   const ws = workspaceOver(files, timers);
   await ws.setConfigs([{ text: config, dir: '/repo' }]);
-  ws.setCacheCapacities({ stackCapacity: 8, schemaCapacity: 32 });
+  ws.setCacheCapacities({ stackCapacity: 8, inMemorySchemaCapacity: 32, schemaStoreCapacity: 100 });
   await ws.sync('file:///repo/one/flat.yml', '/repo/one/flat.yml', files['/repo/one/flat.yml']);
   assert.equal(timers.pending.size, 1);
   const firstRoot = roots[0];
@@ -344,7 +344,7 @@ test('a file opened while a background refresh runs is analyzed at once, before 
   const runningRefreshHeld = new Promise((resolve) => { releaseRunningRefresh = resolve; });
   let opened = null;
   let ws = null;
-  ws = createWorkspace({
+  ws = createVirtualWorkspace({
     readFile: async (filePath) => {
       reads.push(filePath);
       if (filePath === `${roots[0]}/mock.yml`) {
@@ -378,7 +378,7 @@ test('with nothing changing the server does nothing: an unchanged reopen schedul
   const files = stackFiles(root);
   const dev = `${root}/dev/mock.yml`;
   const reads = [];
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => {
       reads.push(filePath);
       return Object.prototype.hasOwnProperty.call(files, filePath) ? files[filePath] : null;

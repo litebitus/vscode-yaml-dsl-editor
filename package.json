@@ -42,11 +42,24 @@
           "default": 10,
           "description": "How often the schema files open files read from disk are checked for a change the IDE did not report, in seconds."
         },
-        "yaml-dsl-editor.cache.schemaCapacity": {
+        "yaml-dsl-editor.cache.inMemorySchemaCapacity": {
           "type": "integer",
           "minimum": 1,
           "default": 32,
           "description": "Distinct schemas kept beyond those a loaded stack uses. The least recently used is dropped first."
+        },
+        "yaml-dsl-editor.cache.schemaCapacity": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 32,
+          "description": "Distinct schemas kept beyond those a loaded stack uses. The least recently used is dropped first.",
+          "deprecationMessage": "Deprecated: use yaml-dsl-editor.cache.inMemorySchemaCapacity."
+        },
+        "yaml-dsl-editor.cache.schemaStoreCapacity": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 100,
+          "description": "Entries the schema store keeps on disk: kept copies of schema URLs and prepared schemas. The least recently used is dropped first."
         },
         "yaml-dsl-editor.cache.stackCapacity": {
           "type": "integer",
@@ -822,6 +835,7 @@
     "version": "node scripts/changelog-release.js && git add CHANGELOG.md"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "3.1178.0",
     "@vscode/test-cli": "0.0.10",
     "@vscode/test-electron": "3.1.0",
     "vscode-oniguruma": "2.0.1",
@@ -833,6 +847,8 @@
     "vscode-languageserver": "9.0.1",
     "vscode-languageserver-textdocument": "1.0.15",
     "yaml": "2.9.1",
-    "yaml-dsl-spec": "0.4.1"
+    "yaml-dsl-spec": "0.4.2-snapshot.20261127034710",
+    "yaml-dsl-spec-schema-reader-github": "0.4.2-snapshot.20261127034710",
+    "yaml-dsl-spec-schema-reader-s3": "0.4.2-snapshot.20261127034710"
   }
 }

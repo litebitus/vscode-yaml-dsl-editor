@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const { createInProcessValidation, createWorkerValidation } = require('../lib/validation-requests');
-const { schemaStoreFolderOf } = require('../lib/schema-store-files');
+const { schemaStoreFolderOf } = require('../lib/validation-host');
 const { dslEntry, configText } = require('./config-builders');
 
 const MOCK_SCHEMA_TEXT = JSON.stringify({
@@ -18,7 +18,7 @@ const SCHEMA_PATH = '/repo/mock.schema.json';
 const MOCK_FILE_TEXT = 'name: 1\n';
 
 function mockWorkspace(createValidation) {
-  return createWorkspace({
+  return createVirtualWorkspace({
     readFile: async (filePath) => (filePath === SCHEMA_PATH ? MOCK_SCHEMA_TEXT : MOCK_FILE_TEXT),
     fetchText: async () => null,
     createValidation,
@@ -88,7 +88,11 @@ test('a DSL\'s validator states the types a quoted value is validated as', async
     properties: { name: { type: 'string' }, count: { type: 'integer' }, enabled: { type: 'boolean' } },
   });
   const readFile = async (filePath) => (filePath === SCHEMA_PATH ? quotedSchemaText : quotedFileText);
-  const quotedWorkspace = createWorkspace({ readFile, fetchText: async () => null, createValidation: createInProcessValidation });
+  const quotedWorkspace = createVirtualWorkspace({
+    readFile,
+    fetchText: async () => null,
+    createValidation: createInProcessValidation,
+  });
   await quotedWorkspace.setConfigs(mockConfigs(
     dslEntry('mock-quoted', {
       file_includes: ['{config_root}/quoted/**/mock.yml'],
@@ -114,7 +118,7 @@ test('a file whose stack leaves the cache stops being validated, and a schema th
   const dropped = { slots: [], schemas: [] };
   const folders = ['first', 'second', 'third'];
   const fileTextOf = (folder) => `# yaml-language-server: $schema=../${folder}.schema.json\nname: 1\n`;
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => {
       const folder = folders.find((name) => filePath.includes(name));
       if (filePath.endsWith('.schema.json')) return JSON.stringify({ ...JSON.parse(MOCK_SCHEMA_TEXT), title: folder });
@@ -131,7 +135,7 @@ test('a file whose stack leaves the cache stops being validated, and a schema th
     },
   });
   await ws.setConfigs(mockConfigs(dslEntry('mock')));
-  ws.setCacheCapacities({ stackCapacity: 1, schemaCapacity: 1 });
+  ws.setCacheCapacities({ stackCapacity: 1, inMemorySchemaCapacity: 1, schemaStoreCapacity: 1 });
   for (const folder of folders) {
     const filePath = `/repo/${folder}/mock.yml`;
     await ws.setActive(filePath);

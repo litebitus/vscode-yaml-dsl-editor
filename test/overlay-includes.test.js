@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspace } = require('../lib/workspace');
+const { createVirtualWorkspace } = require('./virtual-document-schemas');
 const { analyzeDocument } = require('../lib/analyze');
 const { foldedValueOf } = require('../lib/overlay-includes');
 const { scope, declaration, reference, dslEntry, configText, parsedDsl } = require('./config-builders');
@@ -126,7 +126,7 @@ function at(text, needle, shift = 0) {
 }
 
 async function includeWorkspace(files, timers = fakeTimers()) {
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(files, filePath) ? files[filePath] : null),
     fetchText: async () => null,
     timerFunctions: timers,
@@ -444,7 +444,7 @@ test('an include of a join merge macro folds by joining, and a key on both sides
   };
   const twiceText = bucketText.replace('  MockUser:', '  MockWait:\n    Type: Mock::Twice\n  MockUser:');
   const joinFiles = { ...stackFiles, [SCHEMA]: joinSchema, [BUCKET]: twiceText };
-  const ws = createWorkspace({
+  const ws = createVirtualWorkspace({
     readFile: async (filePath) => (Object.hasOwn(joinFiles, filePath) ? joinFiles[filePath] : null),
     fetchText: async () => null,
   });

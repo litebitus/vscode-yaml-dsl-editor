@@ -210,14 +210,14 @@ A stack's schema is the `schema.json` of the grammar version that stack initiali
 - The same grammar version is the same schema, so every stack on that version shares one parsed copy.
 - A different grammar version is a different schema, however small the difference, and hover for a stack uses its own version's schema.
 - The cache's unit is the distinct schema, one entry per hash. Bytes identical to a schema the server holds are that schema and are not parsed again.
-- A schema a resident stack uses is pinned. Capacity beyond the pins is the setting `yaml-dsl-editor.cache.schemaCapacity`; past it, the least recently used schema is dropped.
+- A schema a resident stack uses is pinned. Capacity beyond the pins is the setting `yaml-dsl-editor.cache.inMemorySchemaCapacity`; past it, the least recently used schema is dropped.
 - Evicting a stack unpins the schemas only it used.
 - What the extension works out from a schema, such as the node fingerprints and validators of the schema checks, belongs to the schema's entry and goes with it.
 - A modeline's fragment names a node of the schema it reads: the schema is cached once by its text, and the fragment is kept with the reading file, never as a cache entry of its own.
 
 The validating worker loads each schema through the YAML DSL standard's schema cache, one per worker:
 
-- Its capacity is `yaml-dsl-editor.cache.schemaCapacity`.
+- Its capacity is `yaml-dsl-editor.cache.inMemorySchemaCapacity`.
 - A schema the worker is sent stays loaded until the editor's schema cache drops it.
 
 A DSL's `performance` block states how the editor keeps a large schema fast:
@@ -232,7 +232,8 @@ A DSL's `performance` block states how the editor keeps a large schema fast:
 | its content | the standard's prepared schema: the draft, the schema as written, and the schema its requiredness markers are read into |
 | its key | the standard's, so a schema or package version that differs never reads it |
 
-- A write goes to a new file renamed over the entry, so a reader finds the whole of one write or the other.
+- The store is the standard's folder store: a write goes to a new file moved over the entry, so a reader finds the whole of one write or the other.
+- Its capacity is `yaml-dsl-editor.cache.schemaStoreCapacity`; past it, the least recently used entry is dropped.
 - An entry that does not read is prepared again from the schema and written over.
 
 ```mermaid
@@ -291,7 +292,7 @@ The YAML DSL output channel exists from activation and logs:
 - each startup step;
 - the build of the extension it runs;
 - the first analysis of each opened file, with its time;
-- each schema URL read: downloaded, kept copy used with its age, or not downloaded; a check the server answers unchanged is not logged;
+- each schema finding's problems and warnings;
 - every failure.
 
 A startup step that fails is logged and skipped, so the language server always starts and the file always shows.
@@ -640,17 +641,27 @@ Specified by the YAML DSL standard's [package design](https://github.com/litebit
 
 Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/spec.md), under Finding the schema.
 
+A document's schema is found and read by the standard's schema resolution, specified by its [package design](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/package-design.md) under Schema resolution. The language server holds one schema cache for it, apart from the validating worker's.
+
+- `schema_search_paths` entries are search paths with no position, so a finding's problem is on the file's modeline line, or its first line without a modeline.
+- A finding's problem is an info problem; its hover shows the message, then its label and help.
+- A schema found that is not a JSON object, or whose draft the editor does not read, is the same info problem, and the search ends there.
+- Each candidate the finding tried on the machine is watched: its file, or, for a `*` pattern no file matches, the folder above its first `*` step.
 - Hover, completion and required-field filling read a fragment from its root node.
 - The modeline's path is a link that opens the schema it names.
 - The extension embeds no schema.
-- When neither source resolves, field hovers stay empty. Navigation, other problems and suggestions still run.
+- When no schema is found, field hovers stay empty. Navigation, other problems and suggestions still run.
 
 ### Schema URLs
 
 Specified by the YAML DSL standard, [yaml-dsl-spec](https://github.com/litebitus/yaml-dsl-spec/blob/main/docs/spec.md), under Schema URLs.
 
-- A downloaded copy is kept in the extension's storage, across sessions and workspaces.
-- What a credentialed read reports, a refused credential, a missing release or asset, an unseen repository, is logged.
+The schema cache holds the core's readers, the GitHub schema reader and the S3 schema reader, and reads a URL by the reader of its prefix.
+
+- The S3 schema reader reads `s3://` URLs, a role assumed under the session name `yaml-dsl-editor`.
+- A kept copy is an entry of the schema cache's store, the standard's folder store: a file in the extension's storage, across sessions and workspaces.
+- The store's capacity is `yaml-dsl-editor.cache.schemaStoreCapacity`; past it, the least recently used copy is dropped.
+- A finding's warnings are logged.
 
 ### Branches the document selects
 
@@ -1272,7 +1283,7 @@ Every color the extension draws with comes from its theme, a palette of roles. T
 
 - The extension's own settings are VS Code settings under the extension's name, `yaml-dsl-editor`.
 - A setting is the user's choice of how the editor behaves, the same for every DSL. What a DSL is, and its syntax, lives in `yaml-dsl.yml`, never in a setting.
-- Every cache the extension keeps is bounded. A cache held in memory has its capacity as a setting; the schema store on disk holds one entry for each schema an opted-in DSL loads.
+- Every cache the extension keeps, in memory or on disk, is bounded, and its capacity is a setting.
 - Every behavior that nags has a setting that turns it off.
 - A change to a setting applies at once.
 - The README lists every setting.
