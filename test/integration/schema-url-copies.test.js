@@ -74,7 +74,7 @@ suite('schema URL copies', () => {
     ]);
   });
 
-  test('a modeline URL whose server refuses a later read loads its kept copy, the URL marked with a warning '
+  test('a modeline URL whose server refuses a later read loads its kept copy, the URL marked with an info problem '
     + 'naming the refusal', async () => {
     const revokedUrl = schemaServer.urlOf('/revoked-schema.json');
     schemaServer.serve('/revoked-schema.json', {
@@ -96,7 +96,7 @@ suite('schema URL copies', () => {
     const urlStart = revoked.lineAt(0).text.indexOf(revokedUrl);
     assert.deepEqual(
       answer.problems.map((problem) => [problem.severity, problem.range]),
-      [['warning', {
+      [['info', {
         start: { line: 0, character: urlStart },
         end: { line: 0, character: urlStart + revokedUrl.length },
       }]],

@@ -661,7 +661,7 @@ The schema cache holds the core's readers, the GitHub schema reader and the S3 s
 - The S3 schema reader reads `s3://` URLs, a role assumed under the session name `yaml-dsl-editor`.
 - A kept copy is an entry of the schema cache's store, the standard's folder store: a file in the extension's storage, across sessions and workspaces.
 - The store's capacity is `yaml-dsl-editor.cache.schemaStoreCapacity`; past it, the least recently used copy is dropped.
-- A finding's warnings are logged. A warning about the schema the modeline names, such as a refused read served from its kept copy, is also a warning at the modeline's path.
+- A finding's warnings are logged. A warning about the schema the modeline names, such as a refused read served from its kept copy, is also an info problem at the modeline's path.
 
 ### Branches the document selects
 
