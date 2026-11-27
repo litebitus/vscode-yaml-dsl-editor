@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.2 - 2026-11-26
 
 - Schemas
   - Schemas are found and read by the YAML DSL standard's schema resolution, S3 included.
