@@ -847,8 +847,8 @@
     "vscode-languageserver": "9.0.1",
     "vscode-languageserver-textdocument": "1.0.15",
     "yaml": "2.9.1",
-    "yaml-dsl-spec": "0.4.2-snapshot.20261127034710",
-    "yaml-dsl-spec-schema-reader-github": "0.4.2-snapshot.20261127034710",
-    "yaml-dsl-spec-schema-reader-s3": "0.4.2-snapshot.20261127034710"
+    "yaml-dsl-spec": "0.5.0",
+    "yaml-dsl-spec-schema-reader-github": "0.5.0",
+    "yaml-dsl-spec-schema-reader-s3": "0.5.0"
   }
 }
