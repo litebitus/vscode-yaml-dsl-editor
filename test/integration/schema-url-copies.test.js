@@ -8,6 +8,7 @@ const {
   hoverTextBecomes,
   schemaTextOf,
   paintedProblemMessagesBecome,
+  extensionClient,
   extensionSettled,
 } = require('./editor-hints');
 const { isolateEachTest } = require('./test-isolation');
@@ -71,6 +72,35 @@ suite('schema URL copies', () => {
       `127.0.0.1 refused to read \`${privateUrl}\`\n\n401; `
         + "add `yaml_dsl_machine_credentials=true` to read it with the machine's credentials",
     ]);
+  });
+
+  test('a modeline URL whose server refuses a later read loads its kept copy, the URL marked with a warning '
+    + 'naming the refusal', async () => {
+    const revokedUrl = schemaServer.urlOf('/revoked-schema.json');
+    schemaServer.serve('/revoked-schema.json', {
+      text: JSON.stringify({
+        properties: { size: { type: 'integer', description: '[optional] Mock size from a URL.' } },
+      }),
+    });
+    const kept = (await shownDocument(stackFileWithModeline('url-schema-kept', revokedUrl))).document;
+    await hoverTextBecomes(kept, positionInText(kept, 'size', 1), SIZE_DOCUMENTATION);
+    schemaServer.serve('/revoked-schema.json', { status: 401 });
+    const revoked = (await shownDocument(stackFileWithModeline('url-schema-revoked', revokedUrl))).document;
+    await hoverTextBecomes(revoked, positionInText(revoked, 'size', 1), SIZE_DOCUMENTATION);
+    await paintedProblemMessagesBecome(revoked, [
+      `127.0.0.1 refused to read \`${revokedUrl}\`, so its kept copy was read\n\n401; `
+        + "add `yaml_dsl_machine_credentials=true` to read it with the machine's credentials",
+    ]);
+    const answer = await (await extensionClient())
+      .sendRequest('yaml-dsl/decorations', { uri: revoked.uri.toString() });
+    const urlStart = revoked.lineAt(0).text.indexOf(revokedUrl);
+    assert.deepEqual(
+      answer.problems.map((problem) => [problem.severity, problem.range]),
+      [['warning', {
+        start: { line: 0, character: urlStart },
+        end: { line: 0, character: urlStart + revokedUrl.length },
+      }]],
+    );
   });
 });
 

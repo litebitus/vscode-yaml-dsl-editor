@@ -34,9 +34,16 @@ function virtualDocumentSchemasOf(readFile, fetchText = async () => null) {
       const schemaText = schemaPath ? await readOrNull(readFile, schemaPath) : await readOrNull(fetchText, written);
       if (schemaText === null || schemaText === undefined) continue;
       const schemaName = schemaPath ? path.basename(schemaPath) : written;
-      return { schemaText, schemaName, fragmentPointer, watchedPaths, error: null };
+      return { schemaText, schemaName, fragmentPointer, watchedPaths, error: null, modelineWarnings: [] };
     }
-    return { schemaText: null, schemaName: null, fragmentPointer: null, watchedPaths, error: NO_SCHEMA_FOUND };
+    return {
+      schemaText: null,
+      schemaName: null,
+      fragmentPointer: null,
+      watchedPaths,
+      error: NO_SCHEMA_FOUND,
+      modelineWarnings: [],
+    };
   }
 
   return { documentSchemaOf, setStorageFolder: () => {}, setStoreCapacity: () => {} };

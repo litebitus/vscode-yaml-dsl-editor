@@ -69,6 +69,7 @@ test('a modeline path is read from the file\'s folder with its fragment, and a {
     fragmentPointer: '/definitions/mock',
     watchedPaths: [besideStack],
     error: null,
+    modelineWarnings: [],
   });
   const searched = await documentSchemas.documentSchemaOf(
     documentPath,
@@ -145,6 +146,24 @@ test('without a storage folder a URL is read each time and no copy is kept', asy
   assert.deepEqual(schemaServer.requests.map((request) => request.path), ['/unkept.json', '/unkept.json']);
 });
 
+test('a modeline URL refused after its copy was kept reads the copy with a modeline warning, '
+  + 'and a search path\'s warning is logged only', async () => {
+  schemaServer.serve('/revoked.json', { text: MOCK_SCHEMA_TEXT });
+  const logged = [];
+  const documentSchemas = createDocumentSchemas({ urlReaders: [], logInfo: (line) => logged.push(line) });
+  documentSchemas.setStorageFolder(path.join(mockRoot, 'mock-storage'));
+  const revokedUrl = schemaServer.urlOf('/revoked.json');
+  await documentSchemas.documentSchemaOf(documentPath, modelineOf(revokedUrl), [], mockRoot);
+  schemaServer.serve('/revoked.json', { status: 401 });
+  const refusedWarning = `127.0.0.1 refused to read \`${revokedUrl}\`, so its kept copy was read\n\n401; `
+    + MACHINE_CREDENTIALS_HELP;
+  const named = await documentSchemas.documentSchemaOf(documentPath, modelineOf(revokedUrl), [], mockRoot);
+  assert.deepEqual([named.schemaText, named.modelineWarnings], [MOCK_SCHEMA_TEXT, [refusedWarning]]);
+  const searched = await documentSchemas.documentSchemaOf(documentPath, 'size: 1\n', [revokedUrl], mockRoot);
+  assert.deepEqual([searched.schemaText, searched.modelineWarnings], [MOCK_SCHEMA_TEXT, []]);
+  assert.deepEqual(logged.slice(-1), [`schema of ${documentPath}: ${refusedWarning}`]);
+});
+
 test('a kept copy that cannot be saved is logged, and the schema is still read', async () => {
   schemaServer.serve('/unsaved.json', { text: MOCK_SCHEMA_TEXT });
   const storageThatIsAFile = writtenFile('mock-storage', 'mock');
@@ -176,6 +195,7 @@ test('a URL whose read is refused, with no copy kept, ends the search with a pro
     fragmentPointer: null,
     watchedPaths: [],
     error: `127.0.0.1 refused to read \`${privateUrl}\`\n\n401; ${MACHINE_CREDENTIALS_HELP}`,
+    modelineWarnings: [],
   });
 });
 
